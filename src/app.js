@@ -152,7 +152,7 @@ export function createApp(
       width: 768,
       margin: 4,
       errorCorrectionLevel: "M",
-      color: { dark: "#172d27", light: "#ffffff" },
+      color: { dark: "#173b7a", light: "#ffffff" },
     });
     if (req.query.download === "1")
       res.set(
