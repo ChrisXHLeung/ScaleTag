@@ -118,15 +118,20 @@ function showError(error) {
 }
 
 function home() {
-  document.querySelector('[data-nav="home"]').classList.add("active");
+  document.title = "ScaleTag — Small questions. Local voices.";
   main.innerHTML = `<section class="hero">
-    <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> SMALL QUESTIONS. LOCAL VOICES.</div><h1>Put a question<br>out into <em>the world.</em></h1><p>Create a poll. Share a code. Hear what people think.<br class="desktop-only"> No accounts, no complicated setup. Just a little curiosity.</p><a class="button" href="#create">Start a conversation ${icons.arrow}</a><a class="text-link" href="/VoteList">Explore VoteList ↗</a></div>
+    <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> SMALL QUESTIONS. LOCAL VOICES.</div><h1>Put a question<br>out into <em>the world.</em></h1><p>Create a poll. Share a code. Hear what people think.<br class="desktop-only"> No accounts, no complicated setup. Just a little curiosity.</p><a class="button" href="/create">Start a conversation ${icons.arrow}</a><a class="text-link" href="/VoteList">Explore VoteList ↗</a></div>
     <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><div class="art-stamp">A LITTLE QUESTION<br>CAN GO A LONG WAY</div><div class="question-tag"><span class="tag-hole"></span><span class="tag-caption">YOUR NEXT CONVERSATION</span><strong>What if<br>we asked?</strong><div class="tag-bottom"><span>ONE QUESTION<br>MANY PERSPECTIVES</span><span class="tag-arrow">↗</span></div></div><div class="location-chip">${icons.pin} Rooted in a real place</div><div class="seven-badge"><strong>7</strong><span>DAYS TO<br>HAVE YOUR SAY</span></div></div>
   </section>
-  <section class="principles" aria-label="How ScaleTag works"><div>${icons.clock}<span><strong>7 days to vote</strong><small>Starts the moment you publish.</small></span></div><div>${icons.qr}<span><strong>One code. Any conversation.</strong><small>Save it, print it, pass it around.</small></span></div><div>${icons.shield}<span><strong>No account needed</strong><small>A name of your choosing is enough.</small></span></div></section>
-  <section class="create-section" id="create"><aside class="section-intro"><span class="eyebrow">01 / START SOMETHING</span><h2>What’s on<br>your mind?</h2><p>A neighborhood idea. A small decision.<br>Something you’ve always wondered.</p><div class="intro-note"><span class="tiny-label">KEEP IT SIMPLE</span><p>One question, a few options,<br>and room for a different perspective.</p></div><div class="rules"><p>${icons.pin} Location is required to publish.</p><p>${icons.clock} Voting stays open for exactly 7 days.</p><p>${icons.shield} Your signature is not verified.</p></div></aside>
+  <section class="principles" aria-label="How ScaleTag works"><div>${icons.clock}<span><strong>7 days to vote</strong><small>Starts the moment you publish.</small></span></div><div>${icons.qr}<span><strong>One code. Any conversation.</strong><small>Save it, print it, pass it around.</small></span></div><div>${icons.shield}<span><strong>No account needed</strong><small>A name of your choosing is enough.</small></span></div></section>`;
+}
+
+function createPoll() {
+  document.title = "Create a poll — ScaleTag";
+  document.querySelector('[data-nav="create"]').classList.add("active");
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">← Back to home</a><span class="eyebrow">START SOMETHING</span><h1>What’s on<br>your mind?</h1><p>A neighborhood idea. A small decision.<br>Something you’ve always wondered.</p><div class="intro-note"><span class="tiny-label">KEEP IT SIMPLE</span><p>One question, a few options,<br>and room for a different perspective.</p></div><div class="rules"><p>${icons.pin} Location is required to publish.</p><p>${icons.clock} Voting stays open for exactly 7 days.</p><p>${icons.shield} Your signature is not verified.</p></div></aside>
   <form id="create-form" class="form-card">
-    <div class="form-heading"><h3>Your new poll</h3><span class="pill">SINGLE CHOICE</span></div>
+    <div class="form-heading"><h2>Your new poll</h2><span class="pill">SINGLE CHOICE</span></div>
     <label for="title">The question <span class="required">*</span></label><input id="title" name="title" maxlength="140" placeholder="What should we make happen next?" required><div class="field-hint"><span>Keep it clear and open to everyone.</span><span id="title-count">0 / 140</span></div>
     <label for="description">A little context <span class="optional">optional</span></label><textarea id="description" name="description" maxlength="4000" rows="4" placeholder="Tell people a bit more about your question…"></textarea>
     <details class="image-fields"><summary>Add images using external URLs <span>+</span></summary><p class="field-hint">Up to 3 HTTPS image URLs. ScaleTag does not upload or store images.</p><label class="sr-only" for="images">Image URLs, one per line</label><textarea id="images" rows="3" placeholder="https://example.com/image.jpg&#10;One URL per line"></textarea></details>
@@ -361,7 +366,7 @@ async function votePage(id) {
 function voteList() {
   document.title = "VoteList — ScaleTag";
   document.querySelector('[data-nav="list"]').classList.add("active");
-  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore the latest polls, or find conversations closer to home.</p></div><a href="/#create" class="button">Create a poll ${icons.plus}</a></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Every poll is permanently deleted 30 days after publication. Deleted data cannot be recovered.</p></section>`;
+  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore the latest polls, or find conversations closer to home.</p></div><a href="/create" class="button">Create a poll ${icons.plus}</a></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Every poll is permanently deleted 30 days after publication. Deleted data cannot be recovered.</p></section>`;
   let status = "all",
     location,
     cursor,
@@ -404,7 +409,7 @@ function voteList() {
       loaded += data.polls.length;
       cursor = data.nextCursor;
       if (!loaded)
-        list.innerHTML = `<div class="list-empty"><span class="empty-symbol">${icons.pin}</span><h2>${location ? "A little quiet around here." : "The first question could be yours."}</h2><p>${location ? "No matching polls within 100 km. Try all locations, or start a conversation nearby." : "No polls match this filter yet. Create a poll and invite a few voices in."}</p><a class="text-link" href="/#create">Create a poll ↗</a></div>`;
+        list.innerHTML = `<div class="list-empty"><span class="empty-symbol">${icons.pin}</span><h2>${location ? "A little quiet around here." : "The first question could be yours."}</h2><p>${location ? "No matching polls within 100 km. Try all locations, or start a conversation nearby." : "No polls match this filter yet. Create a poll and invite a few voices in."}</p><a class="text-link" href="/create">Create a poll ↗</a></div>`;
       document.querySelector("#list-count").textContent =
         `${count(loaded)} ${loaded === 1 ? "poll" : "polls"} shown`;
       more.hidden = !cursor;
@@ -469,7 +474,9 @@ function privacy() {
 }
 const route = window.location.pathname;
 try {
-  if (route === "/") home();
+  if (route === "/" && location.hash === "#create") window.location.replace("/create");
+  else if (route === "/") home();
+  else if (route === "/create") createPoll();
   else if (route === "/VoteList") voteList();
   else if (route === "/privacy") privacy();
   else if (/^\/vote\/[a-f0-9]{24}$/.test(route))

@@ -165,7 +165,7 @@ export function createApp(
     next(new AppError(404, "Endpoint not found.")),
   );
   app.use(express.static(publicDir, { index: false, etag: false, maxAge: 0 }));
-  app.get(["/", "/VoteList", "/privacy"], (req, res) =>
+  app.get(["/", "/create", "/VoteList", "/privacy"], (req, res) =>
     res.sendFile(join(publicDir, "index.html")),
   );
   app.get("/vote/:id", async (req, res) => {

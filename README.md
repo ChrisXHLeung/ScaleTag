@@ -8,7 +8,7 @@ Development site: **https://scaletag.risinfo.cn**
 
 ## What it does
 
-- Create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
+- Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
 - Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses.
 - Start immediately; accept a single choice for exactly **168 hours**.
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.

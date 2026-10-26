@@ -469,7 +469,7 @@ main {
 .section-intro {
   padding-top: 17px;
 }
-.section-intro h2 {
+.section-intro h1 {
   font-size: 45px;
   line-height: 1.12;
   margin: 20px 0;
@@ -525,7 +525,7 @@ main {
   margin-bottom: 28px;
   gap: 10px;
 }
-.form-heading h3 {
+.form-heading h2 {
   font-size: 22px;
   letter-spacing: -0.7px;
 }
@@ -1505,11 +1505,11 @@ progress::-moz-progress-bar {
   .section-intro {
     padding: 0;
   }
-  .section-intro h2 {
+  .section-intro h1 {
     font-size: 37px;
     margin: 15px 0;
   }
-  .section-intro h2 br {
+  .section-intro h1 br {
     display: none;
   }
   .section-intro > p br {
@@ -1698,5 +1698,22 @@ progress::-moz-progress-bar {
   .form-card input:not([type]),
   .form-card textarea {
     font-size: 16px;
+  }
+}
+
+.principles {
+  margin-bottom: 64px;
+}
+
+@media (max-width: 380px) {
+  .header-inner {
+    flex-wrap: wrap;
+    padding-top: 14px;
+    padding-bottom: 12px;
+    gap: 10px;
+  }
+  .header-inner nav {
+    width: 100%;
+    justify-content: space-between;
   }
 }
