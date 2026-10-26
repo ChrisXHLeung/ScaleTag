@@ -1,0 +1,25 @@
+name: Deploy development
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: scaletag-development
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.repository == 'ChrisXHLeung/ScaleTag'
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Confirm dedicated runner
+        run: test "$RUNNER_NAME" = eons
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - name: Deploy and verify loopback health
+        run: bash deploy/deploy.sh

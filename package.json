@@ -1,0 +1,22 @@
+{
+  "name": "scaletag",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Small, anonymous, location-aware polls. Seven days to vote, thirty days to exist.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/store.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "lowdb": "^7.0.1",
+    "qrcode": "^1.5.4"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=ScaleTag anonymous polls
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=scaletag
+Group=scaletag
+WorkingDirectory=/ScaleTag/current
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATA_DIR=/ScaleTag/data
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/scaletag.env
+ExecStart=/usr/bin/flock --no-fork --nonblock /ScaleTag/data/.writer.lock /usr/local/bin/node /ScaleTag/current/src/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/ScaleTag/data
+MemoryMax=256M
+TasksMax=64
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target
