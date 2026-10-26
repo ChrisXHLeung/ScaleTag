@@ -1,0 +1,42 @@
+name: scaletag
+services:
+  app:
+    image: ${SCALETAG_IMAGE:-scaletag:local}
+    build:
+      context: .
+    init: true
+    user: "${SCALETAG_UID:-1000}:${SCALETAG_GID:-1000}"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to your site URL}
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /data
+      MAX_POLLS: ${MAX_POLLS:-10000}
+      MAX_VOTES_PER_POLL: ${MAX_VOTES_PER_POLL:-50000}
+      CREATE_LIMIT_PER_MINUTE: ${CREATE_LIMIT_PER_MINUTE:-20}
+    ports:
+      - "127.0.0.1:${SCALETAG_PORT:-3000}:3000"
+    volumes:
+      - "${SCALETAG_DATA_SOURCE:-poll-data}:/data"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    ulimits:
+      core: 0
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+volumes:
+  poll-data:

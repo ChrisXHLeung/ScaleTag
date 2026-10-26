@@ -13,19 +13,20 @@ previous=$(readlink -f "$root/current" || true)
 if [[ ! -d "$release" ]]; then
   stage=$(mktemp -d "$root/releases/.staging.XXXXXX")
   trap 'rm -rf "$stage"' EXIT
-  cp -R src public package.json package-lock.json "$stage/"
+  cp -R src public deploy Dockerfile compose.yaml .dockerignore package.json package-lock.json "$stage/"
   (cd "$stage" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
   mv "$stage" "$release"
   trap - EXIT
 fi
 ln -sfn "$release" "$root/.next"
 mv -Tf "$root/.next" "$root/current"
-sudo /usr/bin/systemctl restart scaletag.service
 healthy=false
-for attempt in {1..15}; do
-  if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then healthy=true; break; fi
-  sleep 1
-done
+if sudo /usr/bin/systemctl restart scaletag.service; then
+  for attempt in {1..60}; do
+    if curl --fail --silent http://127.0.0.1:3000/healthz >/dev/null; then healthy=true; break; fi
+    sleep 1
+  done
+fi
 if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$root/.next"

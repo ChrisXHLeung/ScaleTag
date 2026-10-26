@@ -1,0 +1,12 @@
+# Allowlist: credentials, local data, Git state, and test artifacts never enter builds.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!src/
+!src/**
+!public/
+!public/**
+!deploy/
+!deploy/docker-entrypoint.sh
+!deploy/healthcheck.js

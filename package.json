@@ -11,7 +11,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/store.js && node --check public/app.js"
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/store.js && node --check public/app.js",
+    "test:container": "node test/container-smoke.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

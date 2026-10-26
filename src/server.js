@@ -9,6 +9,9 @@ function positive(name, fallback) {
   return value;
 }
 const port = positive("PORT", 3000);
+const host = process.env.HOST ?? "127.0.0.1";
+if (!["127.0.0.1", "0.0.0.0"].includes(host))
+  throw Error("HOST must be 127.0.0.1 or 0.0.0.0");
 const origin = process.env.PUBLIC_ORIGIN ?? `http://127.0.0.1:${port}`;
 if (process.env.NODE_ENV === "production" && !origin.startsWith("https://"))
   throw Error("Production requires an HTTPS PUBLIC_ORIGIN");
@@ -34,8 +37,8 @@ const cleanup = setInterval(async () => {
   }
 }, 30000);
 cleanup.unref();
-const server = app.listen(port, "127.0.0.1", () =>
-  console.log(`ScaleTag listening on 127.0.0.1:${port}`),
+const server = app.listen(port, host, () =>
+  console.log(`ScaleTag listening on ${host}:${port}`),
 );
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;

@@ -20,3 +20,20 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test
+
+  container:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_ORIGIN: https://scaletag.test
+      SCALETAG_IMAGE: scaletag:container-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: docker compose config --quiet
+      - run: docker compose build --pull
+      - run: npm run test:container

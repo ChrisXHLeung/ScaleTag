@@ -1,0 +1,39 @@
+[Unit]
+Description=ScaleTag container
+Requires=docker.service
+After=network-online.target docker.service
+Wants=network-online.target
+PartOf=docker.service
+
+[Service]
+Type=simple
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATA_DIR=/ScaleTag/data
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=DOCKER_CONFIG=/var/lib/scaletag/docker-config
+Environment=SCALETAG_UID=1000
+Environment=SCALETAG_GID=1000
+EnvironmentFile=/etc/scaletag.env
+StateDirectory=scaletag
+StateDirectoryMode=0700
+WorkingDirectory=/ScaleTag/current
+ExecStartPre=/usr/local/sbin/scaletag-container build
+ExecStart=/usr/local/sbin/scaletag-container run
+ExecStop=/usr/local/sbin/scaletag-container stop
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+TimeoutStopSec=25
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/ScaleTag/data
+MemoryMax=256M
+TasksMax=64
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target
