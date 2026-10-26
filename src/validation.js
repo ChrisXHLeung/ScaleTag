@@ -76,10 +76,7 @@ export function pollInput(body) {
     return url.href;
   });
   if (body.retentionAccepted !== true)
-    throw new AppError(
-      400,
-      "Please acknowledge permanent deletion after 30 days.",
-    );
+    throw new AppError(400, "Please acknowledge the data retention policy.");
   return {
     title,
     description,

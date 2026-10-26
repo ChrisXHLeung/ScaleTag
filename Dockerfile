@@ -1,9 +1,16 @@
-FROM node:24-alpine AS dependencies
+FROM node:24-alpine AS base
+ARG SYSTEM_UPDATE_REVISION=manual
+RUN printf 'System update revision: %s\n' "$SYSTEM_UPDATE_REVISION" \
+    && apk update \
+    && apk upgrade --no-cache \
+    && rm -rf /var/cache/apk/*
+
+FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
-FROM node:24-alpine AS runtime
+FROM base AS runtime
 RUN apk add --no-cache flock \
     && mkdir -p /data \
     && chown node:node /data \

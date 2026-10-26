@@ -82,7 +82,7 @@ export class PollStore {
     if (!ID_PATTERN.test(id))
       throw new AppError(
         404,
-        "This poll does not exist or has been permanently deleted.",
+        "This poll does not exist or has been removed from the website.",
       );
     const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), null);
     await db.read();
@@ -116,13 +116,13 @@ export class PollStore {
     if (!db.data)
       throw new AppError(
         404,
-        "This poll does not exist or has been permanently deleted.",
+        "This poll does not exist or has been removed from the website.",
       );
     if (db.data.deleteAt <= this.clock()) {
       await this.remove(id);
       throw new AppError(
         404,
-        "This poll does not exist or has been permanently deleted. Deleted data cannot be recovered.",
+        "This poll does not exist or has been removed from the website.",
       );
     }
     return db;

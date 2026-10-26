@@ -14,7 +14,7 @@ Development site: **https://scaletag.risinfo.cn**
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.
 - Generate a downloadable PNG QR code containing the canonical poll URL.
 - List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. The homepage never lists polls.
-- Permanently delete the poll, results, location, and related identifiers **30 days after publication**. The original page and QR endpoint then return 404. There is no recovery feature.
+- Remove the poll, results, location, and related identifiers from active storage **30 days after publication**. The original page and QR endpoint then return 404. Private daily archives are retained for **90 days after backup creation** for administrator-managed recovery.
 
 ## Run locally
 
@@ -41,7 +41,7 @@ Requires Docker Engine 28+ and Docker Compose v2+.
 ```sh
 cp .env.docker.example .env
 # Edit PUBLIC_ORIGIN to your HTTPS hostname, then:
-docker compose up --build --detach --wait
+SYSTEM_UPDATE_REVISION=$(date -u +%Y%m%dT%H%M%SZ) docker compose up --build --detach --wait
 docker compose ps
 docker compose logs --tail 30 app
 ```
@@ -54,7 +54,7 @@ For loopback-only local development without an HTTPS proxy:
 NODE_ENV=development PUBLIC_ORIGIN=http://127.0.0.1:3000 docker compose up --build --detach --wait
 ```
 
-The image uses Node.js 24 Alpine, production-only dependencies, a non-root user, an HTTP health check and a file-based writer lock. Compose additionally sets a read-only root filesystem, drops Linux capabilities, limits memory to 256 MiB, disables core dumps and rotates startup/error logs. `.dockerignore` uses an allowlist so credentials, environment files and runtime data never enter image layers.
+The image uses Node.js 24 Alpine with `apk update` / `apk upgrade --no-cache` in a shared base stage, production-only dependencies, a non-root user, an HTTP health check and a file-based writer lock. Compose additionally sets a read-only root filesystem, drops Linux capabilities, limits memory to 256 MiB, disables core dumps and rotates startup/error logs. `.dockerignore` uses an allowlist so credentials, environment files and runtime data never enter image layers.
 
 Poll JSON is stored in the **`poll-data` named volume**, mounted at `/data`. `docker compose down` preserves that volume. Rebuilding or recreating the app preserves poll contents, votes and deduplication records. **`docker compose down --volumes` permanently deletes the named-volume data.** Do not use it for routine upgrades.
 
@@ -72,11 +72,13 @@ Atomic rename prevents partial JSON writes; it is not a guarantee against all st
 
 ## Privacy and deletion
 
-Each poll uses a different random cookie, scoped to that poll's API path, with `HttpOnly`, `Secure` in HTTPS mode, and `SameSite=Strict`. Its expiry is the poll's closing time. The server stores only its SHA-256 digest. Clearing cookies, changing browsers, or private browsing can bypass this protection: **one browser is not one verified person**.
+Each poll uses a different random cookie, scoped to that poll's API path, with `HttpOnly`, `Secure` in HTTPS mode, and `SameSite=Strict`. Its expiry is the poll's closing time. The active store removes its SHA-256 digest after closing; archived copies follow the backup retention policy below. Clearing cookies, changing browsers, or private browsing can bypass this protection: **one browser is not one verified person**.
 
 Location filters use a POST body, so the querying coordinates are not added to URLs, and are discarded after the request. No analytics, third-party fonts, request access logs, or account system are included. Cloudflare and the host still process network information. External images load only when the viewer explicitly asks; their hosts may receive connection information.
 
-Expired records are inaccessible at the exact deadline. A cleanup runs every 30 seconds and on startup to remove files and erase closed polls' deduplication hashes. Filesystem cleanup can be delayed if the VM is offline or storage fails. Do not enable VM snapshots, data backups, proxy caching, crash dumps, or external archival systems that would contradict the deletion promise. Existing infrastructure backups must be assessed by the operator. Deletion unlinks files; it is not forensic secure erasure of underlying storage sectors. Downloaded QR images and copies made by third parties cannot be recalled.
+Expired records are inaccessible at the exact 30-day deadline. A cleanup runs every 30 seconds and on startup to remove active files and erase closed polls' deduplication hashes. Private daily backups can contain poll contents, GPS and hashes that existed at backup time. Each archive is retained for 90 days after its creation, so a poll's final archived copy can remain for up to about 120 days after publication. There is no public recovery interface; recovering a record does not extend its original public expiry.
+
+Filesystem cleanup and archive pruning can be delayed by downtime or storage failure. Deletion unlinks files; it is not forensic erasure of underlying storage sectors. Provider snapshots and external backups are separate operator policies. Downloaded QR images and copies made by third parties cannot be recalled.
 
 ## Deployment on the development VM
 
@@ -95,9 +97,34 @@ Cloudflare HTTPS → cloudflared → 127.0.0.1:3000 → Docker → /ScaleTag/dat
 
 The VM uses the Docker CLI under a fixed systemd unit rather than giving the runner access to the Docker socket. The runner only needs its existing `sudo /usr/bin/systemctl restart scaletag.service` permission. `deploy/scaletag-container.service` and `deploy/scaletag-container.sh` are installed root-owned by the operator; configure the numeric `SCALETAG_UID` and `SCALETAG_GID` to match the data directory. The original `deploy/scaletag.service` remains available for native installations.
 
-`deploy/deploy.sh` stages a release, switches the symlink and restarts the service. The root-managed helper builds a revision-tagged image and starts the container with `/ScaleTag/data` mounted directly. Failed restarts or host health checks restore the previous release. The previous native release remains usable for the initial migration rollback. Current and previous source releases are retained; no runtime data backup is created. Review old `scaletag:<commit>` images periodically and remove unused revisions explicitly; never prune unrelated images or volumes on a shared server.
+`deploy/deploy.sh` stages a release, switches the symlink and restarts the service. The root-managed helper pulls the current base image, passes the commit as `SYSTEM_UPDATE_REVISION` to invalidate the system-update layer for every new release, builds a revision-tagged image and starts the container with `/ScaleTag/data` mounted directly. Failed restarts or host health checks restore the previous release. The previous native release remains usable for the initial migration rollback. Current and previous source releases are retained separately from the daily data archives. Review old `scaletag:<commit>` images periodically and remove unused revisions explicitly; never prune unrelated images or volumes on a shared server.
 
 GitHub Actions tests pull requests on GitHub-hosted Ubuntu, including a real Docker image build and isolated container persistence test. Deployment only runs on `main` using the self-hosted runner **eons**. The VM's Docker access stays restricted to the root-managed service. Protect `main` before accepting outside contributions.
+
+## Daily archives and 90-day retention
+
+The development VM runs `scaletag-backup.timer` at **03:00 America/Toronto** every day. `Persistent=true` catches up after downtime. The root-owned `scaletag-backup.service` runs `/usr/local/sbin/scaletag-backup`; the app and runner cannot read the archive directory through the container.
+
+- Source: `/ScaleTag/data/<poll-id>.json` only; environment files, Docker layers, code, locks, external images and credentials are excluded.
+- Destination: `/ScaleTag/backups/scaletag-data-<UTC-timestamp>.tar.gz`.
+- Permissions: root-only directory `0700`, archive files `0600`.
+- Retention: each archive is removed once it reaches 90 days, on the next successful daily cleanup. Only this tool's matching archive names are pruned.
+- Integrity: gzip CRC, JSON parsing and a SHA-256 manifest are verified before the archive is atomically published. Failed/incomplete jobs do not publish a final archive.
+- Availability: backup reads atomically replaced JSON documents without stopping the app. Each poll is consistent individually; the entire archive is not one global point-in-time transaction.
+- Resource guard: reserve at least 512 MiB free disk space. Jobs are serialized and run with low CPU/I/O priority. Interrupted partial archives are cleared on the next run.
+
+Install `deploy/backup.py`, `deploy/scaletag-backup.service` and `deploy/scaletag-backup.timer` root-owned at the paths above. Keep the helper outside runner-writable release directories. The app's data is not mounted into a backup container, and archives are not mounted into the app container.
+
+```sh
+sudo systemctl start scaletag-backup.service
+sudo systemctl list-timers scaletag-backup.timer
+sudo journalctl -u scaletag-backup.service -n 20
+sudo /usr/local/sbin/scaletag-backup --verify /ScaleTag/backups/<archive>.tar.gz
+```
+
+For recovery, first verify and inspect an archive in a private staging directory. Stop the app before replacing any active records, preserve the original timestamps, and set recovered JSON ownership to the numeric app user with mode `0600`. Expired records will be pruned at startup. Historical records may be inspected offline by the administrator. No automated restore overwrites live data.
+
+These are local archives on the same VM, not an offsite copy. Include their disk use when sizing the host.
 
 ## Initial operating cost
 
@@ -110,6 +137,7 @@ Default safety limits: 20 creations/minute globally, 10,000 retained polls, 50,0
 ```sh
 npm run check
 npm test
+python3 -m unittest discover -s test -p '*_test.py' -v
 ```
 
 With Docker available, verify an already built image using an isolated named volume:

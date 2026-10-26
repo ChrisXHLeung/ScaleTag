@@ -20,6 +20,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test
+      - run: python3 -m unittest discover -s test -p '*_test.py' -v
 
   container:
     needs: test
@@ -27,6 +28,7 @@ jobs:
     env:
       PUBLIC_ORIGIN: https://scaletag.test
       SCALETAG_IMAGE: scaletag:container-test
+      SYSTEM_UPDATE_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:

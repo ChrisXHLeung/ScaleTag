@@ -4,6 +4,8 @@ services:
     image: ${SCALETAG_IMAGE:-scaletag:local}
     build:
       context: .
+      args:
+        SYSTEM_UPDATE_REVISION: ${SYSTEM_UPDATE_REVISION:-manual}
     init: true
     user: "${SCALETAG_UID:-1000}:${SCALETAG_GID:-1000}"
     environment:

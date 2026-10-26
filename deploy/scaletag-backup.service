@@ -1,0 +1,18 @@
+[Unit]
+Description=Verified daily ScaleTag JSON archive and 90-day retention
+After=local-fs.target
+ConditionPathIsDirectory=/ScaleTag/data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/scaletag-backup --data-dir /ScaleTag/data --backup-dir /ScaleTag/backups --retention-days 90
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/ScaleTag/backups
+MemoryMax=256M
+TimeoutStartSec=30min

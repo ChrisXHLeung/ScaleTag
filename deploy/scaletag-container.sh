@@ -16,7 +16,7 @@ case "${1:-}" in
     # Keep the previous native release runnable during the initial migration rollback.
     [ -f "$release/Dockerfile" ] || exit 0
     mkdir -p "${DOCKER_CONFIG:-/var/lib/scaletag/docker-config}"
-    docker image inspect "$image" >/dev/null 2>&1 || docker build --tag "$image" "$release"
+    docker image inspect "$image" >/dev/null 2>&1 || docker build --pull --build-arg SYSTEM_UPDATE_REVISION="$revision" --tag "$image" "$release"
     ;;
   run)
     if [ ! -f "$release/Dockerfile" ]; then

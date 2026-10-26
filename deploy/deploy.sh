@@ -36,7 +36,7 @@ if [[ "$healthy" != true ]]; then
   echo 'Health check failed; restored previous release when available.'
   exit 1
 fi
-# Retain the active release and one previous release; never back up runtime data.
+# Retain code releases separately; leave live data and daily backup archives untouched.
 for old in "$root"/releases/*; do
   [[ -d "$old" && "$old" != "$release" && "$old" != "$previous" ]] || continue
   rm -rf -- "$old"

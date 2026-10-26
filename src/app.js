@@ -107,7 +107,7 @@ export function createApp(
       : next(
           new AppError(
             404,
-            "This poll does not exist or has been permanently deleted.",
+            "This poll does not exist or has been removed from the website.",
           ),
         ),
   );

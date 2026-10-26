@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily ScaleTag backup at 03:00 America/Toronto
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Toronto
+Persistent=true
+AccuracySec=1min
+Unit=scaletag-backup.service
+
+[Install]
+WantedBy=timers.target
