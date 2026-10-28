@@ -90,7 +90,7 @@ async function cachedPaths(page) {
         "Never cache poll data or poll URLs",
       );
       assert.ok(
-        !["/", "/create", "/VoteList", "/privacy"].includes(url.pathname),
+        !["/", "/create", "/PostList", "/privacy"].includes(url.pathname),
         "Do not cache page responses",
       );
       return url.pathname;

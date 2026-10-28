@@ -259,7 +259,7 @@ test("startup clears expired records and abandoned atomic-write files", async (t
   assert.deepEqual(await readdir(f.directory), []);
 });
 
-test("VoteList sorts newest first; nearby is exactly 100 km; coordinates stay private", async (t) => {
+test("PostList sorts newest first; nearby is exactly 100 km; coordinates stay private", async (t) => {
   const f = await fixture(t);
   const base = { latitude: 0, longitude: 0 };
   const latitude = (km) => ((km / 6371.0088) * 180) / Math.PI;
@@ -808,4 +808,32 @@ test("legacy polls initialize social fields without changing votes or exposing h
   assert.equal(result.totalVotes, 0);
   assert.equal(result.type, "poll");
   assert.ok(!("likers" in result));
+});
+
+test("legacy listing links redirect to PostList and preserve query parameters", async (t) => {
+  const f = await fixture(t);
+  // fetch defaults to following redirects, so check the alias directly.
+  const response = await fetch(
+    (await f.request("/healthz")).url.replace(
+      "/healthz",
+      "/VoteList?type=task&status=open",
+    ),
+    { redirect: "manual" },
+  );
+  assert.equal(response.status, 308);
+  assert.equal(
+    response.headers.get("location"),
+    "/PostList?type=task&status=open",
+  );
+  const canonical = await f.request("/PostList");
+  assert.equal(canonical.status, 200);
+  const html = await canonical.text();
+  assert.ok(html.includes('href="/PostList"'));
+  assert.ok(!html.includes("VoteList"));
+  const manifest = await (await f.request("/manifest.webmanifest")).json();
+  assert.ok(
+    manifest.shortcuts.some(
+      (s) => s.url === "/PostList" && s.name.includes("PostList"),
+    ),
+  );
 });

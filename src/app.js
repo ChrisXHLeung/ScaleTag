@@ -316,8 +316,12 @@ export function createApp(
       },
     }),
   );
+  // Preserve shared links and old installed-app shortcuts after the listing rename.
+  app.get("/VoteList", (req, res) =>
+    res.redirect(308, "/PostList" + req.originalUrl.slice(req.path.length)),
+  );
   app.get(
-    ["/", "/create", "/create/task", "/VoteList", "/privacy", "/install"],
+    ["/", "/create", "/create/task", "/PostList", "/privacy", "/install"],
     (req, res) => res.sendFile(join(publicDir, "index.html")),
   );
   app.get("/vote/:id", async (req, res) => {

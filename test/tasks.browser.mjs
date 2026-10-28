@@ -200,7 +200,7 @@ test("task and poll discovery filters work in list and real MapLibre; mobile for
           contentType: "application/x-protobuf",
         }),
   );
-  await f.page.goto(f.origin + "/VoteList");
+  await f.page.goto(f.origin + "/PostList");
   await f.page.locator("#content-type").selectOption("task");
   await f.page.waitForFunction(
     () => document.querySelectorAll(".task-list-card").length === 1,
@@ -221,7 +221,7 @@ test("task and poll discovery filters work in list and real MapLibre; mobile for
       ?.getAttribute("href")
       .startsWith("/vote/"),
   );
-  for (const path of ["/create/task", `/task/${task.id}`, "/VoteList"]) {
+  for (const path of ["/create/task", `/task/${task.id}`, "/PostList"]) {
     await f.page.setViewportSize({ width: 320, height: 800 });
     await f.page.goto(f.origin + path);
     await f.page.waitForFunction(

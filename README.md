@@ -15,22 +15,24 @@ Development site: **https://scaletag.risinfo.cn**
 - Start immediately; accept a single choice for exactly **168 hours**.
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.
 - Generate a downloadable PNG QR code containing the canonical poll URL.
-- List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. Switch between List and Map; the homepage never lists polls.
+- List polls and tasks at **`/PostList`**, newest first, with open/ended filters and an optional **100 km** radius filter. Switch between List and Map; the homepage never lists polls.
 - Remove the poll, results, location, and related identifiers from active storage **30 days after publication**. The original page and QR endpoint then return 404. Private daily archives are retained for **90 days after backup creation** for administrator-managed recovery.
 
 ## Pages
 
-| Path           | Purpose                                                                             |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `/`            | Introduction and QR code for installing the app; no poll listing.                   |
-| `/create/task` | Publish a local task with a reward offer and required GPS/map acknowledgements.     |
-| `/task/<id>`   | Read a task, like it, reply with public contact details, or save its QR code.       |
-| `/create`      | Publish a single-choice poll with required GPS permission.                          |
-| `/VoteList`    | Browse retained polls in List or Map view, with status and optional 100 km filters. |
-| `/install`     | Device-specific PWA installation guide.                                             |
-| `/privacy`     | Explain cookies, location, deletion and private backup retention.                   |
+| Path           | Purpose                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `/`            | Introduction and QR code for installing the app; no poll listing.                             |
+| `/create/task` | Publish a local task with a reward offer and required GPS/map acknowledgements.               |
+| `/task/<id>`   | Read a task, like it, reply with public contact details, or save its QR code.                 |
+| `/create`      | Publish a single-choice poll with required GPS permission.                                    |
+| `/PostList`    | Browse retained polls and tasks in List or Map view, with status and optional 100 km filters. |
+| `/install`     | Device-specific PWA installation guide.                                                       |
+| `/privacy`     | Explain cookies, location, deletion and private backup retention.                             |
 
 Each published poll also has its own shareable URL and downloadable QR code. Installing the app does not create an account or change the anonymous voting rules.
+
+The combined listing is named **PostList**. Old `/VoteList` links and installed-app shortcuts redirect permanently to `/PostList`, preserving query parameters. Poll and task URLs are unchanged.
 
 ## Tasks, likes and public replies
 
@@ -60,13 +62,13 @@ npm run test:tasks
 
 ## Map view
 
-VoteList opens in **List** view. Choosing **Map** loads [MapLibre GL JS](https://maplibre.org/) 6.16.0 from ScaleTag and the Positron basemap from [OpenFreeMap](https://openfreemap.org/). There is no map API key, registration, separate map server or additional paid service. OpenFreeMap currently offers free public map hosting, including commercial use, without map-view quotas; it provides no SLA. Keep the OpenMapTiles/OpenStreetMap attribution visible. Map availability depends on the provider and the visitor's network/browser; List remains available independently.
+PostList opens in **List** view. Choosing **Map** loads [MapLibre GL JS](https://maplibre.org/) 6.16.0 from ScaleTag and the Positron basemap from [OpenFreeMap](https://openfreemap.org/). There is no map API key, registration, separate map server or additional paid service. OpenFreeMap currently offers free public map hosting, including commercial use, without map-view quotas; it provides no SLA. Keep the OpenMapTiles/OpenStreetMap attribution visible. Map availability depends on the provider and the visitor's network/browser; List remains available independently.
 
 - Open polls use blue dots; ended polls use red dots. Numbered groups expand on click. Select a dot to open a poll; polls sharing a rounded position appear together in the popup.
 - Content type (Polls & tasks / Polls / Tasks), status and optional 100 km filters apply to both views. Nearby matching uses the original GPS on the server; the requesting visitor's coordinates are discarded after the search.
 - The map shows only posts created with explicit map consent (`mapVisible: true`). The creation form requires acknowledgement before publishing. Existing polls and API clients without this flag remain list-only; they are not retroactively exposed.
 - Public markers use a stable **0.01° latitude/longitude grid**, roughly 1.1 km north–south and narrower east–west. Exact GPS stays in the private JSON store. A rounded position is an approximate area, not an anonymity guarantee; an original coordinate already on the grid is unchanged.
-- At most the **newest 1,000 matching mapped polls** are returned. The interface shows the returned and total counts; use filters to narrow large sets. A text list of mapped polls is available below the map for keyboard and assistive-technology access.
+- At most the **newest 1,000 matching mapped posts** are returned. The interface shows the returned and total counts; use filters to narrow large sets. A text list of mapped posts is available below the map for keyboard and assistive-technology access.
 - Marker searches use `POST /api/map/search` and `no-store`. No coordinates are put in URLs. Current markers refresh at most every 30 seconds and at upcoming closing/deletion boundaries while the page is visible. Failed refreshes and offline mode clear markers rather than presenting retained results as current.
 
 Choosing Map sends the visitor's IP address and requested map areas to OpenFreeMap. Post titles, rewards, contacts, signatures and votes are not sent to the map provider. The MapLibre module, CSS and worker are served locally from a pinned dependency; the map connects only to `tiles.openfreemap.org`. Third-party map resources, marker responses and map-library files are excluded from the PWA cache. The browser may cache basemap resources under the provider's own headers; ScaleTag does not download offline map areas. MapLibre uses WebGL, with List as the fallback on unsupported devices.
@@ -95,7 +97,7 @@ The guide selects iPhone/iPad or Android/desktop instructions using a local brow
 
 The homepage QR code contains `${PUBLIC_ORIGIN}/install`, using the configured public origin rather than the incoming Host header. It is separate from each poll's QR code, which opens that poll's voting page.
 
-The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/VoteList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
+The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/PostList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
 
 The service worker caches **only an explicit allowlist of public static resources and a generic offline page**. It never caches page URLs, poll HTML, API responses, QR responses, external images or POST requests. An offline navigation displays a connection message rather than old poll contents. Publishing, voting, likes, replies, GPS searches and current results require a network connection. Requests are never queued for background submission. The existing seven-day voting and 30-day public expiry checks stay on the server.
 

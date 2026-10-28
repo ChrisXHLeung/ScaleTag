@@ -22,7 +22,7 @@ export async function createPollMap() {
     ready = false;
   const fail = () => {
     message.textContent =
-      "The map could not load. Try Map again or use List to browse polls.";
+      "The map could not load. Try Map again or use List to browse posts.";
   };
   try {
     map = new gl.Map({
@@ -99,7 +99,7 @@ export async function createPollMap() {
     ready = true;
     clearTimeout(timeout);
     message.textContent =
-      "Select a dot to open a poll. Select a numbered group to explore.";
+      "Select a dot to open a post. Select a numbered group to explore.";
     map.addSource("polls", {
       type: "geojson",
       data: geojson(),

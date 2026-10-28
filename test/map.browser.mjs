@@ -102,7 +102,7 @@ async function mapReady(page) {
   await page.waitForFunction(() =>
     document
       .querySelector("#map-count")
-      .textContent.includes("matching mapped polls"),
+      .textContent.includes("matching mapped posts"),
   );
 }
 
@@ -114,7 +114,7 @@ test("map is opt-in, renders real MapLibre markers, filters and provides accessi
     mapVisible: false,
     title: "Legacy list-only",
   });
-  await f.page.goto(f.origin + "/VoteList");
+  await f.page.goto(f.origin + "/PostList");
   await f.page.getByRole("link", { name: /Legacy list-only/ }).waitFor();
   assert.equal(
     f.requests.length,
@@ -146,7 +146,7 @@ test("map is opt-in, renders real MapLibre markers, filters and provides accessi
   );
   await f.page.getByRole("button", { name: "Ended", exact: true }).click();
   await f.page
-    .getByText("No mapped polls match these filters.", { exact: false })
+    .getByText("No mapped posts match these filters.", { exact: false })
     .waitFor();
   await f.page.getByRole("button", { name: "Open", exact: true }).click();
   await f.page.locator("#map-count").filter({ hasText: "1 of 1" }).waitFor();
@@ -157,7 +157,7 @@ test("map is opt-in, renders real MapLibre markers, filters and provides accessi
   await f.page.getByRole("button", { name: /Within 100 km/ }).click();
   await f.page.getByRole("button", { name: /Within 100 km/ }).click();
   await f.page
-    .getByText("No mapped polls match these filters.", { exact: false })
+    .getByText("No mapped posts match these filters.", { exact: false })
     .waitFor();
   await f.page.getByRole("button", { name: "List", exact: true }).click();
   assert.equal(await f.page.locator("#map-panel").isVisible(), false);
@@ -168,7 +168,7 @@ test("map is opt-in, renders real MapLibre markers, filters and provides accessi
 test("map handles failure, offline and expiry without retaining markers in PWA caches", async (t) => {
   const f = await fixture(t);
   await f.store.create(f.input);
-  await f.page.goto(f.origin + "/VoteList");
+  await f.page.goto(f.origin + "/PostList");
   await f.page.evaluate(() => navigator.serviceWorker.ready);
   await mapReady(f.page);
   await f.context.setOffline(true);
@@ -184,7 +184,7 @@ test("map handles failure, offline and expiry without retaining markers in PWA c
     .getByRole("button", { name: "Fit all markers", exact: false })
     .click();
   await f.page
-    .getByText("No mapped polls match these filters.", { exact: false })
+    .getByText("No mapped posts match these filters.", { exact: false })
     .waitFor();
   assert.equal(await f.page.locator("#mapped-poll-links a").count(), 0);
   const keys = await f.page.evaluate(async () => {
@@ -228,7 +228,7 @@ test("mobile layout, explicit publishing consent and rapid view changes", async 
     await f.page.locator("#map-consent").getAttribute("required"),
     "",
   );
-  await f.page.goto(f.origin + "/VoteList");
+  await f.page.goto(f.origin + "/PostList");
   await mapReady(f.page);
   assert.ok(
     await f.page.evaluate(
@@ -254,7 +254,7 @@ test("cluster expands and overlapping grid markers expose all polls safely", asy
     ...f.input,
     title: "Another question in the same area",
   });
-  await f.page.goto(f.origin + "/VoteList");
+  await f.page.goto(f.origin + "/PostList");
   await mapReady(f.page);
   await f.page
     .locator("#map-message")

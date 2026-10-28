@@ -36,9 +36,9 @@
       "url": "/create"
     },
     {
-      "name": "Explore VoteList",
-      "short_name": "VoteList",
-      "url": "/VoteList"
+      "name": "Explore PostList",
+      "short_name": "PostList",
+      "url": "/PostList"
     },
     {
       "name": "Create a task",
