@@ -366,6 +366,11 @@ test(
     await f.page
       .getByRole("link", { name: "Open the installation guide" })
       .click();
+    // A changed URL can precede attachment of the destination document.
+    // Wait for the guide itself before testing a direct reload.
+    await f.page
+      .getByRole("heading", { name: "Install ScaleTag.", exact: true })
+      .waitFor();
     assert.equal(new URL(f.page.url()).pathname, "/install");
     assert.equal((await f.page.reload()).status(), 200);
 
