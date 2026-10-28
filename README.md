@@ -16,6 +16,26 @@ Development site: **https://scaletag.risinfo.cn**
 - List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. The homepage never lists polls.
 - Remove the poll, results, location, and related identifiers from active storage **30 days after publication**. The original page and QR endpoint then return 404. Private daily archives are retained for **90 days after backup creation** for administrator-managed recovery.
 
+## Install as a PWA
+
+ScaleTag can be installed from its HTTPS website and opened in a standalone app window. Use **Install app** in the footer for an installation guide and, when supported, the browser's native install prompt. On iPhone/iPad, open the site in Safari and choose **Share → Add to Home Screen**; enable **Open as Web App** if shown. Installation availability and menu labels depend on the browser.
+
+The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/VoteList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
+
+The service worker caches **only an explicit allowlist of public static resources and a generic offline page**. It never caches page URLs, poll HTML, API responses, QR responses, external images or POST requests. An offline navigation displays a connection message rather than old poll contents. Publishing, voting, GPS searches and current results require a network connection. Requests are never queued for background submission. The existing seven-day voting and 30-day public expiry checks stay on the server.
+
+Service-worker versions are derived from a content hash of the static assets and generic HTML, so releases trigger browser update detection without manual version bumps. A new worker waits until the user selects **Update & reload**; the notice warns them to finish or copy an unsent draft. Other open windows are not forcibly reloaded. Older ScaleTag static caches are removed on activation. Browsers need an initial successful online visit to prepare offline resources.
+
+API/page responses keep `Cache-Control: no-store`; only the allowlisted static files use `no-cache` for revalidation. Service-worker code is itself served with `no-store` and root scope. No additional backend, database, push service or app-store account is required.
+
+Browser regression tests use isolated local data and check installation metadata, icons, cache contents, offline rejection of writes, reconnection, expiry, install UI and user-approved updates:
+
+```sh
+npm ci --ignore-scripts
+npx playwright install --with-deps chromium
+npm run test:pwa
+```
+
 ## Run locally
 
 Requires Node.js 22+ (production uses Node.js 24 LTS).

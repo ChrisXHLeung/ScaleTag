@@ -20,6 +20,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:pwa
       - run: python3 -m unittest discover -s test -p '*_test.py' -v
 
   container:

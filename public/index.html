@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1746a2" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ScaleTag" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta
       name="description"
       content="A question. A place. Seven days. Create a simple, anonymous poll and share it with a QR code."
@@ -12,6 +17,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" type="module"></script>
+    <script src="/pwa.js" type="module"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -31,6 +37,10 @@
         </nav>
       </div>
     </header>
+    <div id="connection-status" class="connection-banner" role="status" hidden>
+      You’re offline. Publishing and voting need a connection. Results shown may
+      be out of date.
+    </div>
     <main id="main" tabindex="-1">
       <div class="loading-state" role="status">Loading ScaleTag…</div>
     </main>
@@ -42,6 +52,14 @@
         <p>A question. A place. Seven days.</p>
       </div>
       <div class="footer-links">
+        <button
+          type="button"
+          id="install-app"
+          class="footer-action"
+          aria-haspopup="dialog"
+        >
+          Install app
+        </button>
         <a href="/privacy">Privacy &amp; retention</a
         ><a
           href="https://github.com/ChrisXHLeung/ScaleTag"
@@ -51,6 +69,67 @@
         ><span>Made for small conversations.</span>
       </div>
     </footer>
+    <dialog
+      id="install-dialog"
+      class="install-dialog"
+      aria-labelledby="install-title"
+    >
+      <button
+        type="button"
+        id="close-install"
+        class="dialog-close"
+        aria-label="Close installation guide"
+      >
+        ×
+      </button>
+      <img src="/icons/icon-192.png" alt="" width="64" height="64" />
+      <h2 id="install-title">Install ScaleTag</h2>
+      <p>
+        Keep a little curiosity on your home screen. Publishing, voting and live
+        results still need an internet connection.
+      </p>
+      <button type="button" id="install-native" class="button" hidden>
+        Install ScaleTag
+      </button>
+      <dl>
+        <dt>iPhone or iPad</dt>
+        <dd>
+          Open ScaleTag in Safari, tap Share, then Add to Home Screen. Choose
+          Open as Web App if shown.
+        </dd>
+        <dt>Android or desktop</dt>
+        <dd>
+          Open your browser’s menu and choose Install app or Add to Home Screen,
+          when available.
+        </dd>
+      </dl>
+      <p id="install-message" class="field-hint">
+        No app store account is needed.
+      </p>
+    </dialog>
+    <aside
+      id="app-update"
+      class="update-banner"
+      aria-label="App update"
+      role="status"
+      hidden
+    >
+      <div>
+        <strong>A new version is ready.</strong>
+        <p>Finish or copy your draft before updating.</p>
+      </div>
+      <button type="button" class="button small" id="apply-update">
+        Update &amp; reload
+      </button>
+      <button
+        type="button"
+        class="update-dismiss"
+        id="dismiss-update"
+        title="Remind me on my next visit"
+      >
+        Later
+      </button>
+    </aside>
     <div id="toast" role="status" aria-live="polite" hidden></div>
     <noscript
       ><p class="notice">

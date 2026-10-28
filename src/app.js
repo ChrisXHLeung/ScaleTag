@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { AppError, coordinates, pollInput } from "./validation.js";
 import { ID_PATTERN } from "./store.js";
+import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
@@ -20,6 +21,7 @@ export function createApp(
   const app = express();
   app.disable("x-powered-by");
   app.disable("etag");
+  const workerSource = serviceWorkerSource();
   app.use((req, res, next) => {
     res.set({
       "Cache-Control": "no-store, max-age=0",
@@ -28,7 +30,7 @@ export function createApp(
       "X-Frame-Options": "DENY",
       "Permissions-Policy": "geolocation=(self), camera=(), microphone=()",
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'self'",
     });
     if (secure) res.set("Strict-Transport-Security", "max-age=31536000");
     next();
@@ -164,7 +166,22 @@ export function createApp(
   app.use("/api", (req, res, next) =>
     next(new AppError(404, "Endpoint not found.")),
   );
-  app.use(express.static(publicDir, { index: false, etag: false, maxAge: 0 }));
+  app.get("/sw.js", (req, res) => {
+    res.set("Service-Worker-Allowed", "/");
+    res.type("application/javascript").send(workerSource);
+  });
+  app.use(
+    express.static(publicDir, {
+      index: false,
+      etag: false,
+      maxAge: 0,
+      setHeaders(res, path) {
+        const relative = "/" + path.slice(publicDir.length).replace(/^\//, "");
+        if (STATIC_ASSETS.includes(relative))
+          res.set("Cache-Control", "no-cache, max-age=0, must-revalidate");
+      },
+    }),
+  );
   app.get(["/", "/create", "/VoteList", "/privacy"], (req, res) =>
     res.sendFile(join(publicDir, "index.html")),
   );

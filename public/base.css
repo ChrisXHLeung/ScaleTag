@@ -1717,3 +1717,121 @@ progress::-moz-progress-bar {
     justify-content: space-between;
   }
 }
+
+.footer-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.connection-banner {
+  background: #fff2f4;
+  color: #922537;
+  padding: 12px 22px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.install-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 32px;
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 20px 70px #172b4d30;
+}
+.install-dialog::backdrop {
+  background: #172b4d80;
+}
+.install-dialog h2 {
+  font-size: 30px;
+  margin: 18px 0 12px;
+}
+.install-dialog p,
+.install-dialog dd {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+.install-dialog dt {
+  font-size: 13px;
+  font-weight: 650;
+  margin-top: 20px;
+}
+.install-dialog dd {
+  margin: 6px 0 0;
+}
+.install-dialog > .button {
+  width: 100%;
+  margin-top: 20px;
+}
+.dialog-close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--pale);
+  color: var(--ink);
+  font-size: 23px;
+}
+.update-banner {
+  position: fixed;
+  z-index: 15;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(680px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: white;
+  border: 1px solid #b4c9ee;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px #172b4d20;
+}
+.update-banner strong {
+  font-size: 13px;
+}
+.update-banner p {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 5px;
+}
+.update-banner .button {
+  margin-left: auto;
+}
+.update-dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 4px;
+}
+.empty-page #retry-connection {
+  margin: 20px 0 0;
+}
+@media (max-width: 600px) {
+  .update-banner {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .update-banner > div {
+    width: 100%;
+  }
+  .update-banner .button {
+    margin-left: 0;
+  }
+  .install-dialog {
+    padding: 28px 22px;
+  }
+}

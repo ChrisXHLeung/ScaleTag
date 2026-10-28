@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1746a2" />
+    <meta name="robots" content="noindex" />
+    <title>Connection unavailable — ScaleTag</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/base.css" />
+    <script src="/offline.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand"
+          ><span class="brand-mark" aria-hidden="true">↗</span>ScaleTag</a
+        >
+      </div>
+    </header>
+    <main>
+      <section class="empty-page">
+        <span class="eyebrow">A MOMENT TO RECONNECT</span>
+        <h1>Connection unavailable.</h1>
+        <p>
+          We can’t reach ScaleTag right now. Reconnect to the internet or try
+          again in a moment.
+        </p>
+        <p>
+          Publishing, voting and current results need a live connection. Votes
+          are never queued or submitted in the background.
+        </p>
+        <button type="button" class="button" id="retry-connection">
+          Try again ↗
+        </button>
+        <p class="field-hint" id="offline-status" role="status">
+          This page will retry when your connection returns.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
