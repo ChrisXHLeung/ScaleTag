@@ -1,134 +1,32 @@
-const main = document.querySelector("#main");
-const escape = (v) =>
-  String(v ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
-const icons = {
-  arrow:
-    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>',
-  pin: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
-  clock:
-    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg>',
-  shield:
-    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
-  qr: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h3v3h4v4h-7zm7 0v3"/></svg>',
-  download:
-    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>',
-};
-const date = (time) =>
-  new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(time));
-const shortDate = (time) =>
-  new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(
-    new Date(time),
-  );
-const count = (value) => new Intl.NumberFormat("en").format(value);
-const percent = (votes, total) =>
-  total ? ((votes / total) * 100).toFixed(1).replace(/\.0$/, "") : "0";
-function remaining(end, now = Date.now()) {
-  const minutes = Math.max(0, Math.ceil((end - now) / 60000));
-  if (!minutes) return "Voting closed";
-  if (minutes >= 1440)
-    return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h left`;
-  return minutes >= 60
-    ? `${Math.floor(minutes / 60)}h ${minutes % 60}m left`
-    : `${minutes}m left`;
-}
-function toast(message) {
-  const element = document.querySelector("#toast");
-  element.textContent = message;
-  element.hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => {
-    element.hidden = true;
-  }, 4500);
-}
-async function api(path, body) {
-  if (!navigator.onLine)
-    throw new Error(
-      "You’re offline. Reconnect to publish, vote or load current results.",
-    );
-  let response;
-  try {
-    response = await fetch(path, {
-      credentials: "same-origin",
-      cache: "no-store",
-      ...(body === undefined
-        ? {}
-        : {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          }),
-    });
-  } catch {
-    throw new Error("Could not connect. Check your connection and try again.");
-  }
-  let data;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error(
-      "The service is temporarily unavailable. Please try again.",
-    );
-  }
-  if (!response.ok) {
-    const error = new Error(
-      data.error ?? "Something went wrong. Please try again.",
-    );
-    error.status = response.status;
-    throw error;
-  }
-  return data;
-}
-function locate() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation)
-      return reject(
-        new Error(
-          "Location is not supported in this browser. Try a browser with location access.",
-        ),
-      );
-    navigator.geolocation.getCurrentPosition(
-      (p) =>
-        resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
-      (e) =>
-        reject(
-          new Error(
-            e.code === 1
-              ? "Location permission is required. Allow it in your browser settings and try again."
-              : e.code === 3
-                ? "Location timed out. Please try again."
-                : "Your location is unavailable. Check your device location settings and try again.",
-          ),
-        ),
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
-    );
-  });
-}
-function notice() {
-  return `<div class="retention-note">${icons.clock}<div><strong>Public for 30 days. Backed up for recovery.</strong><p>Polls leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.</p></div></div>`;
-}
+import {
+  main,
+  escape,
+  icons,
+  date,
+  shortDate,
+  count,
+  percent,
+  remaining,
+  toast,
+  api,
+  locate,
+  notice,
+} from "/common.js";
+import { mountSocial } from "/social.js";
+import { createTask, taskPage } from "/tasks.js";
 function showError(error) {
-  document.title = "Poll unavailable — ScaleTag";
+  document.title = "Post unavailable — ScaleTag";
   main.innerHTML = `<section class="empty-page"><span class="eyebrow">NOT HERE ANYMORE</span><h1>This page is unavailable.</h1><p>${escape(error.message)}</p><p>Polls leave the website 30 days after publication. Private backup copies may remain for disaster recovery; this link no longer provides access.</p><a class="button" href="/VoteList">Explore VoteList ${icons.arrow}</a></section>`;
 }
 
 function home() {
   document.title = "ScaleTag — Small questions. Local voices.";
   main.innerHTML = `<section class="hero">
-    <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> SMALL QUESTIONS. LOCAL VOICES.</div><h1>Put a question<br>out into <em>the world.</em></h1><p>Create a poll. Share a code. Hear what people think.<br class="desktop-only"> No accounts, no complicated setup. Just a little curiosity.</p><a class="button" href="/create">Start a conversation ${icons.arrow}</a><a class="text-link" href="/VoteList">Explore VoteList ↗</a></div>
-    <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><div class="art-stamp">A LITTLE QUESTION<br>CAN GO A LONG WAY</div><div class="question-tag"><span class="tag-hole"></span><span class="tag-caption">YOUR NEXT CONVERSATION</span><strong>What if<br>we asked?</strong><div class="tag-bottom"><span>ONE QUESTION<br>MANY PERSPECTIVES</span><span class="tag-arrow">↗</span></div></div><div class="location-chip">${icons.pin} Rooted in a real place</div><div class="seven-badge"><strong>7</strong><span>DAYS TO<br>HAVE YOUR SAY</span></div></div>
+    <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> SMALL QUESTIONS. LOCAL VOICES.</div><h1>Put a question<br>out into <em>the world.</em></h1><p>Post a poll or a task. Share a code. Connect with people nearby.<br class="desktop-only"> No accounts, no complicated setup. Just a little curiosity.</p><a class="button" href="/create">Start a conversation ${icons.arrow}</a><a class="text-link" href="/VoteList">Explore VoteList ↗</a></div>
+    <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><div class="art-stamp">A LITTLE QUESTION<br>CAN GO A LONG WAY</div><div class="question-tag"><span class="tag-hole"></span><span class="tag-caption">YOUR NEXT CONVERSATION</span><strong>What if<br>we asked?</strong><div class="tag-bottom"><span>ONE QUESTION<br>MANY PERSPECTIVES</span><span class="tag-arrow">↗</span></div></div><div class="location-chip">${icons.pin} Rooted in a real place</div><div class="seven-badge"><strong>7</strong><span>DAYS TO<br>VOTE IN POLLS</span></div></div>
   </section>
   <section class="home-install" aria-labelledby="home-install-title"><a href="/install" class="home-install-qr"><img src="/install/qr.png" alt="QR code for the ScaleTag installation guide" width="140" height="140"></a><div><span class="eyebrow">TAKE IT WITH YOU</span><h2 id="home-install-title">A little app. One scan away.</h2><p>Scan with your phone for installation steps made for your device.</p><a class="text-link" href="/install">Open the installation guide ↗</a></div></section>
-  <section class="principles" aria-label="How ScaleTag works"><div>${icons.clock}<span><strong>7 days to vote</strong><small>Starts the moment you publish.</small></span></div><div>${icons.qr}<span><strong>One code. Any conversation.</strong><small>Save it, print it, pass it around.</small></span></div><div>${icons.shield}<span><strong>No account needed</strong><small>A name of your choosing is enough.</small></span></div></section>`;
+  <section class="principles" aria-label="How ScaleTag works"><div>${icons.clock}<span><strong>7 days to vote</strong><small>Polls vote for 7 days. All posts stay for 30.</small></span></div><div>${icons.qr}<span><strong>One code. Any conversation.</strong><small>Save it, print it, pass it around.</small></span></div><div>${icons.shield}<span><strong>No account needed</strong><small>A name of your choosing is enough.</small></span></div></section>`;
 }
 
 function installPage() {
@@ -148,7 +46,7 @@ function createPoll() {
   document.title = "Create a poll — ScaleTag";
   document.querySelector('[data-nav="create"]').classList.add("active");
   main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">← Back to home</a><span class="eyebrow">START SOMETHING</span><h1>What’s on<br>your mind?</h1><p>A neighborhood idea. A small decision.<br>Something you’ve always wondered.</p><div class="intro-note"><span class="tiny-label">KEEP IT SIMPLE</span><p>One question, a few options,<br>and room for a different perspective.</p></div><div class="rules"><p>${icons.pin} Location is required to publish.</p><p>${icons.clock} Voting stays open for exactly 7 days.</p><p>${icons.shield} Your signature is not verified.</p></div></aside>
-  <form id="create-form" class="form-card">
+  <form id="create-form" class="form-card"><div class="post-kind-switch" aria-label="Post type"><a href="/create" aria-current="page">Poll</a><a href="/create/task">Task</a></div>
     <div class="form-heading"><h2>Your new poll</h2><span class="pill">SINGLE CHOICE</span></div>
     <label for="title">The question <span class="required">*</span></label><input id="title" name="title" maxlength="140" placeholder="What should we make happen next?" required><div class="field-hint"><span>Keep it clear and open to everyone.</span><span id="title-count">0 / 140</span></div>
     <label for="description">A little context <span class="optional">optional</span></label><textarea id="description" name="description" maxlength="4000" rows="4" placeholder="Tell people a bit more about your question…"></textarea>
@@ -267,7 +165,7 @@ async function votePage(id) {
     ${poll.images.length ? `<div class="external-images"><button class="button secondary small" id="load-images">Show ${poll.images.length} external image${poll.images.length > 1 ? "s" : ""}</button><p class="field-hint">Images load from third-party hosts, which may receive your IP address.</p><div id="poll-images"></div></div>` : ""}
     <section class="ballot-card"><div class="ballot-heading"><h2>Have your say.</h2><span class="tiny-label">PICK ONE</span></div><form id="vote-form"><fieldset id="vote-options"><legend class="sr-only">Choose one option</legend>${poll.options.map((o) => `<label class="vote-option"><input type="radio" name="option" value="${o.id}" required><span>${escape(o.label)}</span><span class="option-check" aria-hidden="true"></span></label>`).join("")}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">Cast my vote ${icons.arrow}</button><p class="field-hint">One vote per browser, as far as an anonymous cookie allows.</p></form></section>
     <section class="results-section" aria-label="Current results"><div class="results-heading"><h2>The conversation so far</h2><span id="total-votes"></span></div><div id="results"></div><p class="field-hint" id="results-updated">Results refresh every 15 seconds while this page is visible.</p></section>
-    </div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">PASS IT ON</span><h2>A small code.<br>A bigger conversation.</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="QR code linking to this poll"></div><p>Scan to vote. Save to share.</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} Save QR image</a><button class="button secondary" id="copy-link">Copy poll link</button></section><section class="timeline-card"><div>${icons.clock}<span>Voting closes<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>Removed from the website<strong>${date(poll.deleteAt)}</strong></span></div><p>Dates are shown in your local time.</p></section>${notice()}</aside></section>`;
+    <section id="social" aria-label="Poll likes"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">PASS IT ON</span><h2>A small code.<br>A bigger conversation.</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="QR code linking to this poll"></div><p>Scan to vote. Save to share.</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} Save QR image</a><button class="button secondary" id="copy-link">Copy poll link</button></section><section class="timeline-card"><div>${icons.clock}<span>Voting closes<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>Removed from the website<strong>${date(poll.deleteAt)}</strong></span></div><p>Dates are shown in your local time.</p></section>${notice()}</aside></section>`;
   if (poll.images.length)
     document.querySelector("#load-images").onclick = (e) => {
       const target = document.querySelector("#poll-images");
@@ -356,6 +254,7 @@ async function votePage(id) {
       render();
     }
   };
+  mountSocial(id, false);
   let fetching = false;
   async function refresh() {
     if (document.hidden || submitting || fetching) return;
@@ -386,7 +285,7 @@ async function votePage(id) {
 function voteList() {
   document.title = "VoteList — ScaleTag";
   document.querySelector('[data-nav="list"]').classList.add("active");
-  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore the latest polls, or find conversations closer to home.</p></div><a href="/create" class="button">Create a poll ${icons.plus}</a></div><div class="view-switch" role="group" aria-label="VoteList view"><button type="button" class="selected" data-view="list" aria-pressed="true">List</button><button type="button" data-view="map" aria-pressed="false">Map</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="Poll map" hidden><div class="map-intro"><strong>Questions on the map</strong><p>Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Poll content stays on ScaleTag.</p></div><p id="map-message" class="map-message" role="status">Loading the map…</p><div id="poll-map" class="poll-map" role="region" aria-label="Interactive map of approximate poll locations"></div><div class="map-legend"><span><i class="legend-dot"></i> Open</span><span><i class="legend-dot ended"></i> Ended</span><button class="text-link" id="map-fit" type="button">Fit all markers ↗</button></div><p id="map-count" class="map-count" aria-live="polite"></p><p class="map-footnote">Only polls published with map consent appear here. Older polls remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.</p><details class="mapped-polls"><summary>Browse mapped polls without the map</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Polls leave the website after 30 days. Private daily backups are retained for up to 90 days after backup creation.</p></section>`;
+  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore polls and local tasks, or find conversations closer to home.</p></div><a href="/create" class="button">Create a post ${icons.plus}</a></div><label class="content-filter" for="content-type">Show <select id="content-type"><option value="all">Polls &amp; tasks</option><option value="poll">Polls</option><option value="task">Tasks</option></select></label><div class="view-switch" role="group" aria-label="VoteList view"><button type="button" class="selected" data-view="list" aria-pressed="true">List</button><button type="button" data-view="map" aria-pressed="false">Map</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="Poll map" hidden><div class="map-intro"><strong>Questions on the map</strong><p>Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Poll content stays on ScaleTag.</p></div><p id="map-message" class="map-message" role="status">Loading the map…</p><div id="poll-map" class="poll-map" role="region" aria-label="Interactive map of approximate poll locations"></div><div class="map-legend"><span><i class="legend-dot"></i> Open</span><span><i class="legend-dot ended"></i> Ended</span><button class="text-link" id="map-fit" type="button">Fit all markers ↗</button></div><p id="map-count" class="map-count" aria-live="polite"></p><p class="map-footnote">Only polls published with map consent appear here. Older polls remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.</p><details class="mapped-polls"><summary>Browse mapped polls without the map</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Polls leave the website after 30 days. Private daily backups are retained for up to 90 days after backup creation.</p></section>`;
   let status = "all",
     location,
     cursor,
@@ -394,6 +293,7 @@ function voteList() {
     request = 0,
     locating = false,
     mode = "list",
+    contentType = "all",
     mapView,
     mapLoading,
     mapGeneration = 0,
@@ -430,6 +330,7 @@ function voteList() {
     try {
       const data = await api("/api/map/search", {
         status,
+        type: contentType,
         ...(location ? { location } : {}),
       });
       if (current !== mapRequest || mode !== "map") return;
@@ -446,8 +347,8 @@ function voteList() {
       for (const p of data.polls) {
         const li = document.createElement("li");
         const a = document.createElement("a");
-        a.href = `/vote/${p.id}`;
-        a.textContent = `${p.title} · ${p.status === "open" ? "Open" : "Ended"}`;
+        a.href = `/${p.type === "task" ? "task" : "vote"}/${p.id}`;
+        a.textContent = `${p.title} · ${p.type === "task" ? "Task" : p.status === "open" ? "Open" : "Ended"}`;
         li.append(a);
         document.querySelector("#mapped-poll-links").append(li);
       }
@@ -532,7 +433,13 @@ function voteList() {
       document.querySelector("#mapped-poll-links").replaceChildren();
     } else loadMap(false);
   });
+  document.querySelector("#content-type").onchange = (event) => {
+    contentType = event.target.value;
+    load();
+  };
   function card(p) {
+    if (p.type === "task")
+      return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">Task</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">by ${escape(p.signature)}</p><div class="task-card-reward"><span>Reward offered</span><strong>${escape(p.reward)}</strong></div><div class="card-bottom"><span>♡ ${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies</span>${icons.arrow}</div></a>`;
     return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? "Ended" : "Open"}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">by ${escape(p.signature)}</p><div class="mini-results">${p.options
       .slice(0, 3)
       .map(
@@ -541,7 +448,7 @@ function voteList() {
       )
       .join(
         "",
-      )}${p.options.length > 3 ? `<small>+ ${p.options.length - 3} more options</small>` : ""}</div><div class="card-bottom"><span>${count(p.totalVotes)} votes <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
+      )}${p.options.length > 3 ? `<small>+ ${p.options.length - 3} more options</small>` : ""}</div><div class="card-bottom"><span>${count(p.totalVotes)} votes <span class="separator">·</span> ♡ ${count(p.totalLikes ?? 0)} likes <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
   }
   async function load(reset = true) {
     if (mode === "map") return loadMap();
@@ -558,8 +465,9 @@ function voteList() {
       more.hidden = true;
     }
     try {
-      const data = await api("/api/polls/search", {
+      const data = await api("/api/posts/search", {
         status,
+        type: contentType,
         ...(location ? { location } : {}),
         ...(cursor ? { cursor } : {}),
       });
@@ -571,7 +479,7 @@ function voteList() {
       if (!loaded)
         list.innerHTML = `<div class="list-empty"><span class="empty-symbol">${icons.pin}</span><h2>${location ? "A little quiet around here." : "The first question could be yours."}</h2><p>${location ? "No matching polls within 100 km. Try all locations, or start a conversation nearby." : "No polls match this filter yet. Create a poll and invite a few voices in."}</p><a class="text-link" href="/create">Create a poll ↗</a></div>`;
       document.querySelector("#list-count").textContent =
-        `${count(loaded)} ${loaded === 1 ? "poll" : "polls"} shown`;
+        `${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`;
       more.hidden = !cursor;
     } catch (e) {
       if (current !== request) return;
@@ -630,7 +538,7 @@ function voteList() {
 
 function privacy() {
   document.title = "Privacy & retention — ScaleTag";
-  main.innerHTML = `<article class="privacy-page"><a class="back-link" href="/">← Back to ScaleTag</a><span class="eyebrow">A SMALL DATA FOOTPRINT</span><h1>A few things<br>you should know.</h1><h2>No account. No fingerprint.</h2><p>We don’t ask voters for a name, email address, or account. A separate random, HttpOnly, Secure, SameSite cookie is used for each poll in production. Its hashed identifier prevents repeat votes from that browser and is removed from the active data store after voting closes. Private backup copies follow the retention policy below. We don’t use a cross-poll identifier or device fingerprint.</p><p>This is not identity verification or a guarantee of one vote per person. Clearing cookies, using private browsing, or switching browsers can allow another vote. Cookies must be enabled to vote.</p><h2>A place, not a trail.</h2><p>Creating a poll requires browser location permission. We store its latitude and longitude with the poll to support nearby discovery. Exact coordinates are not included in public responses. New polls can appear on the public map only with explicit map consent at creation. Their displayed position is rounded to a 0.01° grid (about 1 km north–south, narrower east–west). This is an approximate area, not an anonymity guarantee; locations already on grid points may be unchanged. Older polls without consent remain in the list only. Nearby filtering uses your current coordinates for that request only; they are not saved or added to a URL. Location supplied by a browser is not independently verified.</p><h2>Seven days to vote. Thirty days online.</h2><p>Voting starts at publication and closes exactly 168 hours later. Results remain visible until 30 days after publication. At that point, the poll, its results, location, and related identifiers are removed from the active website. The original link and QR code stop opening the poll. Save what you need before the public link expires.</p><p>Private daily backups include poll JSON data, including location and any deduplication hashes present at backup time. Each archive is retained for up to 90 days after creation for administrator-managed disaster recovery. This means a backup copy may remain for up to about 120 days after a poll was published. Backups are not publicly accessible and there is no user-facing recovery feature. Expired polls are not republished by restoring their original records.</p><p>Expired polls become inaccessible at the deadline. Active files are removed by a background cleanup, normally within 30 seconds while the service is running, and at startup. Archive expiry is enforced by the daily backup job; downtime or storage failures can delay physical cleanup. The application does not keep request access logs. External screenshots, downloaded QR codes, and copies made by other people cannot be recalled.</p><h2>Installed app and offline resources.</h2><p>You can install ScaleTag as a web app. Your browser may keep public scripts, styles, icons and a generic offline page. Poll pages, results, QR responses, location searches and vote requests are not saved in the offline cache. Votes are never queued for later submission. Installing the app does not verify your identity or change the anonymous-cookie voting limits.</p><h2>Maps load only when you choose Map.</h2><p>VoteList starts in List view. Choosing Map loads a third-party OpenFreeMap basemap. OpenFreeMap receives your IP address and the map areas requested; poll titles, votes and signatures are not sent to it. ScaleTag serves the MapLibre library itself and does not use a map account or API key. Required map attribution remains visible. Map responses, marker searches and third-party map resources are not saved in ScaleTag’s offline cache. Your browser may cache basemap resources according to their provider’s headers. No offline maps are downloaded by ScaleTag. If the map is unavailable, use List.</p><h2>Images stay with their hosts.</h2><p>We only store external HTTPS image URLs. Images load when you choose to show them. Their hosts may receive your IP address and may change or remove an image. ScaleTag does not proxy or store those images.</p><h2>Infrastructure still carries requests.</h2><p>The application does not store IP addresses for voting or keep request access logs. Requests pass through Cloudflare, which processes connection information according to its own policies. Server security logs may also exist; an anonymous poll does not mean every network layer is anonymous.</p><h2>Signatures are just signatures.</h2><p>Creators choose any name. A signature is not verified and should not be treated as proof of someone’s identity. Polls appear publicly in VoteList. Only publish information you are comfortable sharing.</p><a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">Read the source on GitHub ↗</a></article>`;
+  main.innerHTML = `<article class="privacy-page"><a class="back-link" href="/">← Back to ScaleTag</a><span class="eyebrow">A SMALL DATA FOOTPRINT</span><h1>A few things<br>you should know.</h1><h2>No account. No fingerprint.</h2><p>We don’t ask voters for a name, email address, or account. A separate random, HttpOnly, Secure, SameSite cookie is used for each poll in production. Its hashed identifier prevents repeat votes from that browser and is removed from the active data store after voting closes. Private backup copies follow the retention policy below. We don’t use a cross-poll identifier or device fingerprint.</p><p>This is not identity verification or a guarantee of one vote per person. Clearing cookies, using private browsing, or switching browsers can allow another vote. Cookies must be enabled to vote.</p><h2>A place, not a trail.</h2><p>Creating a poll requires browser location permission. We store its latitude and longitude with the poll to support nearby discovery. Exact coordinates are not included in public responses. New polls can appear on the public map only with explicit map consent at creation. Their displayed position is rounded to a 0.01° grid (about 1 km north–south, narrower east–west). This is an approximate area, not an anonymity guarantee; locations already on grid points may be unchanged. Older polls without consent remain in the list only. Nearby filtering uses your current coordinates for that request only; they are not saved or added to a URL. Location supplied by a browser is not independently verified.</p><h2>Seven days to vote. Thirty days online.</h2><p>Voting starts at publication and closes exactly 168 hours later. Results remain visible until 30 days after publication. At that point, the poll, its results, location, and related identifiers are removed from the active website. The original link and QR code stop opening the poll. Save what you need before the public link expires.</p><p>Private daily backups include poll JSON data, including location and any deduplication hashes present at backup time. Each archive is retained for up to 90 days after creation for administrator-managed disaster recovery. This means a backup copy may remain for up to about 120 days after a poll was published. Backups are not publicly accessible and there is no user-facing recovery feature. Expired polls are not republished by restoring their original records.</p><p>Expired polls become inaccessible at the deadline. Active files are removed by a background cleanup, normally within 30 seconds while the service is running, and at startup. Archive expiry is enforced by the daily backup job; downtime or storage failures can delay physical cleanup. The application does not keep request access logs. External screenshots, downloaded QR codes, and copies made by other people cannot be recalled.</p><h2>Installed app and offline resources.</h2><p>You can install ScaleTag as a web app. Your browser may keep public scripts, styles, icons and a generic offline page. Poll pages, results, QR responses, location searches and vote requests are not saved in the offline cache. Votes are never queued for later submission. Installing the app does not verify your identity or change the anonymous-cookie voting limits.</p><h2>Maps load only when you choose Map.</h2><p>VoteList starts in List view. Choosing Map loads a third-party OpenFreeMap basemap. OpenFreeMap receives your IP address and the map areas requested; poll titles, votes and signatures are not sent to it. ScaleTag serves the MapLibre library itself and does not use a map account or API key. Required map attribution remains visible. Map responses, marker searches and third-party map resources are not saved in ScaleTag’s offline cache. Your browser may cache basemap resources according to their provider’s headers. No offline maps are downloaded by ScaleTag. If the map is unavailable, use List.</p><h2>Tasks, likes and public replies.</h2><p>Tasks contain a title, description and reward offer, with required GPS and the same approximate-map disclosure as polls. Tasks and their replies leave the website 30 days after the task is published; a late reply does not extend that deadline. Private daily archives follow the 90-day retention rule above.</p><p>Tasks and polls support likes. A separate anonymous cookie for each post limits this browser to one like; it expires when the post leaves the website. Its SHA-256 hash and task reply-rate timestamps remain in the private record until removal and follow the archive policy. It is separate from the voting cookie and does not identify you across posts. Clearing cookies can bypass this limit.</p><p>Task replies require a phone number or email address, or both. Replies, names and contact details are public and unverified. Publish only contact details you have permission to share. There is no private inbox, account-based editing or user recovery. Copies made by others cannot be recalled. Contacts are not included in list/map responses or sent to the map provider. ScaleTag displays reward offers and contact information; it does not process payments, hold funds, accept bookings or manage transactions.</p><h2>Images stay with their hosts.</h2><p>We only store external HTTPS image URLs. Images load when you choose to show them. Their hosts may receive your IP address and may change or remove an image. ScaleTag does not proxy or store those images.</p><h2>Infrastructure still carries requests.</h2><p>The application does not store IP addresses for voting or keep request access logs. Requests pass through Cloudflare, which processes connection information according to its own policies. Server security logs may also exist; an anonymous poll does not mean every network layer is anonymous.</p><h2>Signatures are just signatures.</h2><p>Creators choose any name. A signature is not verified and should not be treated as proof of someone’s identity. Polls appear publicly in VoteList. Only publish information you are comfortable sharing.</p><a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">Read the source on GitHub ↗</a></article>`;
 }
 const route = window.location.pathname;
 try {
@@ -638,12 +546,15 @@ try {
     window.location.replace("/create");
   else if (route === "/") home();
   else if (route === "/create") createPoll();
+  else if (route === "/create/task") createTask();
   else if (route === "/install") installPage();
   else if (route === "/VoteList") voteList();
   else if (route === "/privacy") privacy();
   else if (/^\/vote\/[a-f0-9]{24}$/.test(route))
     await votePage(route.split("/")[2]);
-  else showError(new Error("This link does not point to an available poll."));
+  else if (/^\/task\/[a-f0-9]{24}$/.test(route))
+    await taskPage(route.split("/")[2]);
+  else showError(new Error("This link does not point to an available post."));
 } catch (e) {
   showError(e);
 }

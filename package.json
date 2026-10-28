@@ -11,10 +11,11 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/store.js && node --check public/app.js && node --check public/pwa.js && node --check public/offline.js && node --check src/pwa.js && node --check public/map.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/store.js && node --check public/app.js && node --check public/pwa.js && node --check public/offline.js && node --check src/pwa.js && node --check public/map.js && node --check public/common.js && node --check public/social.js && node --check public/tasks.js",
     "test:container": "node test/container-smoke.mjs",
     "test:pwa": "node --test test/pwa.browser.mjs",
-    "test:map": "node --test test/map.browser.mjs"
+    "test:map": "node --test test/map.browser.mjs",
+    "test:tasks": "node --test test/tasks.browser.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

@@ -2,13 +2,15 @@
 
 **A question. A place. Seven days.**
 
-ScaleTag is a small, location-aware polling platform with an English interface. No accounts, no image storage, no self-hosted map server, and no separate database server.
+ScaleTag is a small, location-aware platform for polls and tasks with an English interface. No accounts, no image storage, no self-hosted map server, and no separate database server.
 
 Development site: **https://scaletag.risinfo.cn**
 
 ## What it does
 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
+- Publish a task at **`/create/task`** with a required title, description and free-text reward offer, plus an optional unverified name. Tasks remain available for 30 days.
+- Like polls and tasks anonymously. Task replies require a phone number or email address (both are allowed), with explicit acknowledgement that the reply and contact details will be public.
 - Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses; publish only rounded map positions after explicit consent.
 - Start immediately; accept a single choice for exactly **168 hours**.
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.
@@ -18,28 +20,56 @@ Development site: **https://scaletag.risinfo.cn**
 
 ## Pages
 
-| Path        | Purpose                                                                             |
-| ----------- | ----------------------------------------------------------------------------------- |
-| `/`         | Introduction and QR code for installing the app; no poll listing.                   |
-| `/create`   | Publish a single-choice poll with required GPS permission.                          |
-| `/VoteList` | Browse retained polls in List or Map view, with status and optional 100 km filters. |
-| `/install`  | Device-specific PWA installation guide.                                             |
-| `/privacy`  | Explain cookies, location, deletion and private backup retention.                   |
+| Path           | Purpose                                                                             |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `/`            | Introduction and QR code for installing the app; no poll listing.                   |
+| `/create/task` | Publish a local task with a reward offer and required GPS/map acknowledgements.     |
+| `/task/<id>`   | Read a task, like it, reply with public contact details, or save its QR code.       |
+| `/create`      | Publish a single-choice poll with required GPS permission.                          |
+| `/VoteList`    | Browse retained polls in List or Map view, with status and optional 100 km filters. |
+| `/install`     | Device-specific PWA installation guide.                                             |
+| `/privacy`     | Explain cookies, location, deletion and private backup retention.                   |
 
 Each published poll also has its own shareable URL and downloadable QR code. Installing the app does not create an account or change the anonymous voting rules.
+
+## Tasks, likes and public replies
+
+Select **Poll** or **Task** in the publishing form. Tasks use the same required GPS permission, explicit approximate-map acknowledgement and 30-day website retention as polls. Reward is a required text description (for example, “CAD 30” or “a coffee”), not a payment instruction processed by ScaleTag. There are no accounts, checkout, deposits, escrow, bookings or transaction handling. Posters and respondents arrange details directly using the contact information in replies.
+
+Task replies require a message and **at least one of phone or email**; both are accepted. Names are optional and unverified. The submission form requires an acknowledgement that contact details are public. Replies are plain text and contacts are format-checked, not identity-verified. Reply contacts are returned only on the post's public social endpoint, never in map/list summaries or basemap requests. Replies share the **parent task's** 30-day deadline; replying does not extend it. There is no account-based editing, private messaging or self-service recovery. Private archives may retain contact details under the existing 90-day archive policy.
+
+Each post has a separate random `ss_<id>` cookie, `HttpOnly`, `Secure` over HTTPS and `SameSite=Strict`, scoped to `/api/posts/<id>` and expiring at post deletion. Only its SHA-256 hash is stored for one-like-per-browser deduplication and reply throttling. This cookie is separate from the seven-day voting cookie, with no cross-post identifier, IP logging or device fingerprint. Clearing cookies or changing browsers can bypass browser-based limits. Likes are idempotent and serialized with votes/replies in the same per-document queue; liking never casts a vote. Polls support likes; replies are available on tasks.
+
+Resource bounds: 50,000 likes per post by default, 200 replies per task, one reply per browser per task per minute, and 20 valid reply attempts per minute globally without IP identifiers. Poll/task creation shares the existing creation limit. These are low-cost resource guards, not identity verification or strong spam protection. Old poll JSON remains compatible; social fields initialize on first use. Daily backups include task JSON, replies and private deduplication hashes, with the same root-only permissions and retention.
+
+| Endpoint                                   | Purpose                                                                                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/tasks`                          | Publish a task.                                                                                                                                    |
+| `GET /api/tasks/<id>`                      | Read public task content, without reply contacts.                                                                                                  |
+| `GET /api/tasks/<id>/qr.png`               | Canonical task QR; `?download=1` saves a PNG.                                                                                                      |
+| `GET /api/posts`, `POST /api/posts/search` | Mixed newest-first discovery with `type=all/poll/task`, status and optional nearby filters. Historic `/api/polls` discovery routes remain aliases. |
+| `GET /api/posts/<id>/social`               | Public like state and task replies; establishes this post's anonymous cookie.                                                                      |
+| `POST /api/posts/<id>/likes`               | Add one idempotent browser like.                                                                                                                   |
+| `POST /api/posts/<id>/replies`             | Add a task reply with public-contact acknowledgement.                                                                                              |
+
+All API responses use `no-store`. No task, reply, contact, like/vote request or QR response is placed in the PWA cache, and offline submissions are never queued. Browser tests run with isolated temporary data:
+
+```sh
+npm run test:tasks
+```
 
 ## Map view
 
 VoteList opens in **List** view. Choosing **Map** loads [MapLibre GL JS](https://maplibre.org/) 6.16.0 from ScaleTag and the Positron basemap from [OpenFreeMap](https://openfreemap.org/). There is no map API key, registration, separate map server or additional paid service. OpenFreeMap currently offers free public map hosting, including commercial use, without map-view quotas; it provides no SLA. Keep the OpenMapTiles/OpenStreetMap attribution visible. Map availability depends on the provider and the visitor's network/browser; List remains available independently.
 
 - Open polls use blue dots; ended polls use red dots. Numbered groups expand on click. Select a dot to open a poll; polls sharing a rounded position appear together in the popup.
-- Status and optional 100 km filters apply to both views. Nearby matching uses the original GPS on the server; the requesting visitor's coordinates are discarded after the search.
-- The map shows only polls created with explicit map consent (`mapVisible: true`). The creation form requires acknowledgement before publishing. Existing polls and API clients without this flag remain list-only; they are not retroactively exposed.
+- Content type (Polls & tasks / Polls / Tasks), status and optional 100 km filters apply to both views. Nearby matching uses the original GPS on the server; the requesting visitor's coordinates are discarded after the search.
+- The map shows only posts created with explicit map consent (`mapVisible: true`). The creation form requires acknowledgement before publishing. Existing polls and API clients without this flag remain list-only; they are not retroactively exposed.
 - Public markers use a stable **0.01° latitude/longitude grid**, roughly 1.1 km north–south and narrower east–west. Exact GPS stays in the private JSON store. A rounded position is an approximate area, not an anonymity guarantee; an original coordinate already on the grid is unchanged.
 - At most the **newest 1,000 matching mapped polls** are returned. The interface shows the returned and total counts; use filters to narrow large sets. A text list of mapped polls is available below the map for keyboard and assistive-technology access.
 - Marker searches use `POST /api/map/search` and `no-store`. No coordinates are put in URLs. Current markers refresh at most every 30 seconds and at upcoming closing/deletion boundaries while the page is visible. Failed refreshes and offline mode clear markers rather than presenting retained results as current.
 
-Choosing Map sends the visitor's IP address and requested map areas to OpenFreeMap. Poll titles, signatures and votes are not sent to the map provider. The MapLibre module, CSS and worker are served locally from a pinned dependency; the map connects only to `tiles.openfreemap.org`. Third-party map resources, marker responses and map-library files are excluded from the PWA cache. The browser may cache basemap resources under the provider's own headers; ScaleTag does not download offline map areas. MapLibre uses WebGL, with List as the fallback on unsupported devices.
+Choosing Map sends the visitor's IP address and requested map areas to OpenFreeMap. Post titles, rewards, contacts, signatures and votes are not sent to the map provider. The MapLibre module, CSS and worker are served locally from a pinned dependency; the map connects only to `tiles.openfreemap.org`. Third-party map resources, marker responses and map-library files are excluded from the PWA cache. The browser may cache basemap resources under the provider's own headers; ScaleTag does not download offline map areas. MapLibre uses WebGL, with List as the fallback on unsupported devices.
 
 ```sh
 npx playwright install --with-deps chromium
@@ -67,7 +97,7 @@ The homepage QR code contains `${PUBLIC_ORIGIN}/install`, using the configured p
 
 The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/VoteList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
 
-The service worker caches **only an explicit allowlist of public static resources and a generic offline page**. It never caches page URLs, poll HTML, API responses, QR responses, external images or POST requests. An offline navigation displays a connection message rather than old poll contents. Publishing, voting, GPS searches and current results require a network connection. Requests are never queued for background submission. The existing seven-day voting and 30-day public expiry checks stay on the server.
+The service worker caches **only an explicit allowlist of public static resources and a generic offline page**. It never caches page URLs, poll HTML, API responses, QR responses, external images or POST requests. An offline navigation displays a connection message rather than old poll contents. Publishing, voting, likes, replies, GPS searches and current results require a network connection. Requests are never queued for background submission. The existing seven-day voting and 30-day public expiry checks stay on the server.
 
 Service-worker versions are derived from a content hash of the static assets and generic HTML, so releases trigger browser update detection without manual version bumps. A new worker waits until the user selects **Update & reload**; the notice warns them to finish or copy an unsent draft. Other open windows are not forcibly reloaded. Older ScaleTag static caches are removed on activation. Browsers need an initial successful online visit to prepare offline resources.
 
@@ -204,6 +234,7 @@ npm run check
 npm test
 npm run test:pwa
 npm run test:map
+npm run test:tasks
 python3 -m unittest discover -s test -p '*_test.py' -v
 ```
 
@@ -214,7 +245,7 @@ PUBLIC_ORIGIN=https://scaletag.test docker compose build
 npm run test:container
 ```
 
-The container test always uses its own project, local port and disposable volume. It checks startup, non-root execution, read-only root, memory configuration, loopback publishing, Secure cookies, QR generation, single-writer locking, graceful SIGTERM, and persisted vote counts/deduplication after container recreation. Only its isolated test volume is removed afterward.
+The container test always uses its own project, local port and disposable volume. It checks startup, non-root execution, read-only root, memory configuration, loopback publishing, Secure cookies, QR generation, single-writer locking, graceful SIGTERM, and persisted votes, likes, task replies and deduplication after container recreation. Only its isolated test volume is removed afterward.
 
 Integration tests cover concurrent duplicate submissions, distinct votes, persisted counts across reload, exact 7/30-day boundaries, startup cleanup, 100 km boundaries, pagination, privacy, origin enforcement, size limits, and QR PNG downloads. Test files use isolated temporary directories.
 

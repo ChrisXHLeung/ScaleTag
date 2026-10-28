@@ -2,7 +2,7 @@
   "id": "/",
   "name": "ScaleTag",
   "short_name": "ScaleTag",
-  "description": "A question. A place. Seven days. Create and share simple local polls.",
+  "description": "Local polls and tasks. No accounts. Connect directly.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
@@ -30,7 +30,27 @@
     }
   ],
   "shortcuts": [
-    { "name": "Create a poll", "short_name": "Create", "url": "/create" },
-    { "name": "Explore VoteList", "short_name": "VoteList", "url": "/VoteList" }
+    {
+      "name": "Create a post",
+      "short_name": "Create",
+      "url": "/create"
+    },
+    {
+      "name": "Explore VoteList",
+      "short_name": "VoteList",
+      "url": "/VoteList"
+    },
+    {
+      "name": "Create a task",
+      "short_name": "Task",
+      "url": "/create/task",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

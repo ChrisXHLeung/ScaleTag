@@ -48,6 +48,17 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(manifest["files"][f"data/{self.id}.json"], hashlib.sha256(raw).hexdigest())
         self.assertEqual(json.loads(self.document.read_text()), self.record)
 
+    def test_task_contacts_and_social_hashes_are_archived_without_schema_loss(self):
+        self.record.update({"type": "task", "reward": "A coffee", "totalLikes": 1,
+                            "likers": {"hashed-like-id": True},
+                            "replyAuthors": {"hashed-reply-id": 123456},
+                            "replies": [{"id": "b" * 24, "message": "I can help", "email": "helper@example.com"}]})
+        self.document.write_text(json.dumps(self.record))
+        result = self.run_backup()
+        self.assertTrue(result["verified"])
+        with tarfile.open(result["archive"], "r:gz") as archive:
+            self.assertEqual(json.load(archive.extractfile(f"data/{self.id}.json")), self.record)
+
     def test_retention_deletes_only_own_archives_at_90_days(self):
         self.archives.mkdir()
         old = self.archives / f"scaletag-data-{(self.now-timedelta(days=90)).strftime(module.STAMP)}.tar.gz"

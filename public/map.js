@@ -75,12 +75,15 @@ export async function createPollMap() {
     content.className = "map-popup-content";
     for (const p of polls) {
       const link = document.createElement("a");
-      link.href = `/vote/${p.id}`;
+      link.href = `/${p.type === "task" ? "task" : "vote"}/${p.id}`;
       link.className = "map-poll-link";
       const title = document.createElement("strong");
       title.textContent = p.title;
       const detail = document.createElement("span");
-      detail.textContent = `${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`;
+      detail.textContent =
+        p.type === "task"
+          ? `Task · Reward: ${p.reward} · View task ↗`
+          : `${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`;
       link.append(title, detail);
       content.append(link);
     }

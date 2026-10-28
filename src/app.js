@@ -3,7 +3,13 @@ import QRCode from "qrcode";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { AppError, coordinates, pollInput } from "./validation.js";
+import {
+  AppError,
+  coordinates,
+  pollInput,
+  taskInput,
+  replyInput,
+} from "./validation.js";
 import { ID_PATTERN } from "./store.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
@@ -55,8 +61,7 @@ export function createApp(
   app.get("/healthz", (req, res) =>
     res.json({ status: "ok", version: "0.1.0" }),
   );
-  app.post("/api/polls", async (req, res) => {
-    const input = pollInput(req.body);
+  function takeCreation(res) {
     if (store.clock() - windowStart >= 60000) {
       windowStart = store.clock();
       creations = 0;
@@ -65,13 +70,26 @@ export function createApp(
       res.set("Retry-After", "60");
       throw new AppError(
         429,
-        "Too many polls are being published. Please try again in a minute.",
+        "Too many posts are being published. Please try again in a minute.",
       );
     }
     creations++;
-    const poll = await store.create(input);
-    res.status(201).json(poll);
+  }
+  app.post("/api/polls", async (req, res) => {
+    const input = pollInput(req.body);
+    takeCreation(res);
+    res.status(201).json(await store.create(input));
   });
+  app.post("/api/tasks", async (req, res) => {
+    const input = taskInput(req.body);
+    takeCreation(res);
+    res.status(201).json(await store.create(input));
+  });
+  function contentType(data) {
+    if (data.type && !["all", "poll", "task"].includes(data.type))
+      throw new AppError(400, "Invalid content type.");
+    return data.type;
+  }
   function list(req, res) {
     const data = req.method === "POST" ? (req.body ?? {}) : req.query;
     if (data.status && !["all", "open", "closed"].includes(data.status))
@@ -86,9 +104,16 @@ export function createApp(
         ? coordinates(data.location)
         : undefined;
     res.json(
-      store.list({ location, status: data.status, cursor: data.cursor }),
+      store.list({
+        location,
+        status: data.status,
+        cursor: data.cursor,
+        type: contentType(data),
+      }),
     );
   }
+  app.get("/api/posts", list);
+  app.post("/api/posts/search", list);
   app.get("/api/polls", list);
   app.post("/api/polls/search", list);
   app.post("/api/map/search", (req, res) => {
@@ -98,20 +123,21 @@ export function createApp(
     res.json(
       store.map({
         status: data.status,
+        type: contentType(data),
         location: data.location ? coordinates(data.location) : undefined,
       }),
     );
   });
 
-  function cookieName(id) {
-    return `st_${id}`;
+  function cookieName(id, prefix = "st") {
+    return `${prefix}_${id}`;
   }
-  function tokenFor(req, id) {
+  function tokenFor(req, id, prefix = "st") {
     const item = (req.headers.cookie ?? "")
       .split(";")
       .map((s) => s.trim())
-      .find((s) => s.startsWith(`${cookieName(id)}=`));
-    const token = item?.slice(cookieName(id).length + 1);
+      .find((s) => s.startsWith(`${cookieName(id, prefix)}=`));
+    const token = item?.slice(cookieName(id, prefix).length + 1);
     return COOKIE_PATTERN.test(token ?? "") ? token : undefined;
   }
   app.param("id", (req, res, next, id) =>
@@ -127,6 +153,7 @@ export function createApp(
   app.get("/api/polls/:id", async (req, res) => {
     let token = tokenFor(req, req.params.id);
     const poll = await store.get(req.params.id, token);
+    if (poll.type === "task") throw new AppError(404, "Poll not found.");
     if (poll.status === "open" && !token) {
       token = randomBytes(32).toString("hex");
       res.cookie(cookieName(poll.id), token, {
@@ -160,6 +187,7 @@ export function createApp(
   });
   app.get("/api/polls/:id/qr.png", async (req, res) => {
     const poll = await store.get(req.params.id);
+    if (poll.type === "task") throw new AppError(404, "Poll not found.");
     const png = await QRCode.toBuffer(`${origin}/vote/${poll.id}`, {
       type: "png",
       width: 768,
@@ -173,6 +201,75 @@ export function createApp(
         `attachment; filename="ScaleTag-${poll.id}.png"`,
       );
     res.type("png").send(png);
+  });
+  app.get("/api/tasks/:id", async (req, res) => {
+    const task = await store.get(req.params.id);
+    if (task.type !== "task") throw new AppError(404, "Task not found.");
+    res.json(task);
+  });
+  app.get("/api/tasks/:id/qr.png", async (req, res) => {
+    const task = await store.get(req.params.id);
+    if (task.type !== "task") throw new AppError(404, "Task not found.");
+    const png = await QRCode.toBuffer(`${origin}/task/${task.id}`, {
+      type: "png",
+      width: 768,
+      margin: 4,
+      errorCorrectionLevel: "M",
+      color: { dark: "#173b7a", light: "#ffffff" },
+    });
+    if (req.query.download === "1")
+      res.set(
+        "Content-Disposition",
+        `attachment; filename="ScaleTag-task-${task.id}.png"`,
+      );
+    res.type("png").send(png);
+  });
+  app.get("/api/posts/:id/social", async (req, res) => {
+    let token = tokenFor(req, req.params.id, "ss");
+    const data = await store.getSocial(req.params.id, token);
+    if (!token) {
+      token = randomBytes(32).toString("hex");
+      res.cookie(cookieName(req.params.id, "ss"), token, {
+        httpOnly: true,
+        secure,
+        sameSite: "strict",
+        path: `/api/posts/${req.params.id}`,
+        expires: new Date(data.deleteAt),
+        maxAge: Math.max(0, data.deleteAt - store.clock()),
+      });
+    }
+    res.json(data);
+  });
+  function socialToken(req) {
+    const token = tokenFor(req, req.params.id, "ss");
+    if (!token)
+      throw new AppError(
+        403,
+        "Please allow this post’s anonymous cookie and reload before liking or replying.",
+      );
+    return token;
+  }
+  app.post("/api/posts/:id/likes", async (req, res) =>
+    res.json(await store.like(req.params.id, socialToken(req))),
+  );
+  let replyWindow = store.clock(),
+    replyRequests = 0;
+  app.post("/api/posts/:id/replies", async (req, res) => {
+    const token = socialToken(req),
+      input = replyInput(req.body);
+    if (store.clock() - replyWindow >= 60000) {
+      replyWindow = store.clock();
+      replyRequests = 0;
+    }
+    if (replyRequests >= 20) {
+      res.set("Retry-After", "60");
+      throw new AppError(
+        429,
+        "Too many replies. Please try again in a minute.",
+      );
+    }
+    replyRequests++;
+    res.status(201).json(await store.reply(req.params.id, token, input));
   });
   app.use("/api", (req, res, next) =>
     next(new AppError(404, "Endpoint not found.")),
@@ -219,11 +316,18 @@ export function createApp(
       },
     }),
   );
-  app.get(["/", "/create", "/VoteList", "/privacy", "/install"], (req, res) =>
-    res.sendFile(join(publicDir, "index.html")),
+  app.get(
+    ["/", "/create", "/create/task", "/VoteList", "/privacy", "/install"],
+    (req, res) => res.sendFile(join(publicDir, "index.html")),
   );
   app.get("/vote/:id", async (req, res) => {
-    await store.get(req.params.id);
+    const poll = await store.get(req.params.id);
+    if (poll.type === "task") throw new AppError(404, "Poll not found.");
+    res.sendFile(join(publicDir, "index.html"));
+  });
+  app.get("/task/:id", async (req, res) => {
+    const task = await store.get(req.params.id);
+    if (task.type !== "task") throw new AppError(404, "Task not found.");
     res.sendFile(join(publicDir, "index.html"));
   });
   app.use((req, res, next) => next(new AppError(404, "Page not found.")));

@@ -438,6 +438,7 @@ test("map publishes only opted-in coarse locations; search stays private and exp
       "deleteAt",
       "status",
       "position",
+      "type",
     ].sort(),
   );
   assert.ok(!JSON.stringify(data).includes("43.653256"));
@@ -557,4 +558,254 @@ test("map library is pinned and served locally without exposing dependency direc
     (await f.request("/node_modules/maplibre-gl/package.json")).status,
     404,
   );
+});
+
+const taskBody = (extra = {}) => ({
+  title: "Help with a local garden",
+  description: "Move a few planters.",
+  reward: "CAD 30",
+  location: { latitude: 43.6532, longitude: -79.3832 },
+  mapVisible: true,
+  retentionAccepted: true,
+  ...extra,
+});
+async function createTask(f, extra) {
+  const r = await f.request("/api/tasks", taskBody(extra));
+  assert.equal(r.status, 201);
+  return r.json();
+}
+async function socialSession(f, id) {
+  const r = await f.request(`/api/posts/${id}/social`);
+  assert.equal(r.status, 200);
+  return {
+    cookie: r.headers.get("set-cookie").split(";")[0],
+    header: r.headers.get("set-cookie"),
+    data: await r.json(),
+  };
+}
+const replyBody = (extra = {}) => ({
+  name: "Neighbour",
+  message: "I can help on Saturday.",
+  email: "helper@example.com",
+  contactAccepted: true,
+  ...extra,
+});
+
+test("tasks require title, description, reward and GPS; discover by type and share a canonical QR", async (t) => {
+  const f = await fixture(t);
+  for (const extra of [
+    { title: "" },
+    { description: "" },
+    { reward: "" },
+    { location: null },
+    { retentionAccepted: false },
+  ])
+    assert.equal((await f.request("/api/tasks", taskBody(extra))).status, 400);
+  const task = await createTask(f, {
+    type: "poll",
+    endsAt: 1,
+    totalLikes: 900,
+  });
+  assert.equal(task.type, "task");
+  assert.equal(task.signature, "Anonymous");
+  assert.equal(task.totalLikes, 0);
+  assert.equal(task.deleteAt - task.createdAt, 30 * DAY);
+  assert.equal(task.endsAt, task.deleteAt);
+  assert.equal(task.location, undefined);
+  await f.create();
+  const list = await (
+    await f.request("/api/polls/search", { type: "task" })
+  ).json();
+  assert.deepEqual(
+    list.polls.map((p) => p.id),
+    [task.id],
+  );
+  assert.equal(
+    (await (await f.request("/api/map/search", { type: "task" })).json())
+      .polls[0].type,
+    "task",
+  );
+  assert.equal(
+    (await f.request("/api/map/search", { type: "bad" })).status,
+    400,
+  );
+  assert.equal((await f.request(`/api/polls/${task.id}`)).status, 404);
+  assert.equal((await f.request(`/vote/${task.id}`)).status, 404);
+  assert.equal((await f.request(`/task/${task.id}`)).status, 200);
+  assert.equal(
+    (await f.request(`/api/tasks/${task.id}/qr.png?download=1`)).headers.get(
+      "content-type",
+    ),
+    "image/png",
+  );
+  assert.equal((await f.request(`/api/polls/${task.id}/qr.png`)).status, 404);
+});
+
+test("anonymous likes are atomic and idempotent on polls and tasks, independent of votes", async (t) => {
+  const f = await fixture(t);
+  for (const p of [await f.create(), await createTask(f)]) {
+    const session = await socialSession(f, p.id);
+    assert.match(session.header, /HttpOnly/);
+    assert.match(session.header, /Secure/);
+    assert.match(session.header, /SameSite=Strict/);
+    assert.match(session.header, new RegExp(`Path=/api/posts/${p.id}`));
+    assert.match(session.header, /Max-Age=2592000/);
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        f.request(`/api/posts/${p.id}/likes`, {}, session.cookie),
+      ),
+    );
+    assert.ok(responses.every((r) => r.status === 200));
+    const state = await (
+      await f.request(`/api/posts/${p.id}/social`, undefined, session.cookie)
+    ).json();
+    assert.equal(state.totalLikes, 1);
+    assert.equal(state.hasLiked, true);
+    assert.equal((await f.store.get(p.id)).totalVotes, 0);
+    const disk = JSON.parse(
+      await readFile(join(f.directory, `${p.id}.json`), "utf8"),
+    );
+    assert.equal(Object.keys(disk.likers).length, 1);
+    assert.ok(!JSON.stringify(disk).includes(session.cookie.split("=")[1]));
+    assert.equal((await f.request(`/api/posts/${p.id}/likes`, {})).status, 403);
+    assert.equal(
+      (
+        await f.request(`/api/posts/${p.id}/likes`, {}, session.cookie, {
+          origin: "https://other.test",
+        })
+      ).status,
+      403,
+    );
+  }
+  const reload = new PollStore(f.directory, { clock: f.now });
+  await reload.init();
+  assert.ok(reload.list().polls.every((p) => p.totalLikes === 1));
+});
+
+test("task replies require public contact consent; phone-only, email-only and both work; contacts stay out of discovery", async (t) => {
+  const f = await fixture(t),
+    task = await createTask(f),
+    session = await socialSession(f, task.id);
+  for (const extra of [
+    { email: "", phone: "" },
+    { email: "bad" },
+    { email: "", phone: "abc" },
+    { contactAccepted: false },
+    { message: "" },
+    { email: "bad\r\n@example.com" },
+  ])
+    assert.equal(
+      (
+        await f.request(
+          `/api/posts/${task.id}/replies`,
+          replyBody(extra),
+          session.cookie,
+        )
+      ).status,
+      400,
+    );
+  for (const extra of [
+    { email: "", phone: "+1 (416) 555-0123" },
+    { email: "helper@example.com" },
+    { email: "both@example.com", phone: "416-555-0124" },
+  ]) {
+    const r = await f.request(
+      `/api/posts/${task.id}/replies`,
+      replyBody(extra),
+      session.cookie,
+    );
+    assert.equal(r.status, 201);
+    assert.equal(r.headers.get("cache-control"), "no-store, max-age=0");
+    f.advance(60000);
+  }
+  const state = await (await f.request(`/api/posts/${task.id}/social`)).json();
+  assert.equal(state.replies.length, 3);
+  assert.equal(state.replies[0].phone, "+1 (416) 555-0123");
+  for (const route of ["/api/polls", `/api/tasks/${task.id}`]) {
+    const text = await (await f.request(route)).text();
+    assert.ok(!text.includes("helper@example.com"));
+    assert.ok(!text.includes("replyAuthors"));
+    assert.ok(!text.includes("likers"));
+  }
+  const map = await (await f.request("/api/map/search", {})).text();
+  assert.ok(!map.includes("@example.com"));
+  const poll = await f.create(),
+    pollSession = await socialSession(f, poll.id);
+  assert.equal(
+    (
+      await f.request(
+        `/api/posts/${poll.id}/replies`,
+        replyBody(),
+        pollSession.cookie,
+      )
+    ).status,
+    400,
+  );
+});
+
+test("reply bursts serialize and full post expiry removes likes, replies, contacts and all endpoints", async (t) => {
+  const f = await fixture(t),
+    task = await createTask(f),
+    session = await socialSession(f, task.id);
+  const burst = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie),
+    ),
+  );
+  assert.equal(burst.filter((r) => r.status === 201).length, 1);
+  assert.equal(burst.filter((r) => r.status === 429).length, 9);
+  await f.request(`/api/posts/${task.id}/likes`, {}, session.cookie);
+  f.advance(7 * DAY);
+  assert.equal(
+    (await f.request(`/api/posts/${task.id}/likes`, {}, session.cookie)).status,
+    200,
+  );
+  assert.equal((await f.request(`/api/tasks/${task.id}`)).status, 200);
+  f.advance(23 * DAY);
+  for (const route of [
+    `/task/${task.id}`,
+    `/api/tasks/${task.id}`,
+    `/api/tasks/${task.id}/qr.png`,
+    `/api/posts/${task.id}/social`,
+  ])
+    assert.equal((await f.request(route)).status, 404);
+  assert.equal(
+    (
+      await f.request(
+        `/api/posts/${task.id}/replies`,
+        replyBody(),
+        session.cookie,
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await f.request(`/api/posts/${task.id}/likes`, {}, session.cookie)).status,
+    404,
+  );
+  assert.equal(
+    (await readdir(f.directory)).filter((n) => n.endsWith(".json")).length,
+    0,
+  );
+});
+
+test("legacy polls initialize social fields without changing votes or exposing hashes", async (t) => {
+  const f = await fixture(t),
+    poll = await f.create();
+  const path = join(f.directory, `${poll.id}.json`),
+    disk = JSON.parse(await readFile(path, "utf8"));
+  for (const key of ["type", "likers", "totalLikes", "replies", "replyAuthors"])
+    delete disk[key];
+  await writeFile(path, JSON.stringify(disk));
+  const session = await socialSession(f, poll.id);
+  assert.equal(session.data.totalLikes, 0);
+  assert.equal(
+    (await f.request(`/api/posts/${poll.id}/likes`, {}, session.cookie)).status,
+    200,
+  );
+  const result = await (await f.request(`/api/polls/${poll.id}`)).json();
+  assert.equal(result.totalLikes, 1);
+  assert.equal(result.totalVotes, 0);
+  assert.equal(result.type, "poll");
+  assert.ok(!("likers" in result));
 });

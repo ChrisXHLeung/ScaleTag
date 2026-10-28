@@ -37,25 +37,12 @@ export function coordinates(value) {
   return { latitude: value.latitude, longitude: value.longitude };
 }
 
-export function pollInput(body) {
+function baseInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the poll form.");
   const title = text(body.title, "Title", 140);
   const description = text(body.description ?? "", "Description", 4000, false);
   const signature = text(body.signature, "Signature", 60);
-  if (
-    !Array.isArray(body.options) ||
-    body.options.length < 2 ||
-    body.options.length > 12
-  ) {
-    throw new AppError(400, "Provide between 2 and 12 options.");
-  }
-  const options = body.options.map((v) => text(v, "Option", 120));
-  if (
-    new Set(options.map((v) => v.toLocaleLowerCase())).size !== options.length
-  ) {
-    throw new AppError(400, "Options must be unique.");
-  }
   if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 3) {
     throw new AppError(400, "You can add up to 3 external images.");
   }
@@ -81,12 +68,75 @@ export function pollInput(body) {
     title,
     description,
     signature,
-    options,
     images,
     // Existing polls and clients stay off the map unless they explicitly opt in.
     mapVisible: body.mapVisible === true,
     location: coordinates(body.location),
   };
+}
+
+export function pollInput(body) {
+  const common = baseInput(body);
+  if (
+    !Array.isArray(body.options) ||
+    body.options.length < 2 ||
+    body.options.length > 12
+  ) {
+    throw new AppError(400, "Provide between 2 and 12 options.");
+  }
+  const options = body.options.map((v) => text(v, "Option", 120));
+  if (
+    new Set(options.map((v) => v.toLocaleLowerCase())).size !== options.length
+  ) {
+    throw new AppError(400, "Options must be unique.");
+  }
+  return { ...common, options };
+}
+
+export function taskInput(body) {
+  if (!body || typeof body !== "object")
+    throw new AppError(400, "Please complete the task form.");
+  // Share publication validation; task content has no voting options.
+  const common = baseInput({
+    ...body,
+    signature: body.signature || "Anonymous",
+  });
+  return {
+    ...common,
+    type: "task",
+    options: [],
+    description: text(body.description, "Description", 4000),
+    reward: text(body.reward, "Reward", 160),
+  };
+}
+
+export function replyInput(body) {
+  if (!body || typeof body !== "object")
+    throw new AppError(400, "Please complete your reply.");
+  const message = text(body.message, "Reply", 2000);
+  const name = text(body.name || "Anonymous", "Name", 60);
+  const phone = text(body.phone ?? "", "Phone", 40, false);
+  const email = text(body.email ?? "", "Email", 254, false);
+  if (!phone && !email)
+    throw new AppError(
+      400,
+      "Provide a phone number or email address, or both.",
+    );
+  if (
+    phone &&
+    (!/^[+0-9(). #x-]+$/i.test(phone) ||
+      phone.replace(/\D/g, "").length < 5 ||
+      phone.replace(/\D/g, "").length > 20)
+  )
+    throw new AppError(400, "Enter a valid phone number.");
+  if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
+    throw new AppError(400, "Enter a valid email address.");
+  if (body.contactAccepted !== true)
+    throw new AppError(
+      400,
+      "Please confirm that your reply and contact details will be public.",
+    );
+  return { message, name, phone, email };
 }
 
 export function distanceKm(a, b) {

@@ -55,16 +55,20 @@ export class PollStore {
   summary(p) {
     return {
       id: p.id,
+      type: p.type ?? "poll",
+      reward: p.reward,
+      totalLikes: p.totalLikes ?? 0,
+      replyCount: p.replies?.length ?? p.replyCount ?? 0,
       title: p.title,
       signature: p.signature,
       createdAt: p.createdAt,
       endsAt: p.endsAt,
       deleteAt: p.deleteAt,
       totalVotes: p.totalVotes,
-      options: p.options.map((o) => ({ ...o })),
+      options: (p.options ?? []).map((o) => ({ ...o })),
       location: p.location,
       mapVisible: p.mapVisible === true,
-      needsPrune: Object.keys(p.voters).length > 0,
+      needsPrune: Object.keys(p.voters ?? {}).length > 0,
     };
   }
 
@@ -143,7 +147,7 @@ export class PollStore {
         ...input,
         id,
         createdAt: now,
-        endsAt: now + 7 * DAY,
+        endsAt: now + (input.type === "task" ? 30 : 7) * DAY,
         deleteAt: now + 30 * DAY,
         options: input.options.map((label, n) => ({
           id: n + 1,
@@ -152,6 +156,10 @@ export class PollStore {
         })),
         totalVotes: 0,
         voters: {},
+        totalLikes: 0,
+        likers: {},
+        replies: [],
+        replyAuthors: {},
       };
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
       await this.write(db);
@@ -160,9 +168,23 @@ export class PollStore {
   }
 
   public(p, token) {
-    const { location, voters, version, needsPrune, mapVisible, ...result } = p;
+    const {
+      location,
+      voters,
+      version,
+      needsPrune,
+      mapVisible,
+      mapConsentSource,
+      likers,
+      replies,
+      replyAuthors,
+      ...result
+    } = p;
     return {
       ...result,
+      type: p.type ?? "poll",
+      totalLikes: p.totalLikes ?? 0,
+      replyCount: p.replies?.length ?? p.replyCount ?? 0,
       status: this.clock() < p.endsAt ? "open" : "closed",
       hasVoted: Boolean(
         token && voters && Object.hasOwn(voters, voterHash(token)),
@@ -181,6 +203,8 @@ export class PollStore {
     return this.exclusive(id, async () => {
       const db = await this.live(id);
       const p = db.data;
+      if (p.type === "task")
+        throw new AppError(400, "Tasks do not accept votes.");
       if (this.clock() >= p.endsAt)
         throw new AppError(
           409,
@@ -203,7 +227,7 @@ export class PollStore {
     });
   }
 
-  list({ location, status = "all", cursor } = {}) {
+  list({ location, status = "all", cursor, type = "all" } = {}) {
     let before;
     if (cursor) {
       try {
@@ -216,6 +240,7 @@ export class PollStore {
     }
     const now = this.clock();
     let rows = [...this.index.values()].filter((p) => p.deleteAt > now);
+    if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
       rows = rows.filter(
         (p) => (p.endsAt > now ? "open" : "closed") === status,
@@ -242,10 +267,11 @@ export class PollStore {
     };
   }
 
-  map({ location, status = "all" } = {}) {
+  map({ location, status = "all", type = "all" } = {}) {
     const now = this.clock();
     const rows = [...this.index.values()]
       .filter((p) => p.mapVisible && p.deleteAt > now)
+      .filter((p) => type === "all" || (p.type ?? "poll") === type)
       .filter(
         (p) =>
           status === "all" || (p.endsAt > now ? "open" : "closed") === status,
@@ -258,6 +284,8 @@ export class PollStore {
       // Bound response size; the UI explicitly identifies the newest 1,000 limit.
       polls: rows.slice(0, 1000).map((p) => ({
         id: p.id,
+        type: p.type ?? "poll",
+        reward: p.reward,
         title: p.title,
         totalVotes: p.totalVotes,
         createdAt: p.createdAt,
@@ -272,6 +300,73 @@ export class PollStore {
         ],
       })),
     };
+  }
+
+  social(p, token) {
+    return {
+      type: p.type ?? "poll",
+      totalLikes: p.totalLikes ?? 0,
+      hasLiked: Boolean(
+        token && Object.hasOwn(p.likers ?? {}, voterHash(token)),
+      ),
+      replies: p.type === "task" ? (p.replies ?? []) : [],
+      deleteAt: p.deleteAt,
+      serverTime: this.clock(),
+    };
+  }
+
+  async getSocial(id, token) {
+    return this.exclusive(id, async () =>
+      this.social((await this.live(id)).data, token),
+    );
+  }
+
+  async like(id, token) {
+    return this.exclusive(id, async () => {
+      const db = await this.live(id),
+        p = db.data;
+      p.likers ??= {};
+      const hash = voterHash(token);
+      if (!Object.hasOwn(p.likers, hash)) {
+        if ((p.totalLikes ?? 0) >= this.maxVotes)
+          throw new AppError(503, "This post has reached its like limit.");
+        p.likers[hash] = true;
+        p.totalLikes = (p.totalLikes ?? 0) + 1;
+        await this.write(db);
+      }
+      return this.social(p, token);
+    });
+  }
+
+  async reply(id, token, input) {
+    return this.exclusive(id, async () => {
+      const db = await this.live(id),
+        p = db.data;
+      if (p.type !== "task")
+        throw new AppError(400, "Replies are available on tasks only.");
+      p.replies ??= [];
+      p.replyAuthors ??= {};
+      if (p.replies.length >= 200)
+        throw new AppError(409, "This task has reached its 200-reply limit.");
+      const hash = voterHash(token),
+        now = this.clock();
+      if (
+        Object.hasOwn(p.replyAuthors, hash) &&
+        now - p.replyAuthors[hash] < 60000
+      )
+        throw new AppError(
+          429,
+          "Please wait a minute before posting another reply to this task.",
+        );
+      p.replies.push({
+        id: randomBytes(12).toString("hex"),
+        ...input,
+        createdAt: now,
+      });
+      p.replyAuthors[hash] = now;
+      await this.write(db);
+      return this.social(p, token);
+    });
   }
 
   async sweep() {

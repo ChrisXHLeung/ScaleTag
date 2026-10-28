@@ -96,6 +96,36 @@ try {
       .toString("hex"),
     "89504e470d0a1a0a",
   );
+  const taskResponse = await request("/api/tasks", {
+    title: "Isolated container task",
+    description: "A temporary task in the disposable test volume.",
+    reward: "A coffee",
+    location: { latitude: 0, longitude: 0 },
+    mapVisible: true,
+    retentionAccepted: true,
+  });
+  assert.equal(taskResponse.status, 201);
+  const task = await taskResponse.json();
+  const socialResponse = await request(`/api/posts/${task.id}/social`);
+  const socialCookie = socialResponse.headers.get("set-cookie").split(";")[0];
+  assert.equal(
+    (await request(`/api/posts/${task.id}/likes`, {}, socialCookie)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request(
+        `/api/posts/${task.id}/replies`,
+        {
+          message: "I can help.",
+          phone: "+1 416 555 0123",
+          contactAccepted: true,
+        },
+        socialCookie,
+      )
+    ).status,
+    201,
+  );
   const secondWriter = spawnSync(
     "docker",
     [...composeArgs, "exec", "-T", "app", "scaletag-entrypoint", "true"],
@@ -127,6 +157,14 @@ try {
   const restored = await (
     await request(`/api/polls/${poll.id}`, undefined, cookie)
   ).json();
+  const restoredSocial = await (
+    await request(`/api/posts/${task.id}/social`, undefined, socialCookie)
+  ).json();
+  assert.equal(restoredSocial.totalLikes, 1);
+  assert.equal(restoredSocial.hasLiked, true);
+  assert.equal(restoredSocial.replies.length, 1);
+  assert.equal(restoredSocial.replies[0].phone, "+1 416 555 0123");
+  assert.equal((await request(`/api/tasks/${task.id}`)).status, 200);
   assert.equal(restored.totalVotes, 1);
   assert.equal(restored.options[0].votes, 1);
   assert.equal(restored.hasVoted, true);
