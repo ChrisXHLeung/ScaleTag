@@ -18,7 +18,7 @@ Development site: **https://scaletag.risinfo.cn**
 
 ## Install as a PWA
 
-ScaleTag can be installed from its HTTPS website and opened in a standalone app window. Use **Install app** in the footer for an installation guide and, when supported, the browser's native install prompt. On iPhone/iPad, open the site in Safari and choose **Share → Add to Home Screen**; enable **Open as Web App** if shown. Installation availability and menu labels depend on the browser.
+ScaleTag can be installed from its HTTPS website and opened in a standalone app window. The homepage QR code opens **`/install`**, which selects iPhone/iPad or Android/desktop instructions using a local browser hint. This hint is not uploaded or stored, and visitors can switch instructions manually. On supported Android browsers a prominent install button directly opens the native confirmation; otherwise the guide shows a browser-menu fallback. iPhone/iPad visitors see Safari Share → Add to Home Screen steps. The QR code uses the configured `PUBLIC_ORIGIN`, never an incoming Host header. Use **Install app** in the footer for the same native prompt and a quick installation guide. On iPhone/iPad, open the site in Safari and choose **Share → Add to Home Screen**; enable **Open as Web App** if shown. Installation availability and menu labels depend on the browser.
 
 The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/VoteList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
 

@@ -1835,3 +1835,165 @@ progress::-moz-progress-bar {
     padding: 28px 22px;
   }
 }
+
+.home-install {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f5f8ff;
+  padding: 24px 30px;
+  margin: 0 0 38px;
+}
+.home-install-qr {
+  display: block;
+  flex-shrink: 0;
+  border: 1px solid #d1dff5;
+  border-radius: 10px;
+  background: white;
+  overflow: hidden;
+}
+.home-install-qr img {
+  display: block;
+  width: 140px;
+  height: 140px;
+}
+.home-install h2 {
+  font-size: 29px;
+  margin: 9px 0;
+}
+.home-install p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 13px;
+}
+.install-page {
+  max-width: 620px;
+  margin: auto;
+  padding: 40px 0 65px;
+}
+.install-page-heading > img {
+  display: block;
+  margin-bottom: 22px;
+  border-radius: 16px;
+}
+.install-page-heading h1 {
+  font-size: 48px;
+  line-height: 1.1;
+  margin: 17px 0;
+}
+.install-page-heading > p,
+.install-page-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.device-picker {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 28px 0 24px;
+}
+.device-picker button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 12px 8px;
+  font-size: 12px;
+}
+.device-picker button.selected {
+  background: var(--blue);
+  color: white;
+}
+.install-steps h2 {
+  font-size: 26px;
+  margin-bottom: 22px;
+}
+.install-steps ol {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.install-steps li {
+  display: flex;
+  align-items: start;
+  gap: 16px;
+  padding: 0 0 24px;
+}
+.step-number {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 650;
+  background: #eef3ff;
+  color: var(--blue);
+}
+.install-steps h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  margin: 4px 0 8px;
+}
+.install-steps h3 svg {
+  width: 21px;
+  height: 21px;
+  color: var(--blue);
+}
+.install-steps li p,
+.install-browser-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.install-browser-hint {
+  background: #f5f8ff;
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+.install-page-native {
+  margin-top: 24px;
+  width: 100%;
+}
+.install-page-note {
+  margin: 26px 0 20px;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .home-install {
+    padding: 20px;
+    gap: 18px;
+    align-items: start;
+  }
+  .home-install-qr img {
+    width: 108px;
+    height: 108px;
+  }
+  .home-install h2 {
+    font-size: 23px;
+  }
+  .home-install .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .home-install p {
+    font-size: 11px;
+  }
+  .install-page-heading h1 {
+    font-size: 39px;
+  }
+}
+@media (max-width: 380px) {
+  .home-install {
+    flex-direction: column;
+  }
+}

@@ -127,7 +127,21 @@ function home() {
     <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> SMALL QUESTIONS. LOCAL VOICES.</div><h1>Put a question<br>out into <em>the world.</em></h1><p>Create a poll. Share a code. Hear what people think.<br class="desktop-only"> No accounts, no complicated setup. Just a little curiosity.</p><a class="button" href="/create">Start a conversation ${icons.arrow}</a><a class="text-link" href="/VoteList">Explore VoteList ↗</a></div>
     <div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><div class="art-stamp">A LITTLE QUESTION<br>CAN GO A LONG WAY</div><div class="question-tag"><span class="tag-hole"></span><span class="tag-caption">YOUR NEXT CONVERSATION</span><strong>What if<br>we asked?</strong><div class="tag-bottom"><span>ONE QUESTION<br>MANY PERSPECTIVES</span><span class="tag-arrow">↗</span></div></div><div class="location-chip">${icons.pin} Rooted in a real place</div><div class="seven-badge"><strong>7</strong><span>DAYS TO<br>HAVE YOUR SAY</span></div></div>
   </section>
+  <section class="home-install" aria-labelledby="home-install-title"><a href="/install" class="home-install-qr"><img src="/install/qr.png" alt="QR code for the ScaleTag installation guide" width="140" height="140"></a><div><span class="eyebrow">TAKE IT WITH YOU</span><h2 id="home-install-title">A little app. One scan away.</h2><p>Scan with your phone for installation steps made for your device.</p><a class="text-link" href="/install">Open the installation guide ↗</a></div></section>
   <section class="principles" aria-label="How ScaleTag works"><div>${icons.clock}<span><strong>7 days to vote</strong><small>Starts the moment you publish.</small></span></div><div>${icons.qr}<span><strong>One code. Any conversation.</strong><small>Save it, print it, pass it around.</small></span></div><div>${icons.shield}<span><strong>No account needed</strong><small>A name of your choosing is enough.</small></span></div></section>`;
+}
+
+function installPage() {
+  document.title = "Install ScaleTag — ScaleTag";
+  const shareIcon =
+    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3"/></svg>';
+  main.innerHTML = `<section class="install-page"><a class="back-link" href="/">← Back to home</a><div class="install-page-heading"><img src="/icons/icon-192.png" width="72" height="72" alt=""><span class="eyebrow">KEEP A LITTLE CURIOSITY CLOSE</span><h1>Install ScaleTag.</h1><p>Keep ScaleTag on your home screen for your next conversation.</p></div>
+    <div class="installed-notice success-banner" id="install-page-done" role="status" hidden>ScaleTag is installed. Open it from your home screen.</div>
+    <button type="button" class="button install-page-native" id="install-page-native" hidden>Install ScaleTag</button>
+    <div class="device-picker" role="group" aria-label="Your device"><button type="button" data-install-platform="ios" aria-pressed="false">iPhone / iPad</button><button type="button" data-install-platform="android" aria-pressed="false">Android / desktop</button></div>
+    <section class="install-steps" data-platform-panel="ios" aria-labelledby="ios-install-title"><h2 id="ios-install-title">Add it from Safari.</h2><ol><li><span class="step-number">1</span><div><h3>Tap Share ${shareIcon}</h3><p>Find the square with an upward arrow in Safari’s toolbar or menu.</p></div></li><li><span class="step-number">2</span><div><h3>Add to Home Screen</h3><p>Choose this option from the share menu. Scroll down if needed.</p></div></li><li><span class="step-number">3</span><div><h3>Confirm Add</h3><p>Keep Open as Web App enabled if shown, then tap Add. The ScaleTag icon is ready on your home screen.</p></div></li></ol><p class="install-browser-hint">Scanned inside another app? Open this page in Safari to use Add to Home Screen.</p></section>
+    <section class="install-steps" data-platform-panel="android" aria-labelledby="android-install-title" hidden><h2 id="android-install-title">Install from your browser.</h2><ol><li><span class="step-number">1</span><div><h3>Tap Install ScaleTag</h3><p>When your browser offers installation, use the blue button above.</p></div></li><li><span class="step-number">2</span><div><h3>Confirm installation</h3><p>Approve the browser’s installation prompt. ScaleTag is added as an app with its own icon.</p></div></li><li><span class="step-number">3</span><div><h3>Open from your app icon</h3><p>Use ScaleTag from your home screen or app launcher.</p></div></li></ol><p class="install-browser-hint" id="android-install-fallback">No install button? In Chrome or Edge, open the browser menu and choose Install app or Add to Home Screen. Some in-app browsers do not support installation.</p></section>
+    <p class="install-page-note" data-install-message>Publishing, voting and current results still need an internet connection. No account is required.</p><a class="button secondary" href="/">Continue to ScaleTag ${icons.arrow}</a></section>`;
 }
 
 function createPoll() {
@@ -483,6 +497,7 @@ try {
     window.location.replace("/create");
   else if (route === "/") home();
   else if (route === "/create") createPoll();
+  else if (route === "/install") installPage();
   else if (route === "/VoteList") voteList();
   else if (route === "/privacy") privacy();
   else if (/^\/vote\/[a-f0-9]{24}$/.test(route))

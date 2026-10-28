@@ -166,6 +166,17 @@ export function createApp(
   app.use("/api", (req, res, next) =>
     next(new AppError(404, "Endpoint not found.")),
   );
+  let installationQr;
+  app.get("/install/qr.png", async (req, res) => {
+    installationQr ??= QRCode.toBuffer(`${origin}/install`, {
+      type: "png",
+      width: 384,
+      margin: 4,
+      errorCorrectionLevel: "M",
+      color: { dark: "#173b7a", light: "#ffffff" },
+    });
+    res.type("png").send(await installationQr);
+  });
   app.get("/sw.js", (req, res) => {
     res.set("Service-Worker-Allowed", "/");
     res.type("application/javascript").send(workerSource);
@@ -182,7 +193,7 @@ export function createApp(
       },
     }),
   );
-  app.get(["/", "/create", "/VoteList", "/privacy"], (req, res) =>
+  app.get(["/", "/create", "/VoteList", "/privacy", "/install"], (req, res) =>
     res.sendFile(join(publicDir, "index.html")),
   );
   app.get("/vote/:id", async (req, res) => {

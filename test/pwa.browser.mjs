@@ -74,19 +74,28 @@ async function cachedPaths(page) {
   const urls = await page.evaluate(async () => {
     const result = [];
     for (const name of await caches.keys()) {
-      for (const key of await (await caches.open(name)).keys()) result.push(key.url);
+      for (const key of await (await caches.open(name)).keys())
+        result.push(key.url);
     }
     return result;
   });
   const origin = new URL(page.url()).origin;
-  return urls.map(value => {
-    const url = new URL(value);
-    assert.equal(url.origin, origin, 'Never cache third-party resources');
-    assert.equal(url.search, '', 'Never cache query parameters');
-    assert.ok(!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/vote/'), 'Never cache poll data or poll URLs');
-    assert.ok(!['/', '/create', '/VoteList', '/privacy'].includes(url.pathname), 'Do not cache page responses');
-    return url.pathname;
-  }).sort();
+  return urls
+    .map((value) => {
+      const url = new URL(value);
+      assert.equal(url.origin, origin, "Never cache third-party resources");
+      assert.equal(url.search, "", "Never cache query parameters");
+      assert.ok(
+        !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/vote/"),
+        "Never cache poll data or poll URLs",
+      );
+      assert.ok(
+        !["/", "/create", "/VoteList", "/privacy"].includes(url.pathname),
+        "Do not cache page responses",
+      );
+      return url.pathname;
+    })
+    .sort();
 }
 
 test(
@@ -333,6 +342,103 @@ test(
     }, originalCache);
     assert.equal(await page.getByLabel("The question").inputValue(), "");
     assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
+    assert.deepEqual(f.errors, []);
+  },
+);
+
+test(
+  "homepage QR leads to platform-specific installation; Android confirms directly",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const image = f.page.getByRole("img", {
+      name: "QR code for the ScaleTag installation guide",
+    });
+    await image.waitFor();
+    assert.equal(await image.getAttribute("src"), "/install/qr.png");
+    const qr = await f.context.request.get(f.origin + "/install/qr.png", {
+      headers: { host: "untrusted.example" },
+    });
+    assert.equal(qr.status(), 200);
+    assert.equal(qr.headers()["content-type"], "image/png");
+    await f.page
+      .getByRole("link", { name: "Open the installation guide" })
+      .click();
+    assert.equal(new URL(f.page.url()).pathname, "/install");
+    assert.equal((await f.page.reload()).status(), 200);
+
+    const iphone = await f.browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    });
+    const ios = await iphone.newPage();
+    await ios.goto(f.origin + "/install");
+    assert.equal(
+      await ios
+        .locator('[data-install-platform="ios"]')
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(
+      await ios.locator('[data-platform-panel="ios"]').isVisible(),
+      true,
+    );
+    assert.equal(
+      await ios.locator('[data-platform-panel="android"]').isVisible(),
+      false,
+    );
+    await ios.getByRole("heading", { name: "Tap Share" }).waitFor();
+    await ios
+      .getByRole("heading", { name: "Add to Home Screen", exact: true })
+      .waitFor();
+    assert.equal(await ios.locator("#install-page-native").isVisible(), false);
+    await ios.setViewportSize({ width: 320, height: 844 });
+    assert.ok(
+      await ios.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await ios.getByRole("button", { name: "Android / desktop" }).click();
+    assert.equal(
+      await ios.locator('[data-platform-panel="android"]').isVisible(),
+      true,
+    );
+
+    const android = await f.browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      userAgent:
+        "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36",
+    });
+    const phone = await android.newPage();
+    await phone.goto(f.origin + "/install");
+    assert.equal(
+      await phone
+        .locator('[data-install-platform="android"]')
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    await phone.evaluate(() => {
+      window.installRequests = 0;
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      event.prompt = async () => {
+        window.installRequests++;
+        dispatchEvent(new Event("appinstalled"));
+      };
+      event.userChoice = Promise.resolve({ outcome: "accepted" });
+      dispatchEvent(event);
+    });
+    await phone.locator("#install-page-native").click();
+    assert.equal(await phone.evaluate(() => window.installRequests), 1);
+    assert.match(await phone.locator(".install-page-note").innerText(), /Publishing/);
+    assert.equal(await phone.locator("#install-page-done").isVisible(), true);
+    assert.equal(
+      await phone.locator("#install-page-native").isVisible(),
+      false,
+    );
+    assert.equal(f.store.index.size, 0);
     assert.deepEqual(f.errors, []);
   },
 );

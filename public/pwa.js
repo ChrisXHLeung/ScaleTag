@@ -1,17 +1,51 @@
 const installButton = document.querySelector("#install-app");
 const dialog = document.querySelector("#install-dialog");
 const nativeInstall = document.querySelector("#install-native");
+const pageInstall = document.querySelector("#install-page-native");
+const nativeButtons = [nativeInstall, pageInstall].filter(Boolean);
 const updateBanner = document.querySelector("#app-update");
 const updateButton = document.querySelector("#apply-update");
 const connectionBanner = document.querySelector("#connection-status");
 const displayMode = window.matchMedia("(display-mode: standalone)");
 let installPrompt;
+let installedThisVisit = false;
 let registration;
 let reloadRequested = false;
 let lastUpdateCheck = Date.now();
 
 function reflectDisplayMode() {
-  installButton.hidden = displayMode.matches || navigator.standalone === true;
+  const installed =
+    installedThisVisit || displayMode.matches || navigator.standalone === true;
+  installButton.hidden = installed;
+  for (const button of nativeButtons)
+    button.hidden = installed || !installPrompt;
+  const done = document.querySelector("#install-page-done");
+  if (done) done.hidden = !installed;
+  const fallback = document.querySelector("#android-install-fallback");
+  if (fallback) fallback.hidden = Boolean(installPrompt) || installed;
+}
+
+function choosePlatform(platform) {
+  document.querySelectorAll("[data-install-platform]").forEach((button) => {
+    const selected = button.dataset.installPlatform === platform;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  document.querySelectorAll("[data-platform-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.platformPanel !== platform;
+  });
+}
+if (document.querySelector("[data-install-platform]")) {
+  // This local hint only chooses instructions; it is never uploaded or saved.
+  const appleMobile =
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  choosePlatform(appleMobile ? "ios" : "android");
+  document.querySelectorAll("[data-install-platform]").forEach((button) => {
+    button.addEventListener("click", () =>
+      choosePlatform(button.dataset.installPlatform),
+    );
+  });
 }
 reflectDisplayMode();
 displayMode.addEventListener("change", reflectDisplayMode);
@@ -22,32 +56,36 @@ document
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   installPrompt = event;
-  nativeInstall.hidden = false;
+  reflectDisplayMode();
 });
-nativeInstall.addEventListener("click", async () => {
+async function requestInstallation() {
   if (!installPrompt) return;
-  nativeInstall.disabled = true;
+  const prompt = installPrompt;
+  for (const button of nativeButtons) button.disabled = true;
   try {
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
     if (choice.outcome === "accepted") {
+      installedThisVisit = true;
       dialog.close();
-      installButton.hidden = true;
     }
   } catch {
-    document.querySelector("#install-message").textContent =
-      "Use your browser’s menu to install ScaleTag.";
+    document.querySelectorAll("[data-install-message]").forEach((message) => {
+      message.textContent = "Use your browser’s menu to install ScaleTag.";
+    });
   } finally {
     installPrompt = undefined;
-    nativeInstall.hidden = true;
-    nativeInstall.disabled = false;
+    for (const button of nativeButtons) button.disabled = false;
+    reflectDisplayMode();
   }
-});
+}
+for (const button of nativeButtons)
+  button.addEventListener("click", requestInstallation);
 window.addEventListener("appinstalled", () => {
+  installedThisVisit = true;
   installPrompt = undefined;
-  installButton.hidden = true;
-  nativeInstall.hidden = true;
   dialog.close();
+  reflectDisplayMode();
 });
 
 function reflectConnection() {
