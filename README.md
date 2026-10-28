@@ -16,9 +16,34 @@ Development site: **https://scaletag.risinfo.cn**
 - List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. The homepage never lists polls.
 - Remove the poll, results, location, and related identifiers from active storage **30 days after publication**. The original page and QR endpoint then return 404. Private daily archives are retained for **90 days after backup creation** for administrator-managed recovery.
 
+## Pages
+
+| Path | Purpose |
+| --- | --- |
+| `/` | Introduction and QR code for installing the app; no poll listing. |
+| `/create` | Publish a single-choice poll with required GPS permission. |
+| `/VoteList` | Browse retained polls, with status and optional 100 km filters. |
+| `/install` | Device-specific PWA installation guide. |
+| `/privacy` | Explain cookies, location, deletion and private backup retention. |
+
+Each published poll also has its own shareable URL and downloadable QR code. Installing the app does not create an account or change the anonymous voting rules.
+
 ## Install as a PWA
 
-ScaleTag can be installed from its HTTPS website and opened in a standalone app window. The homepage QR code opens **`/install`**, which selects iPhone/iPad or Android/desktop instructions using a local browser hint. This hint is not uploaded or stored, and visitors can switch instructions manually. On supported Android browsers a prominent install button directly opens the native confirmation; otherwise the guide shows a browser-menu fallback. iPhone/iPad visitors see Safari Share → Add to Home Screen steps. The QR code uses the configured `PUBLIC_ORIGIN`, never an incoming Host header. Use **Install app** in the footer for the same native prompt and a quick installation guide. On iPhone/iPad, open the site in Safari and choose **Share → Add to Home Screen**; enable **Open as Web App** if shown. Installation availability and menu labels depend on the browser.
+ScaleTag is an installable web app served over HTTPS. Open the homepage on a computer, scan its QR code with your phone, and follow the installation guide at **`/install`**. You can also open the guide directly on your phone or use **Install app** in the footer.
+
+| Device / browser | Installation flow |
+| --- | --- |
+| Android with a supported browser offering installation | Tap **Install ScaleTag**, then confirm the browser's installation prompt. |
+| Android without an available installation prompt | Follow the guide to install or add the app from the browser menu. |
+| iPhone / iPad | Open in Safari, tap **Share → Add to Home Screen**, then confirm **Add**. Enable **Open as Web App** if shown. |
+| Desktop | Use **Install ScaleTag** when offered, or follow the browser's installation menu. |
+
+Scanning opens the guide; installation still requires the visitor's confirmation. On iPhone/iPad, the guide explains the Safari steps because the website cannot open a native installation prompt. In-app browsers may require opening the page in Safari or another supported browser first. Installation availability and menu labels depend on the browser.
+
+The guide selects iPhone/iPad or Android/desktop instructions using a local browser hint, including iPad desktop mode. The hint is not uploaded or stored, and visitors can switch instructions manually. A direct install button appears only when the browser supplies an installation prompt. An installed standalone window hides the installation actions and offers a link back to ScaleTag.
+
+The homepage QR code contains `${PUBLIC_ORIGIN}/install`, using the configured public origin rather than the incoming Host header. It is separate from each poll's QR code, which opens that poll's voting page.
 
 The manifest includes stable app identity, 192/512px icons, a maskable icon and Create/VoteList shortcuts where supported. An Apple touch icon is included. The PNG icons are raster exports of the existing SVG brand mark; no image-generation service is used.
 
@@ -28,7 +53,7 @@ Service-worker versions are derived from a content hash of the static assets and
 
 API/page responses keep `Cache-Control: no-store`; only the allowlisted static files use `no-cache` for revalidation. Service-worker code is itself served with `no-store` and root scope. No additional backend, database, push service or app-store account is required.
 
-Browser regression tests use isolated local data and check installation metadata, icons, cache contents, offline rejection of writes, reconnection, expiry, install UI and user-approved updates:
+Browser regression tests use isolated local data and check installation metadata, icons, cache contents, offline rejection of writes, reconnection, expiry, homepage QR navigation, platform-specific guides, standalone mode and user-approved updates. Native install prompts are simulated in Chromium tests; these tests do not verify installation through a physical phone's operating system.
 
 ```sh
 npm ci --ignore-scripts
