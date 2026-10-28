@@ -83,6 +83,8 @@ export function pollInput(body) {
     signature,
     options,
     images,
+    // Existing polls and clients stay off the map unless they explicitly opt in.
+    mapVisible: body.mapVisible === true,
     location: coordinates(body.location),
   };
 }

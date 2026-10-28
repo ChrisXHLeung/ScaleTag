@@ -1,1 +1,172 @@
 @import url("/base.css");
+
+/* The map is optional; the list stays available without WebGL or map hosting. */
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 5px;
+  margin-bottom: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pale);
+}
+.view-switch button {
+  padding: 10px 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 650;
+  cursor: pointer;
+}
+.view-switch button.selected {
+  color: white;
+  background: var(--blue);
+}
+.map-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: white;
+}
+.map-intro {
+  padding: 22px 24px 8px;
+}
+.map-intro strong {
+  font-size: 1.2rem;
+}
+.map-intro p,
+.map-footnote {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+.map-message {
+  min-height: 22px;
+  margin: 8px 24px 15px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.poll-map {
+  height: 520px;
+  background: #eef3f7;
+}
+.map-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 18px 24px 0;
+  font-size: 0.85rem;
+}
+.map-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.legend-dot {
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+.legend-dot.ended {
+  background: var(--red);
+}
+.map-legend button {
+  margin-left: auto;
+  padding: 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.map-count {
+  padding: 0 24px;
+  font-weight: 650;
+}
+.map-footnote {
+  margin: 0;
+  padding: 0 24px 20px;
+}
+.mapped-polls {
+  padding: 0 24px 24px;
+}
+.mapped-polls summary {
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.mapped-polls ul {
+  padding-left: 20px;
+  max-height: 300px;
+  overflow: auto;
+}
+.mapped-polls li {
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+.mapped-polls a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.map-popup-content {
+  max-height: 280px;
+  overflow: auto;
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.map-poll-link {
+  display: block;
+  padding: 12px 5px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.map-poll-link strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.map-poll-link span,
+.map-popup-content > p {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.maplibregl-popup-close-button {
+  min-width: 30px;
+  min-height: 30px;
+  font-size: 20px;
+}
+.maplibregl-ctrl-attrib a {
+  text-decoration: underline;
+}
+@media (max-width: 600px) {
+  .poll-map {
+    height: 420px;
+  }
+  .map-intro {
+    padding: 18px 16px 5px;
+  }
+  .map-message {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+  .map-legend {
+    padding: 16px 16px 0;
+    gap: 13px;
+  }
+  .map-count {
+    padding: 0 16px;
+  }
+  .map-footnote,
+  .mapped-polls {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .maplibregl-ctrl-attrib {
+    font-size: 10px;
+  }
+}

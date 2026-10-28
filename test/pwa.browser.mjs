@@ -144,7 +144,8 @@ test(
       .getByRole("textbox", { name: "Option 2", exact: true })
       .fill("B");
     await page.getByLabel("Your signature").fill("Test");
-    await page.getByRole("checkbox").check();
+    await page.locator("#map-consent").check();
+    await page.locator("#retention").check();
     await page.getByRole("button", { name: "Publish my poll" }).click();
     await page.waitForURL(/\/vote\/[a-f0-9]{24}/);
     const id = new URL(page.url()).pathname.split("/").at(-1);
@@ -176,7 +177,8 @@ test(
     await page
       .getByText("Location ready. You’re all set to publish.")
       .waitFor();
-    await page.getByRole("checkbox").check();
+    await page.locator("#map-consent").check();
+    await page.locator("#retention").check();
     await context.setOffline(true);
     await page.getByRole("button", { name: "Publish my poll" }).click();
     await page
@@ -432,7 +434,10 @@ test(
     });
     await phone.locator("#install-page-native").click();
     assert.equal(await phone.evaluate(() => window.installRequests), 1);
-    assert.match(await phone.locator(".install-page-note").innerText(), /Publishing/);
+    assert.match(
+      await phone.locator(".install-page-note").innerText(),
+      /Publishing/,
+    );
     assert.equal(await phone.locator("#install-page-done").isVisible(), true);
     assert.equal(
       await phone.locator("#install-page-native").isVisible(),

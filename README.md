@@ -2,42 +2,62 @@
 
 **A question. A place. Seven days.**
 
-ScaleTag is a small, location-aware polling platform with an English interface. No accounts, no image storage, no map service, and no separate database server.
+ScaleTag is a small, location-aware polling platform with an English interface. No accounts, no image storage, no self-hosted map server, and no separate database server.
 
 Development site: **https://scaletag.risinfo.cn**
 
 ## What it does
 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
-- Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses.
+- Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses; publish only rounded map positions after explicit consent.
 - Start immediately; accept a single choice for exactly **168 hours**.
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.
 - Generate a downloadable PNG QR code containing the canonical poll URL.
-- List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. The homepage never lists polls.
+- List polls at **`/VoteList`**, newest first, with open/ended filters and an optional **100 km** radius filter. Switch between List and Map; the homepage never lists polls.
 - Remove the poll, results, location, and related identifiers from active storage **30 days after publication**. The original page and QR endpoint then return 404. Private daily archives are retained for **90 days after backup creation** for administrator-managed recovery.
 
 ## Pages
 
-| Path | Purpose |
-| --- | --- |
-| `/` | Introduction and QR code for installing the app; no poll listing. |
-| `/create` | Publish a single-choice poll with required GPS permission. |
-| `/VoteList` | Browse retained polls, with status and optional 100 km filters. |
-| `/install` | Device-specific PWA installation guide. |
-| `/privacy` | Explain cookies, location, deletion and private backup retention. |
+| Path        | Purpose                                                                             |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `/`         | Introduction and QR code for installing the app; no poll listing.                   |
+| `/create`   | Publish a single-choice poll with required GPS permission.                          |
+| `/VoteList` | Browse retained polls in List or Map view, with status and optional 100 km filters. |
+| `/install`  | Device-specific PWA installation guide.                                             |
+| `/privacy`  | Explain cookies, location, deletion and private backup retention.                   |
 
 Each published poll also has its own shareable URL and downloadable QR code. Installing the app does not create an account or change the anonymous voting rules.
+
+## Map view
+
+VoteList opens in **List** view. Choosing **Map** loads [MapLibre GL JS](https://maplibre.org/) 6.16.0 from ScaleTag and the Positron basemap from [OpenFreeMap](https://openfreemap.org/). There is no map API key, registration, separate map server or additional paid service. OpenFreeMap currently offers free public map hosting, including commercial use, without map-view quotas; it provides no SLA. Keep the OpenMapTiles/OpenStreetMap attribution visible. Map availability depends on the provider and the visitor's network/browser; List remains available independently.
+
+- Open polls use blue dots; ended polls use red dots. Numbered groups expand on click. Select a dot to open a poll; polls sharing a rounded position appear together in the popup.
+- Status and optional 100 km filters apply to both views. Nearby matching uses the original GPS on the server; the requesting visitor's coordinates are discarded after the search.
+- The map shows only polls created with explicit map consent (`mapVisible: true`). The creation form requires acknowledgement before publishing. Existing polls and API clients without this flag remain list-only; they are not retroactively exposed.
+- Public markers use a stable **0.01° latitude/longitude grid**, roughly 1.1 km north–south and narrower east–west. Exact GPS stays in the private JSON store. A rounded position is an approximate area, not an anonymity guarantee; an original coordinate already on the grid is unchanged.
+- At most the **newest 1,000 matching mapped polls** are returned. The interface shows the returned and total counts; use filters to narrow large sets. A text list of mapped polls is available below the map for keyboard and assistive-technology access.
+- Marker searches use `POST /api/map/search` and `no-store`. No coordinates are put in URLs. Current markers refresh at most every 30 seconds and at upcoming closing/deletion boundaries while the page is visible. Failed refreshes and offline mode clear markers rather than presenting retained results as current.
+
+Choosing Map sends the visitor's IP address and requested map areas to OpenFreeMap. Poll titles, signatures and votes are not sent to the map provider. The MapLibre module, CSS and worker are served locally from a pinned dependency; the map connects only to `tiles.openfreemap.org`. Third-party map resources, marker responses and map-library files are excluded from the PWA cache. The browser may cache basemap resources under the provider's own headers; ScaleTag does not download offline map areas. MapLibre uses WebGL, with List as the fallback on unsupported devices.
+
+```sh
+npx playwright install --with-deps chromium
+npm run test:map
+```
+
+Map regression tests run real MapLibre in Chromium with a deterministic mocked basemap, isolated poll data, marker interactions, filters, offline/error handling, expiry, consent, text escaping and mobile layout. External basemap availability is checked separately against the development site.
 
 ## Install as a PWA
 
 ScaleTag is an installable web app served over HTTPS. Open the homepage on a computer, scan its QR code with your phone, and follow the installation guide at **`/install`**. You can also open the guide directly on your phone or use **Install app** in the footer.
 
-| Device / browser | Installation flow |
-| --- | --- |
-| Android with a supported browser offering installation | Tap **Install ScaleTag**, then confirm the browser's installation prompt. |
-| Android without an available installation prompt | Follow the guide to install or add the app from the browser menu. |
-| iPhone / iPad | Open in Safari, tap **Share → Add to Home Screen**, then confirm **Add**. Enable **Open as Web App** if shown. |
-| Desktop | Use **Install ScaleTag** when offered, or follow the browser's installation menu. |
+| Device / browser                                       | Installation flow                                                                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Android with a supported browser offering installation | Tap **Install ScaleTag**, then confirm the browser's installation prompt.                                      |
+| Android without an available installation prompt       | Follow the guide to install or add the app from the browser menu.                                              |
+| iPhone / iPad                                          | Open in Safari, tap **Share → Add to Home Screen**, then confirm **Add**. Enable **Open as Web App** if shown. |
+| Desktop                                                | Use **Install ScaleTag** when offered, or follow the browser's installation menu.                              |
 
 Scanning opens the guide; installation still requires the visitor's confirmation. On iPhone/iPad, the guide explains the Safari steps because the website cannot open a native installation prompt. In-app browsers may require opening the page in Safari or another supported browser first. Installation availability and menu labels depend on the browser.
 
@@ -119,7 +139,7 @@ Atomic rename prevents partial JSON writes; it is not a guarantee against all st
 
 Each poll uses a different random cookie, scoped to that poll's API path, with `HttpOnly`, `Secure` in HTTPS mode, and `SameSite=Strict`. Its expiry is the poll's closing time. The active store removes its SHA-256 digest after closing; archived copies follow the backup retention policy below. Clearing cookies, changing browsers, or private browsing can bypass this protection: **one browser is not one verified person**.
 
-Location filters use a POST body, so the querying coordinates are not added to URLs, and are discarded after the request. No analytics, third-party fonts, request access logs, or account system are included. Cloudflare and the host still process network information. External images load only when the viewer explicitly asks; their hosts may receive connection information.
+Location filters use a POST body, so the querying coordinates are not added to URLs, and are discarded after the request. No analytics, request access logs, or account system are included. The ordinary interface uses system fonts; optional maps load map-label glyphs and basemap resources from OpenFreeMap. Cloudflare and the host still process network information. External images load only when the viewer explicitly asks; their hosts may receive connection information.
 
 Expired records are inaccessible at the exact 30-day deadline. A cleanup runs every 30 seconds and on startup to remove active files and erase closed polls' deduplication hashes. Private daily backups can contain poll contents, GPS and hashes that existed at backup time. Each archive is retained for 90 days after its creation, so a poll's final archived copy can remain for up to about 120 days after publication. There is no public recovery interface; recovering a record does not extend its original public expiry.
 
@@ -173,7 +193,7 @@ These are local archives on the same VM, not an offsite copy. Include their disk
 
 ## Initial operating cost
 
-The existing VM, runner, and Cloudflare Tunnel are reused. The app introduces no separately billed database, image-storage service, maps API, or SaaS dependency. Existing VM, domain, Cloudflare plan, bandwidth and host backup charges still depend on the operator's plans.
+The existing VM, runner, and Cloudflare Tunnel are reused. The app introduces no separately billed database, image-storage service, paid maps API, or SaaS subscription. The optional map uses OpenFreeMap’s public service and adds client-side download/rendering work plus a locally served MapLibre dependency; it does not require a map server on the VM. Existing VM, domain, Cloudflare plan, bandwidth and host backup charges still depend on the operator's plans.
 
 Default safety limits: 20 creations/minute globally, 10,000 retained polls, 50,000 votes per poll, and a 256 MiB free-disk reserve before accepting writes. The global creation limit uses no IP identifier and is a resource guard, not a strong abuse-prevention system. Each vote rewrites that poll's JSON, so very popular polls need a different persistence design. Start small, measure latency, memory and disk use, and scale only when needed. The 256 MiB application/container limit is a ceiling, not measured consumption. Docker Engine and containerd add their own host overhead; measure them separately.
 
@@ -182,6 +202,8 @@ Default safety limits: 20 creations/minute globally, 10,000 retained polls, 50,0
 ```sh
 npm run check
 npm test
+npm run test:pwa
+npm run test:map
 python3 -m unittest discover -s test -p '*_test.py' -v
 ```
 

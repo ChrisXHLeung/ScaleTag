@@ -30,7 +30,7 @@ export function createApp(
       "X-Frame-Options": "DENY",
       "Permissions-Policy": "geolocation=(self), camera=(), microphone=()",
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data: blob:; connect-src 'self' https://tiles.openfreemap.org; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'self'",
     });
     if (secure) res.set("Strict-Transport-Security", "max-age=31536000");
     next();
@@ -91,6 +91,17 @@ export function createApp(
   }
   app.get("/api/polls", list);
   app.post("/api/polls/search", list);
+  app.post("/api/map/search", (req, res) => {
+    const data = req.body ?? {};
+    if (data.status && !["all", "open", "closed"].includes(data.status))
+      throw new AppError(400, "Invalid filter.");
+    res.json(
+      store.map({
+        status: data.status,
+        location: data.location ? coordinates(data.location) : undefined,
+      }),
+    );
+  });
 
   function cookieName(id) {
     return `st_${id}`;
@@ -181,6 +192,21 @@ export function createApp(
     res.set("Service-Worker-Allowed", "/");
     res.type("application/javascript").send(workerSource);
   });
+  // Serve only the pinned browser distribution, not the node_modules directory.
+  for (const name of [
+    "maplibre-gl.mjs",
+    "maplibre-gl-worker.mjs",
+    "maplibre-gl.css",
+  ]) {
+    app.get(`/vendor/maplibre/6.16.0/${name}`, (req, res) => {
+      res.set("Cache-Control", "no-cache, max-age=0, must-revalidate");
+      res.sendFile(
+        fileURLToPath(
+          new URL(`../node_modules/maplibre-gl/dist/${name}`, import.meta.url),
+        ),
+      );
+    });
+  }
   app.use(
     express.static(publicDir, {
       index: false,

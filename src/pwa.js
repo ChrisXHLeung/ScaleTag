@@ -8,6 +8,7 @@ export const STATIC_ASSETS = [
   "/base.css",
   "/styles.css",
   "/app.js",
+  "/map.js",
   "/pwa.js",
   "/favicon.svg",
   "/manifest.webmanifest",

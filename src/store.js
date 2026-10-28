@@ -63,6 +63,7 @@ export class PollStore {
       totalVotes: p.totalVotes,
       options: p.options.map((o) => ({ ...o })),
       location: p.location,
+      mapVisible: p.mapVisible === true,
       needsPrune: Object.keys(p.voters).length > 0,
     };
   }
@@ -159,7 +160,7 @@ export class PollStore {
   }
 
   public(p, token) {
-    const { location, voters, version, needsPrune, ...result } = p;
+    const { location, voters, version, needsPrune, mapVisible, ...result } = p;
     return {
       ...result,
       status: this.clock() < p.endsAt ? "open" : "closed",
@@ -238,6 +239,38 @@ export class PollStore {
               JSON.stringify({ createdAt: last.createdAt, id: last.id }),
             ).toString("base64url")
           : null,
+    };
+  }
+
+  map({ location, status = "all" } = {}) {
+    const now = this.clock();
+    const rows = [...this.index.values()]
+      .filter((p) => p.mapVisible && p.deleteAt > now)
+      .filter(
+        (p) =>
+          status === "all" || (p.endsAt > now ? "open" : "closed") === status,
+      )
+      .filter((p) => !location || distanceKm(location, p.location) <= 100)
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+    return {
+      serverTime: now,
+      total: rows.length,
+      // Bound response size; the UI explicitly identifies the newest 1,000 limit.
+      polls: rows.slice(0, 1000).map((p) => ({
+        id: p.id,
+        title: p.title,
+        totalVotes: p.totalVotes,
+        createdAt: p.createdAt,
+        endsAt: p.endsAt,
+        deleteAt: p.deleteAt,
+        status: p.endsAt > now ? "open" : "closed",
+        // One stable grid prevents averaging multiple requests to recover GPS.
+        // Rounding is a coarse public position, not an anonymity guarantee.
+        position: [
+          Number((Math.round(p.location.longitude * 100) / 100).toFixed(2)),
+          Number((Math.round(p.location.latitude * 100) / 100).toFixed(2)),
+        ],
+      })),
     };
   }
 

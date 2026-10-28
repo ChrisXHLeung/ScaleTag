@@ -406,3 +406,155 @@ test("low disk reserve rejects writes without creating partial poll records", as
   assert.equal(f.store.index.size, 0);
   assert.deepEqual(await readdir(f.directory), []);
 });
+
+test("map publishes only opted-in coarse locations; search stays private and expires on time", async (t) => {
+  const f = await fixture(t);
+  const legacy = await f.create();
+  const exact = { latitude: 43.653256, longitude: -79.383289 };
+  const mapped = await f.create({
+    location: exact,
+    mapVisible: true,
+    title: "Mapped poll",
+  });
+  const distant = await f.create({
+    mapVisible: true,
+    location: { latitude: 49.2827, longitude: -123.1207 },
+  });
+  const response = await f.request("/api/map/search", { status: "all" });
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+  const data = await response.json();
+  assert.equal(data.total, 2);
+  assert.ok(!data.polls.some((p) => p.id === legacy.id));
+  const pin = data.polls.find((p) => p.id === mapped.id);
+  assert.deepEqual(pin.position, [-79.38, 43.65]);
+  assert.deepEqual(
+    Object.keys(pin).sort(),
+    [
+      "id",
+      "title",
+      "totalVotes",
+      "createdAt",
+      "endsAt",
+      "deleteAt",
+      "status",
+      "position",
+    ].sort(),
+  );
+  assert.ok(!JSON.stringify(data).includes("43.653256"));
+  const nearby = await (
+    await f.request("/api/map/search", { location: exact })
+  ).json();
+  assert.deepEqual(
+    nearby.polls.map((p) => p.id),
+    [mapped.id],
+  );
+  const disk = JSON.parse(
+    await readFile(join(f.directory, mapped.id + ".json"), "utf8"),
+  );
+  assert.deepEqual(disk.location, exact);
+  assert.equal(disk.mapVisible, true);
+  const reopened = new PollStore(f.directory, { clock: f.now });
+  await reopened.init();
+  assert.equal(reopened.map().total, 2);
+  assert.equal(
+    (await f.request("/api/map/search", { status: "nope" })).status,
+    400,
+  );
+  assert.equal(
+    (
+      await f.request("/api/map/search", {
+        location: { latitude: 91, longitude: 0 },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await f.request("/api/map/search", {}, undefined, {
+        origin: "https://other.test",
+      })
+    ).status,
+    403,
+  );
+  f.advance(7 * DAY);
+  assert.equal(
+    (await (await f.request("/api/map/search", { status: "open" })).json())
+      .total,
+    0,
+  );
+  assert.equal(
+    (await (await f.request("/api/map/search", { status: "closed" })).json())
+      .total,
+    2,
+  );
+  f.advance(23 * DAY);
+  assert.equal(
+    (await (await f.request("/api/map/search", {})).json()).total,
+    0,
+  );
+  assert.equal((await f.request(`/api/polls/${distant.id}`)).status, 404);
+});
+
+test("map radius uses original GPS, caps payload and handles poles and the date line", async (t) => {
+  const f = await fixture(t);
+  const make = (id, location, createdAt = f.now()) => ({
+    id: id.toString(16).padStart(24, "0"),
+    title: "Pin",
+    mapVisible: true,
+    location,
+    createdAt,
+    endsAt: f.now() + 7 * DAY,
+    deleteAt: f.now() + 30 * DAY,
+    totalVotes: 0,
+  });
+  const latitude = (km) => ((km / 6371.0088) * 180) / Math.PI;
+  f.store.index.set(
+    "inside",
+    make(1, { latitude: latitude(99.99), longitude: 0 }),
+  );
+  f.store.index.set(
+    "outside",
+    make(2, { latitude: latitude(100.01), longitude: 0 }),
+  );
+  assert.deepEqual(
+    f.store
+      .map({ location: { latitude: 0, longitude: 0 } })
+      .polls.map((p) => p.id),
+    [make(1, {}).id],
+  );
+  for (let n = 3; n <= 1105; n++)
+    f.store.index.set(
+      String(n),
+      make(n, { latitude: 90, longitude: 180 }, f.now() + n),
+    );
+  const data = f.store.map();
+  assert.equal(data.total, 1105);
+  assert.equal(data.polls.length, 1000);
+  assert.equal(data.polls[0].id, make(1105, {}).id);
+  assert.deepEqual(data.polls[0].position, [180, 90]);
+});
+
+test("map library is pinned and served locally without exposing dependency directories", async (t) => {
+  const f = await fixture(t);
+  for (const name of [
+    "maplibre-gl.mjs",
+    "maplibre-gl-worker.mjs",
+    "maplibre-gl.css",
+  ]) {
+    const r = await f.request(`/vendor/maplibre/6.16.0/${name}`);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get("cache-control"), /must-revalidate/);
+    assert.match(
+      r.headers.get("content-security-policy"),
+      /connect-src 'self' https:\/\/tiles.openfreemap.org;/,
+    );
+  }
+  assert.equal(
+    (await f.request("/vendor/maplibre/6.16.0/package.json")).status,
+    404,
+  );
+  assert.equal(
+    (await f.request("/node_modules/maplibre-gl/package.json")).status,
+    404,
+  );
+});

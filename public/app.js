@@ -155,8 +155,8 @@ function createPoll() {
     <details class="image-fields"><summary>Add images using external URLs <span>+</span></summary><p class="field-hint">Up to 3 HTTPS image URLs. ScaleTag does not upload or store images.</p><label class="sr-only" for="images">Image URLs, one per line</label><textarea id="images" rows="3" placeholder="https://example.com/image.jpg&#10;One URL per line"></textarea></details>
     <fieldset class="options-fieldset"><legend>The options <span class="required">*</span></legend><p class="field-hint">Add 2–12 choices. Each person selects one.</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} Add an option</button></fieldset>
     <label for="signature">Your signature <span class="required">*</span></label><input id="signature" name="signature" maxlength="60" placeholder="A name, a nickname, or a little mystery" required><p class="field-hint">Pick any name. No account or identity verification.</p>
-    <div class="location-box"><div><strong>${icons.pin} Give your poll a place</strong><p id="location-status" aria-live="polite">Your location helps people discover nearby polls.</p></div><button class="button secondary small" type="button" id="locate">Enable location</button></div><p class="field-hint">We store the poll’s coordinates, not your movement. Exact coordinates are not shown publicly.</p>
-    ${notice()}<label class="checkbox-row"><input type="checkbox" id="retention" required><span>I understand that my poll leaves the website after 30 days and that private daily backups are retained for up to 90 days after each backup is created.</span></label>
+    <div class="location-box"><div><strong>${icons.pin} Give your poll a place</strong><p id="location-status" aria-live="polite">Your location helps people discover nearby polls.</p></div><button class="button secondary small" type="button" id="locate">Enable location</button></div><p class="field-hint">We store the poll’s coordinates, not your movement. Exact coordinates are not shown publicly. The map shows a rounded area on a 0.01° grid (about 1 km north–south, narrower east–west).</p>
+    <label class="checkbox-row"><input type="checkbox" id="map-consent" required><span>I agree to show my poll’s approximate area publicly on the map. This does not guarantee anonymity.</span></label>${notice()}<label class="checkbox-row"><input type="checkbox" id="retention" required><span>I understand that my poll leaves the website after 30 days and that private daily backups are retained for up to 90 days after each backup is created.</span></label>
     <p id="form-error" class="form-error" role="alert" hidden></p><button class="button publish-button" type="submit" id="publish">Publish my poll ${icons.arrow}</button><p class="publish-note">Starts immediately · Closes in 7 days · Removed in 30 days</p>
   </form></section>`;
   let location;
@@ -244,6 +244,7 @@ function createPoll() {
         images,
         location,
         retentionAccepted: document.querySelector("#retention").checked,
+        mapVisible: document.querySelector("#map-consent").checked,
       });
       window.location.assign(`/vote/${poll.id}?created=1`);
     } catch (e) {
@@ -385,13 +386,152 @@ async function votePage(id) {
 function voteList() {
   document.title = "VoteList — ScaleTag";
   document.querySelector('[data-nav="list"]').classList.add("active");
-  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore the latest polls, or find conversations closer to home.</p></div><a href="/create" class="button">Create a poll ${icons.plus}</a></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Polls leave the website after 30 days. Private daily backups are retained for up to 90 days after backup creation.</p></section>`;
+  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">THE PUBLIC NOTICEBOARD</span><h1>Every question<br>starts <em>somewhere.</em></h1><p>Explore the latest polls, or find conversations closer to home.</p></div><a href="/create" class="button">Create a poll ${icons.plus}</a></div><div class="view-switch" role="group" aria-label="VoteList view"><button type="button" class="selected" data-view="list" aria-pressed="true">List</button><button type="button" data-view="map" aria-pressed="false">Map</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="Poll status"><button class="selected" data-filter="all" aria-pressed="true">All polls</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="closed" aria-pressed="false">Ended</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} Within 100 km <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">Newest first · Available for 30 days</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>Your location is used only for this search and is not saved.</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="Poll map" hidden><div class="map-intro"><strong>Questions on the map</strong><p>Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Poll content stays on ScaleTag.</p></div><p id="map-message" class="map-message" role="status">Loading the map…</p><div id="poll-map" class="poll-map" role="region" aria-label="Interactive map of approximate poll locations"></div><div class="map-legend"><span><i class="legend-dot"></i> Open</span><span><i class="legend-dot ended"></i> Ended</span><button class="text-link" id="map-fit" type="button">Fit all markers ↗</button></div><p id="map-count" class="map-count" aria-live="polite"></p><p class="map-footnote">Only polls published with map consent appear here. Older polls remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.</p><details class="mapped-polls"><summary>Browse mapped polls without the map</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>Load more polls</button><p class="list-retention">Polls leave the website after 30 days. Private daily backups are retained for up to 90 days after backup creation.</p></section>`;
   let status = "all",
     location,
     cursor,
     loaded = 0,
     request = 0,
-    locating = false;
+    locating = false,
+    mode = "list",
+    mapView,
+    mapLoading,
+    mapGeneration = 0,
+    mapRequest = 0,
+    mapTimer;
+  function getMap() {
+    if (mapView) return Promise.resolve(mapView);
+    const generation = mapGeneration;
+    mapLoading ??= import("/map.js")
+      .then((module) => module.createPollMap())
+      .then((view) => {
+        if (generation !== mapGeneration) {
+          view.destroy();
+          return null;
+        }
+        mapView = view;
+        return view;
+      })
+      .catch((error) => {
+        if (generation === mapGeneration) mapLoading = undefined;
+        throw error;
+      });
+    return mapLoading;
+  }
+  async function loadMap(fit = true) {
+    clearTimeout(mapTimer);
+    const current = ++mapRequest;
+    const error = document.querySelector("#list-error");
+    error.hidden = true;
+    mapView?.setData([]);
+    document.querySelector("#mapped-poll-links").replaceChildren();
+    document.querySelector("#map-count").textContent = "Finding mapped polls…";
+    const started = Date.now();
+    try {
+      const data = await api("/api/map/search", {
+        status,
+        ...(location ? { location } : {}),
+      });
+      if (current !== mapRequest || mode !== "map") return;
+      const view = await getMap();
+      if (!view || current !== mapRequest || mode !== "map") return;
+      data.polls = data.polls.filter(
+        (p) => p.deleteAt > data.serverTime + Date.now() - started,
+      );
+      view.setData(data.polls, fit);
+      view.resize();
+      document.querySelector("#map-count").textContent = data.total
+        ? `${count(data.polls.length)} of ${count(data.total)} matching mapped polls${data.total > data.polls.length ? " · Newest 1,000 only" : ""}`
+        : "No mapped polls match these filters. Try List to see all polls.";
+      for (const p of data.polls) {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = `/vote/${p.id}`;
+        a.textContent = `${p.title} · ${p.status === "open" ? "Open" : "Ended"}`;
+        li.append(a);
+        document.querySelector("#mapped-poll-links").append(li);
+      }
+      const boundary = data.polls.reduce(
+        (time, p) =>
+          Math.min(
+            time,
+            p.deleteAt,
+            ...(p.endsAt > data.serverTime ? [p.endsAt] : []),
+          ),
+        data.serverTime + 30000,
+      );
+      mapTimer = setTimeout(
+        () => loadMap(false),
+        Math.max(100, boundary - data.serverTime - (Date.now() - started)),
+      );
+    } catch (e) {
+      if (current !== mapRequest || mode !== "map") return;
+      mapView?.setData([]);
+      document.querySelector("#map-count").textContent =
+        "Mapped polls are unavailable. Try Map again or use List.";
+      error.textContent = e.message;
+      error.hidden = false;
+    }
+  }
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.onclick = () => {
+      const previousMode = mode;
+      mode = button.dataset.view;
+      request++;
+      mapRequest++;
+      clearTimeout(mapTimer);
+      document.querySelectorAll("[data-view]").forEach((b) => {
+        b.classList.toggle("selected", b === button);
+        b.setAttribute("aria-pressed", String(b === button));
+      });
+      document.querySelector("#map-panel").hidden = mode !== "map";
+      document.querySelector("#poll-list").hidden = mode === "map";
+      document.querySelector("#load-more").hidden = true;
+      document.querySelector("#list-count").hidden = mode === "map";
+      document.querySelector("#list-caption").textContent =
+        mode === "map"
+          ? "Approximate areas · Available for 30 days"
+          : "Newest first · Available for 30 days";
+      if (mode === "list" || previousMode === "map") {
+        ++mapGeneration;
+        mapView?.destroy();
+        mapView = undefined;
+        mapLoading = undefined;
+        document.querySelector("#poll-map").replaceChildren();
+      }
+      load();
+    };
+  });
+  document.querySelector("#map-fit").onclick = () => loadMap();
+  window.addEventListener(
+    "pagehide",
+    () => {
+      clearTimeout(mapTimer);
+      mapView?.destroy();
+    },
+    { once: true },
+  );
+  window.addEventListener("offline", () => {
+    if (mode !== "map") return;
+    ++mapRequest;
+    clearTimeout(mapTimer);
+    mapView?.setData([]);
+    document.querySelector("#mapped-poll-links").replaceChildren();
+    document.querySelector("#map-count").textContent =
+      "You’re offline. Reconnect to see current mapped polls.";
+  });
+  window.addEventListener("online", () => {
+    if (mode === "map") loadMap(false);
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (mode !== "map") return;
+    if (document.hidden) {
+      ++mapRequest;
+      clearTimeout(mapTimer);
+      mapView?.setData([]);
+      document.querySelector("#mapped-poll-links").replaceChildren();
+    } else loadMap(false);
+  });
   function card(p) {
     return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? "Ended" : "Open"}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">by ${escape(p.signature)}</p><div class="mini-results">${p.options
       .slice(0, 3)
@@ -404,6 +544,7 @@ function voteList() {
       )}${p.options.length > 3 ? `<small>+ ${p.options.length - 3} more options</small>` : ""}</div><div class="card-bottom"><span>${count(p.totalVotes)} votes <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
   }
   async function load(reset = true) {
+    if (mode === "map") return loadMap();
     const current = ++request;
     const list = document.querySelector("#poll-list");
     const more = document.querySelector("#load-more");
@@ -489,7 +630,7 @@ function voteList() {
 
 function privacy() {
   document.title = "Privacy & retention — ScaleTag";
-  main.innerHTML = `<article class="privacy-page"><a class="back-link" href="/">← Back to ScaleTag</a><span class="eyebrow">A SMALL DATA FOOTPRINT</span><h1>A few things<br>you should know.</h1><h2>No account. No fingerprint.</h2><p>We don’t ask voters for a name, email address, or account. A separate random, HttpOnly, Secure, SameSite cookie is used for each poll in production. Its hashed identifier prevents repeat votes from that browser and is removed from the active data store after voting closes. Private backup copies follow the retention policy below. We don’t use a cross-poll identifier or device fingerprint.</p><p>This is not identity verification or a guarantee of one vote per person. Clearing cookies, using private browsing, or switching browsers can allow another vote. Cookies must be enabled to vote.</p><h2>A place, not a trail.</h2><p>Creating a poll requires browser location permission. We store its latitude and longitude with the poll to support nearby discovery. Exact coordinates are not included in public responses. Nearby filtering uses your current coordinates for that request only; they are not saved or added to a URL. Location supplied by a browser is not independently verified.</p><h2>Seven days to vote. Thirty days online.</h2><p>Voting starts at publication and closes exactly 168 hours later. Results remain visible until 30 days after publication. At that point, the poll, its results, location, and related identifiers are removed from the active website. The original link and QR code stop opening the poll. Save what you need before the public link expires.</p><p>Private daily backups include poll JSON data, including location and any deduplication hashes present at backup time. Each archive is retained for up to 90 days after creation for administrator-managed disaster recovery. This means a backup copy may remain for up to about 120 days after a poll was published. Backups are not publicly accessible and there is no user-facing recovery feature. Expired polls are not republished by restoring their original records.</p><p>Expired polls become inaccessible at the deadline. Active files are removed by a background cleanup, normally within 30 seconds while the service is running, and at startup. Archive expiry is enforced by the daily backup job; downtime or storage failures can delay physical cleanup. The application does not keep request access logs. External screenshots, downloaded QR codes, and copies made by other people cannot be recalled.</p><h2>Installed app and offline resources.</h2><p>You can install ScaleTag as a web app. Your browser may keep public scripts, styles, icons and a generic offline page. Poll pages, results, QR responses, location searches and vote requests are not saved in the offline cache. Votes are never queued for later submission. Installing the app does not verify your identity or change the anonymous-cookie voting limits.</p><h2>Images stay with their hosts.</h2><p>We only store external HTTPS image URLs. Images load when you choose to show them. Their hosts may receive your IP address and may change or remove an image. ScaleTag does not proxy or store those images.</p><h2>Infrastructure still carries requests.</h2><p>The application does not store IP addresses for voting or keep request access logs. Requests pass through Cloudflare, which processes connection information according to its own policies. Server security logs may also exist; an anonymous poll does not mean every network layer is anonymous.</p><h2>Signatures are just signatures.</h2><p>Creators choose any name. A signature is not verified and should not be treated as proof of someone’s identity. Polls appear publicly in VoteList. Only publish information you are comfortable sharing.</p><a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">Read the source on GitHub ↗</a></article>`;
+  main.innerHTML = `<article class="privacy-page"><a class="back-link" href="/">← Back to ScaleTag</a><span class="eyebrow">A SMALL DATA FOOTPRINT</span><h1>A few things<br>you should know.</h1><h2>No account. No fingerprint.</h2><p>We don’t ask voters for a name, email address, or account. A separate random, HttpOnly, Secure, SameSite cookie is used for each poll in production. Its hashed identifier prevents repeat votes from that browser and is removed from the active data store after voting closes. Private backup copies follow the retention policy below. We don’t use a cross-poll identifier or device fingerprint.</p><p>This is not identity verification or a guarantee of one vote per person. Clearing cookies, using private browsing, or switching browsers can allow another vote. Cookies must be enabled to vote.</p><h2>A place, not a trail.</h2><p>Creating a poll requires browser location permission. We store its latitude and longitude with the poll to support nearby discovery. Exact coordinates are not included in public responses. New polls can appear on the public map only with explicit map consent at creation. Their displayed position is rounded to a 0.01° grid (about 1 km north–south, narrower east–west). This is an approximate area, not an anonymity guarantee; locations already on grid points may be unchanged. Older polls without consent remain in the list only. Nearby filtering uses your current coordinates for that request only; they are not saved or added to a URL. Location supplied by a browser is not independently verified.</p><h2>Seven days to vote. Thirty days online.</h2><p>Voting starts at publication and closes exactly 168 hours later. Results remain visible until 30 days after publication. At that point, the poll, its results, location, and related identifiers are removed from the active website. The original link and QR code stop opening the poll. Save what you need before the public link expires.</p><p>Private daily backups include poll JSON data, including location and any deduplication hashes present at backup time. Each archive is retained for up to 90 days after creation for administrator-managed disaster recovery. This means a backup copy may remain for up to about 120 days after a poll was published. Backups are not publicly accessible and there is no user-facing recovery feature. Expired polls are not republished by restoring their original records.</p><p>Expired polls become inaccessible at the deadline. Active files are removed by a background cleanup, normally within 30 seconds while the service is running, and at startup. Archive expiry is enforced by the daily backup job; downtime or storage failures can delay physical cleanup. The application does not keep request access logs. External screenshots, downloaded QR codes, and copies made by other people cannot be recalled.</p><h2>Installed app and offline resources.</h2><p>You can install ScaleTag as a web app. Your browser may keep public scripts, styles, icons and a generic offline page. Poll pages, results, QR responses, location searches and vote requests are not saved in the offline cache. Votes are never queued for later submission. Installing the app does not verify your identity or change the anonymous-cookie voting limits.</p><h2>Maps load only when you choose Map.</h2><p>VoteList starts in List view. Choosing Map loads a third-party OpenFreeMap basemap. OpenFreeMap receives your IP address and the map areas requested; poll titles, votes and signatures are not sent to it. ScaleTag serves the MapLibre library itself and does not use a map account or API key. Required map attribution remains visible. Map responses, marker searches and third-party map resources are not saved in ScaleTag’s offline cache. Your browser may cache basemap resources according to their provider’s headers. No offline maps are downloaded by ScaleTag. If the map is unavailable, use List.</p><h2>Images stay with their hosts.</h2><p>We only store external HTTPS image URLs. Images load when you choose to show them. Their hosts may receive your IP address and may change or remove an image. ScaleTag does not proxy or store those images.</p><h2>Infrastructure still carries requests.</h2><p>The application does not store IP addresses for voting or keep request access logs. Requests pass through Cloudflare, which processes connection information according to its own policies. Server security logs may also exist; an anonymous poll does not mean every network layer is anonymous.</p><h2>Signatures are just signatures.</h2><p>Creators choose any name. A signature is not verified and should not be treated as proof of someone’s identity. Polls appear publicly in VoteList. Only publish information you are comfortable sharing.</p><a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">Read the source on GitHub ↗</a></article>`;
 }
 const route = window.location.pathname;
 try {
