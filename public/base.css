@@ -229,11 +229,7 @@ main {
 }
 .hero h1 em {
   color: #c7283d;
-  font-family: inherit;
-  font-style: normal;
-  font-weight: inherit;
-  letter-spacing: inherit;
-  white-space: nowrap;
+  letter-spacing: -2.4px;
 }
 .hero-copy > p {
   font-size: 14px;
