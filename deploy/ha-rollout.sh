@@ -45,6 +45,15 @@ route() {
 image="scaletag:$revision"
 docker image inspect "$image" >/dev/null 2>&1 || \
   docker build --pull --build-arg SYSTEM_UPDATE_REVISION="$revision" --tag "$image" "$release"
+# Check source readability as the real runtime UID before touching either slot.
+docker run --rm --user "${SCALETAG_UID:-1000}:${SCALETAG_GID:-1000}" \
+  --read-only --network none --cap-drop ALL --security-opt no-new-privileges:true \
+  --memory 256m --pids-limit 32 --entrypoint node "$image" --input-type=module -e '
+    import {readFileSync} from "node:fs";
+    JSON.parse(readFileSync("/app/package.json"));
+    readFileSync("/app/public/index.html");
+    await import("/app/src/sqlite-store.js");
+  '
 if [[ ! -f "$state/images.env" ]]; then
   export APP1_IMAGE=$image APP2_IMAGE=$image APP1_REVISION=$revision APP2_REVISION=$revision
   save

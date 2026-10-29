@@ -6,6 +6,8 @@ ScaleTag is a small, location-aware platform for polls and tasks with an English
 
 Development site: **https://scaletag.risinfo.cn**
 
+The development site runs the lightweight **Nginx + two Node instances + shared SQLite** HA demonstration. The existing cloudflared tunnel connects to Nginx ingress. See the [architecture and demo commands](docs/ha-demo.md) and [verification results](docs/ha-verification.md).
+
 ## What it does
 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.

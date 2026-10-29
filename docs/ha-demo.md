@@ -140,11 +140,18 @@ subsequent updates use the rolling flow above.
 source_dir=/path/to/reviewed/ScaleTag
 revision=$(git -C "$source_dir" rev-parse HEAD)
 release=/ScaleTag/releases/$revision
-mkdir -p "$release" /etc/scaletag-ha/deploy /ScaleTag/ha
+mkdir -p "$release"
+install -d -m 0755 /etc/scaletag-ha /etc/scaletag-ha/deploy
+install -d -m 0700 /ScaleTag/ha
 cp -R "$source_dir"/src "$source_dir"/public "$source_dir"/deploy \
   "$source_dir"/Dockerfile "$source_dir"/.dockerignore \
   "$source_dir"/compose.yaml "$source_dir"/compose.ha.yaml \
   "$source_dir"/package.json "$source_dir"/package-lock.json "$release/"
+# Public source must be readable inside the non-root image even with umask 077.
+# Match existing release ownership so the runner can clean up old code later.
+previous=$(readlink -f /ScaleTag/current)
+chown -R --reference="$previous" "$release"
+chmod -R u=rwX,go=rX "$release"
 docker build --tag "scaletag:$revision" "$release"
 install -m 0644 "$source_dir/compose.ha.yaml" /etc/scaletag-ha/compose.ha.yaml
 install -m 0644 "$source_dir/deploy/nginx.conf" /etc/scaletag-ha/deploy/nginx.conf

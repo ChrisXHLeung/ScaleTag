@@ -18,6 +18,9 @@ if [[ ! -d "$release" ]]; then
   stage=$(mktemp -d "$root/releases/.staging.XXXXXX")
   trap 'rm -rf "$stage"' EXIT
   cp -R src public deploy Dockerfile compose.yaml compose.ha.yaml .dockerignore package.json package-lock.json "$stage/"
+  # Public code must remain readable by the image's non-root runtime even when
+  # the runner or administrator stages it with a private umask.
+  chmod -R u=rwX,go=rX "$stage"
   (cd "$stage" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
   mv "$stage" "$release"
   trap - EXIT

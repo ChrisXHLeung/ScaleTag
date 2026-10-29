@@ -49,8 +49,34 @@ failure domains.
 Browser UI suites are retained in CI. No UI code was changed in this work; this
 report does not claim a new physical-device or full browser-suite run.
 
-The code has not converted the live service. Initial activation requires the
-documented root-managed helper/unit installation and a verified offline import
-of existing JSON into SQLite. See [HA setup and migration](ha-demo.md). Until
-the administrator bootstrap marker exists, deployment fails safely before
-switching the existing code symlink or restarting the old service.
+The live demonstration has now been activated on eons. Before the cutover, a
+verified private archive was taken; all four existing documents matched their
+SQLite imports by complete canonical-document SHA-256 fingerprints. Integrity
+checks passed, the stale JSON sources were removed after validation, and a new
+SQLite snapshot archive was verified. The systemd backup unit also completed
+with `Result=success` and `ExecMainStatus=0`; its daily timer remains active.
+
+Read-only checks through the actual HTTPS hostname observed app1 → app2 → app1
+while stopping/restarting the primary. All four existing discovery records
+remained present at each step. No synthetic public posts or votes were created.
+The existing cloudflared tunnel was kept running and its origin port now belongs
+to Nginx. Both apps have no published host port.
+
+After those public checks, live `docker stats` reported app1 **19.93 MiB**, app2
+**20.52 MiB** and Nginx **4.93 MiB** (about **45.4 MiB** combined, with the same
+measurement limits described above).
+
+A first import attempt stopped before reading data because source staged under
+root's private umask was unreadable by the container UID. The recovery trap
+restored the original service immediately. Public source permissions were
+normalized, the image was rebuilt and checked as UID 1001, then migration
+completed. Release staging and the documented bootstrap now normalize code
+permissions; the root-managed rollout additionally checks non-root source
+readability before replacing either slot. A regression creates an intentionally
+unreadable image and asserts both serving container identities stay unchanged.
+
+Initial activation commit `e3801d7` passed the complete GitHub Test workflow
+(API/storage, browsers, backups, legacy Docker and HA Docker). The initial
+automatic deployment correctly refused to run before the administrator bootstrap
+marker existed. Subsequent deployments use the installed root-managed rolling
+helper and exact-SHA CI gate. See [HA setup and migration](ha-demo.md).

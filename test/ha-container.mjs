@@ -10,8 +10,8 @@ import { randomBytes } from "node:crypto";
 
 const root = await mkdtemp(join(tmpdir(), "scaletag-ha-test-"));
 const project = `scaletag-ha-test-${process.pid}`;
-const revisions = Array.from({ length: 4 }, () => randomBytes(20).toString("hex"));
-const [old, next, broken, primaryBroken] = revisions;
+const revisions = Array.from({ length: 5 }, () => randomBytes(20).toString("hex"));
+const [old, next, broken, primaryBroken, permissionsBroken] = revisions;
 const reservation = createServer().listen(0, "127.0.0.1");
 await once(reservation, "listening");
 const port = reservation.address().port;
@@ -166,6 +166,18 @@ try {
   assert.equal((await compose("ps", "-q", "ingress")).trim(), ingressId);
   assert.equal((await (await request(`/api/polls/${p.id}`)).json()).totalVotes, 21);
   console.log("PASS: rolling update, automatic failback, uninterrupted GET samples", traffic);
+
+  const before1 = (await compose("ps", "-q", "app1")).trim();
+  const before2 = (await compose("ps", "-q", "app2")).trim();
+  execFileSync("docker", ["build", "--tag", `scaletag:${permissionsBroken}`, "-"], {
+    env, input: "FROM scaletag:ha-test\nUSER root\nRUN chmod 0600 /app/package.json\nUSER node\n",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  assert.match(await rollout(permissionsBroken, false), /permission denied|EACCES/);
+  assert.equal((await compose("ps", "-q", "app1")).trim(), before1);
+  assert.equal((await compose("ps", "-q", "app2")).trim(), before2);
+  await routed("app1", next);
+  console.log("PASS: unreadable image rejected before changing either slot.");
 
   for (const [revision, command] of [[broken, "process.exit(42)"], [primaryBroken,
     "if(process.env.INSTANCE_ID==='app1')process.exit(42);else import('/app/src/server.js')"]]) {
