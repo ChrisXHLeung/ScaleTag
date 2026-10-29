@@ -18,7 +18,8 @@ const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
 
 export function createApp(
   store,
-  { origin = "http://127.0.0.1:3000", createLimit = 20 } = {},
+  { origin = "http://127.0.0.1:3000", createLimit = 20,
+    instance = "single", revision = "development", ready = () => true } = {},
 ) {
   const url = new URL(origin);
   if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin)
@@ -61,7 +62,20 @@ export function createApp(
   app.get("/healthz", (req, res) =>
     res.json({ status: "ok", version: "0.1.0" }),
   );
-  function takeCreation(res) {
+  app.get("/readyz", (req, res) => {
+    try {
+      if (!ready()) return res.status(503).json({ status: "unavailable" });
+      res.json({ status: "ok", instance, revision });
+    } catch {
+      res.status(503).json({ status: "unavailable" });
+    }
+  });
+  async function takeCreation(res) {
+    if (store.consumeLimit) {
+      if (await store.consumeLimit("create", createLimit)) return;
+      res.set("Retry-After", "60");
+      throw new AppError(429, "Too many posts are being published. Please try again in a minute.");
+    }
     if (store.clock() - windowStart >= 60000) {
       windowStart = store.clock();
       creations = 0;
@@ -77,12 +91,12 @@ export function createApp(
   }
   app.post("/api/polls", async (req, res) => {
     const input = pollInput(req.body);
-    takeCreation(res);
+    await takeCreation(res);
     res.status(201).json(await store.create(input));
   });
   app.post("/api/tasks", async (req, res) => {
     const input = taskInput(req.body);
-    takeCreation(res);
+    await takeCreation(res);
     res.status(201).json(await store.create(input));
   });
   function contentType(data) {
@@ -261,7 +275,9 @@ export function createApp(
       replyWindow = store.clock();
       replyRequests = 0;
     }
-    if (replyRequests >= 20) {
+    const limited = store.consumeLimit
+      ? !(await store.consumeLimit("reply", 20)) : replyRequests >= 20;
+    if (limited) {
       res.set("Retry-After", "60");
       throw new AppError(
         429,

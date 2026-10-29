@@ -131,7 +131,13 @@ PUBLIC_ORIGIN=https://polls.example.com DATA_DIR=/path/to/data NODE_ENV=producti
 
 Native execution defaults to **127.0.0.1**. The container listens on `0.0.0.0` inside its network namespace, while Compose publishes **only `127.0.0.1:3000` on the host**. Cloudflare Tunnel remains the public entry point.
 
-## Run in Docker
+## High-availability demonstration
+
+The two-instance demonstration uses **Nginx ingress + primary/backup Node containers + shared SQLite**, with no separate database service. The existing cloudflared tunnel connects only to ingress. Updates replace app2, verify readiness, take app1 offline so ingress fails over, update app1, then verify automatic failback. See [HA architecture, resource choices, migration and demo commands](docs/ha-demo.md).
+
+`compose.ha.yaml` is the HA topology; `compose.yaml` below remains the legacy single-instance JSON setup. The first conversion requires an administrator bootstrap and verified data import. The deployment pipeline refuses to change the existing VM until that bootstrap is complete.
+
+## Run in Docker (legacy single instance)
 
 Requires Docker Engine 28+ and Docker Compose v2+.
 
@@ -161,6 +167,8 @@ Only one app instance may use a data directory. The entrypoint's `flock` prevent
 
 ## Storage and concurrency
 
+For the HA demo, set `STORAGE_BACKEND=sqlite` (already configured in `compose.ha.yaml`). Both apps mount the same local directory, and SQLite transactions protect counts, deduplication and shared rate limits. Lists/maps read current database data. Native development defaults to `json`; the following file-lock restrictions apply to that legacy backend only.
+
 [lowdb](https://github.com/typicode/lowdb) is the embedded JSON document store. Each poll lives in its own `<id>.json` file under `DATA_DIR`. An in-memory metadata index is rebuilt from files at startup; it is not a second retained copy. Voter identifiers are hashed and kept only for the voting period. No voter IPs, user agents, or browser fingerprints are stored.
 
 Mutations to one poll run in a serialized queue. A vote's count and deduplication record are written together through lowdb's atomic temporary-file-and-rename adapter. **Only one application process may write a data directory.** Both the native systemd unit and the container entrypoint enforce this with `flock`. Do not run clustered Node workers, multiple containers, or manual second processes against the same directory.
@@ -178,6 +186,8 @@ Expired records are inaccessible at the exact 30-day deadline. A cleanup runs ev
 Filesystem cleanup and archive pruning can be delayed by downtime or storage failure. Deletion unlinks files; it is not forensic erasure of underlying storage sectors. Provider snapshots and external backups are separate operator policies. Downloaded QR images and copies made by third parties cannot be recalled.
 
 ## Deployment on the development VM
+
+The new pipeline deploys the [Nginx HA topology](docs/ha-demo.md#rolling-pipeline) only after CI passes on the exact main SHA. A one-time administrator conversion is required; the following describes the previous single-instance deployment for migration reference.
 
 ```
 Cloudflare HTTPS → cloudflared → 127.0.0.1:3000 → Docker → /ScaleTag/data/*.json
@@ -199,6 +209,8 @@ The VM uses the Docker CLI under a fixed systemd unit rather than giving the run
 GitHub Actions tests pull requests on GitHub-hosted Ubuntu, including a real Docker image build and isolated container persistence test. Deployment only runs on `main` using the self-hosted runner **eons**. The VM's Docker access stays restricted to the root-managed service. Protect `main` before accepting outside contributions.
 
 ## Daily archives and 90-day retention
+
+In SQLite mode the updated helper uses the online backup API for a consistent snapshot, then exports documents into the same verified JSON archive format. It never copies a live database file or falls back to stale JSON on a database error. Install the updated helper during HA bootstrap; see [migration instructions](docs/ha-demo.md#one-time-conversion-of-the-existing-vm). The source and per-document snapshot descriptions below apply to the legacy JSON backend.
 
 The development VM runs `scaletag-backup.timer` at **03:00 America/Toronto** every day. `Persistent=true` catches up after downtime. The root-owned `scaletag-backup.service` runs `/usr/local/sbin/scaletag-backup`; the app and runner cannot read the archive directory through the container.
 
@@ -254,3 +266,5 @@ Integration tests cover concurrent duplicate submissions, distinct votes, persis
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The HA integration suite additionally runs `docker build --tag scaletag:ha-test .` followed by `npm run test:ha`. It uses its own disposable project and checks Nginx failover/failback, shared data, concurrent writes, rolling updates under traffic and both failure rollback paths.

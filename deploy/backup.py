@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import sqlite3
+from contextlib import closing
 import tarfile
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -84,6 +86,42 @@ def prune_archives(directory, now, retention_days):
     return removed
 
 
+def source_documents(source, destination):
+    database = source / "scaletag.sqlite"
+    if database.exists() or database.is_symlink():
+        if database.is_symlink() or not database.is_file():
+            raise ValueError("SQLite source must be a regular file")
+        # Online backup API creates a consistent private snapshot; never copy a
+        # live database file. Release the live read lock before compression.
+        with tempfile.TemporaryDirectory(prefix=".scaletag-snapshot-", dir=destination) as directory:
+            snapshot = Path(directory) / "snapshot.sqlite"
+            with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True, timeout=10)) as live:
+                if any(DOCUMENT.fullmatch(path.name) for path in source.iterdir()):
+                    marker = live.execute("SELECT value FROM metadata WHERE key='json-import'").fetchone()
+                    if marker != ("complete",):
+                        raise ValueError("Unimported legacy JSON exists; inspect storage before backup")
+                with closing(sqlite3.connect(snapshot)) as copy:
+                    live.backup(copy)
+            with closing(sqlite3.connect(snapshot)) as copy:
+                for identifier, document in copy.execute("SELECT id, document FROM posts ORDER BY id"):
+                    if not DOCUMENT.fullmatch(identifier + ".json"):
+                        raise ValueError("Invalid SQLite document identifier")
+                    yield identifier, document.encode()
+        return
+    for path in sorted(source.iterdir()):
+        match = DOCUMENT.fullmatch(path.name)
+        if not match:
+            continue
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            continue
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise ValueError("Backup source contains a non-regular document")
+            yield match.group(1), stream.read()
+
+
 def backup(data_directory, archive_directory, retention_days=90, now=None):
     now = now or datetime.now(timezone.utc)
     if retention_days < 1:
@@ -109,31 +147,20 @@ def backup(data_directory, archive_directory, retention_days=90, now=None):
         files = {}
         try:
             with tarfile.open(temporary, "w:gz", compresslevel=6) as archive:
-                for path in sorted(source.iterdir()):
-                    match = DOCUMENT.fullmatch(path.name)
-                    if not match:
-                        continue
-                    try:
-                        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                    except FileNotFoundError:
-                        continue  # Retention cleanup may remove a document during the scan.
-                    with os.fdopen(descriptor, "rb") as stream:
-                        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                            raise ValueError("Backup source contains a non-regular document")
-                        raw = stream.read()
-                    value = validate_document(raw, match.group(1))
+                for identifier, raw in source_documents(source, destination):
+                    value = validate_document(raw, identifier)
                     if value["deleteAt"] <= now.timestamp() * 1000:
                         continue
                     if shutil.disk_usage(destination).free < RESERVE_BYTES + len(raw) * 2:
                         raise OSError("Insufficient free space for backup")
-                    name = f"data/{path.name}"
+                    name = f"data/{identifier}.json"
                     info = tarfile.TarInfo(name)
                     info.size, info.mode, info.mtime = len(raw), 0o600, int(now.timestamp())
                     archive.addfile(info, io.BytesIO(raw))
                     files[name] = hashlib.sha256(raw).hexdigest()
                 manifest = {"version": 1, "createdAt": now.isoformat(),
                             "retentionDays": retention_days, "pollCount": len(files),
-                            "snapshotMode": "per-document-atomic", "files": files}
+                            "snapshotMode": "sqlite-consistent" if (source / "scaletag.sqlite").exists() else "per-document-atomic", "files": files}
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()
                 info = tarfile.TarInfo("manifest.json")
                 info.size, info.mode, info.mtime = len(raw), 0o600, int(now.timestamp())

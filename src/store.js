@@ -135,7 +135,7 @@ export class PollStore {
 
   async create(input) {
     return this.exclusive("create", async () => {
-      if (this.index.size >= this.maxPolls)
+      if ((await this.count()) >= this.maxPolls)
         throw new AppError(
           503,
           "The service is currently at capacity. Please try again later.",
@@ -166,6 +166,8 @@ export class PollStore {
       return this.public(p);
     });
   }
+
+  count() { return this.index.size; }
 
   public(p, token) {
     const {

@@ -43,3 +43,17 @@ jobs:
       - run: docker compose config --quiet
       - run: docker compose build --pull
       - run: npm run test:container
+
+  ha:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: docker build --pull --tag scaletag:ha-test .
+      - name: Test shared SQLite, Nginx failover, failback and rolling deployment
+        run: npm run test:ha

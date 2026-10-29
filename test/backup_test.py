@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tarfile
 import tempfile
+import sqlite3
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -34,6 +35,26 @@ class BackupTests(unittest.TestCase):
 
     def run_backup(self, **kwargs):
         return module.backup(self.data, self.archives, now=self.now, **kwargs)
+
+    def test_sqlite_snapshot_is_authoritative_and_uses_existing_verified_archive_format(self):
+        current = {**self.record, "totalVotes": 42, "replies": [{"email": "helper@example.com"}]}
+        with sqlite3.connect(self.data / "scaletag.sqlite") as db:
+            db.execute("CREATE TABLE posts(id TEXT PRIMARY KEY, document TEXT NOT NULL)")
+            db.execute("CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT)")
+            db.execute("INSERT INTO metadata VALUES('json-import','complete')")
+            db.execute("INSERT INTO posts VALUES(?,?)", (self.id, json.dumps(current)))
+        result = self.run_backup()
+        with tarfile.open(result["archive"], "r:gz") as archive:
+            self.assertEqual(json.load(archive.extractfile(f"data/{self.id}.json")), current)
+            self.assertEqual(json.load(archive.extractfile("manifest.json"))["snapshotMode"], "sqlite-consistent")
+        self.assertEqual(module.verify_archive(Path(result["archive"]))["pollCount"], 1)
+        self.assertFalse(list(self.archives.glob(".scaletag-snapshot-*")))
+
+    def test_corrupt_sqlite_fails_instead_of_archiving_stale_json(self):
+        (self.data / "scaletag.sqlite").write_bytes(b"not a database")
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.run_backup()
+        self.assertFalse(list(self.archives.glob("*.tar.gz")))
 
     def test_verified_archive_contains_exact_documents_and_manifest(self):
         result = self.run_backup()
