@@ -402,3 +402,13 @@
 @media (max-width: 600px) {
   .home-hero h1 { font-size: clamp(28px, 8vw, 38px); }
 }
+
+/* Product screens share the homepage's paper and ink palette while keeping controls legible. */
+.post-kind-switch, .view-switch { background: #f2f4ee; border-color: var(--line); border-radius: 6px; }
+.post-kind-switch a, .view-switch button { color: var(--ink); border-radius: 4px; }
+.post-kind-switch [aria-current="page"], .view-switch button.selected, .filter-tabs button.selected { background: var(--ink); color: white; }
+.content-filter select { border-color: #b9c6ce; border-radius: 5px; color: var(--ink); }
+.map-panel, .social-card, .task-reward { border-color: var(--line); border-radius: 8px; }
+.task-reward { background: #f8f8f3; border-left: 1px solid var(--line); }
+.task-reward h2 { font-weight: 750; }
+#reply-form input[type="tel"], #reply-form input[type="email"] { border-color: #b9c6ce; border-radius: 5px; font-size: 16px; }

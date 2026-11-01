@@ -1997,3 +1997,60 @@ progress::-moz-progress-bar {
     flex-direction: column;
   }
 }
+
+/* Shared ScaleTag visual language: warm paper, navy type and a red action. */
+:root {
+  --paper: #fff;
+  --ink: #0c253b;
+  --muted: #435773;
+  --line: #d9e0df;
+  --pale: #f4f5ef;
+  --red: #c9162c;
+  --radius: 8px;
+}
+.site-header { border-color: var(--line); }
+.brand { color: var(--ink); font-weight: 800; }
+.header-inner nav a { color: var(--ink); }
+.header-inner nav a.active { color: var(--red); }
+.header-inner nav a:last-child { border-color: var(--line); border-radius: 5px; }
+.button { background: var(--red); border-color: var(--red); border-radius: 5px; font-weight: 700; box-shadow: none; }
+.button:hover:not(:disabled) { background: #a81325; }
+.button.secondary { color: var(--ink); background: transparent; border-color: #b9c6ce; }
+.button.secondary:hover:not(:disabled) { background: var(--pale); }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, select:focus-visible { outline: 3px solid #315fbc; outline-offset: 3px; }
+.site-footer { border-color: var(--line); }
+.footer-brand { color: var(--ink); font-weight: 800; }
+.footer-brand span, .required { color: var(--red); }
+.create-section, .list-page, .poll-layout, .privacy-page, .install-page, .empty-page { color: var(--ink); }
+.section-intro h1, .list-heading h1, .poll-title, .privacy-page h1, .install-page-heading h1, .empty-page h1 { font-weight: 800; letter-spacing: -.04em; }
+.list-heading h1 em { color: var(--red); font: inherit; }
+.section-intro > p, .list-heading p { font-size: 15px; line-height: 1.65; }
+.form-card, .ballot-card, .poll-list-card { border-radius: var(--radius); box-shadow: none; }
+.form-card { background: #f8f8f3; padding: 32px; }
+.form-card > label:not(.checkbox-row), .options-fieldset legend, #reply-form label:not(.checkbox-row) { font-size: 14px; font-weight: 700; }
+input[type="text"], input:not([type]), textarea { font-size: 16px; border-color: #b9c6ce; border-radius: 5px; }
+.field-hint, .checkbox-row, .location-box p, .retention-note p { font-size: 12px; }
+.optional, .rules p, .back-link { font-size: 12px; }
+.location-box { background: #fff; border: 1px solid var(--line); border-radius: 5px; }
+.location-box strong, .retention-note strong { font-size: 13px; }
+.retention-note { border-radius: 5px; }
+.publish-button { border-radius: 5px; box-shadow: none; }
+.poll-list-card:hover { border-color: var(--red); }
+.list-heading, .poll-layout, .privacy-page, .install-page { padding-top: 58px; }
+.status-badge { font-size: 11px; }
+.poll-title { line-height: 1.1; }
+.poll-description, .privacy-page p { font-size: 15px; line-height: 1.75; }
+.share-card { background: #f2f4ee; border-color: var(--line); border-radius: var(--radius); }
+.share-card h2, .ballot-heading h2, .results-heading h2 { font-weight: 750; }
+.qr-frame { border-radius: 5px; }
+.install-page-heading h1 { color: var(--ink); }
+.empty-page h1 { color: var(--ink); }
+@media (max-width: 600px) {
+  .form-card { padding: 22px 16px; }
+  .list-heading, .poll-layout, .privacy-page, .install-page { padding-top: 32px; }
+  .section-intro h1, .list-heading h1, .poll-title, .privacy-page h1 { font-size: clamp(32px, 9vw, 42px); }
+}
+.section-intro h1 em { font: inherit; color: var(--red); }
+.device-picker button.selected { background: var(--ink); }
+.step-number, .empty-symbol { background: #eaece4; color: var(--ink); }
+.list-empty, .install-browser-hint { background: #f8f8f3; border-color: var(--line); }
