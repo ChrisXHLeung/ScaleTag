@@ -60,7 +60,7 @@ if [[ -n "${SCALETAG_ENCRYPTION_KEY:-}" && -f "$SCALETAG_DATA_SOURCE/scaletag.sq
   compose stop app1 app2
   install -d -m 0700 /ScaleTag/backups
   snapshot="/ScaleTag/backups/scaletag-pre-encryption-$(date -u +%Y%m%dT%H%M%S).aes.json"
-  if ! docker run --rm --network none --env SCALETAG_ENCRYPTION_KEY \
+  if ! docker run --rm --network none --user "${SCALETAG_UID}:${SCALETAG_GID}" --env SCALETAG_ENCRYPTION_KEY \
     --mount "type=bind,src=$SCALETAG_DATA_SOURCE,dst=/data,readonly" \
     --entrypoint node "$image" /app/src/encrypted-backup.js --plaintext-source > "$snapshot"; then
     rm -f "$snapshot"
