@@ -54,6 +54,36 @@ docker run --rm --user "${SCALETAG_UID:-1000}:${SCALETAG_GID:-1000}" \
     readFileSync("/app/public/index.html");
     await import("/app/src/sqlite-store.js");
   '
+# First encryption conversion requires an offline window for both writers.
+if [[ -n "${SCALETAG_ENCRYPTION_KEY:-}" && -f "$SCALETAG_DATA_SOURCE/scaletag.sqlite" ]] && \
+  [[ "$(head -c 15 "$SCALETAG_DATA_SOURCE/scaletag.sqlite")" == 'SQLite format 3' ]]; then
+  compose stop app1 app2
+  install -d -m 0700 /ScaleTag/backups
+  snapshot="/ScaleTag/backups/scaletag-pre-encryption-$(date -u +%Y%m%dT%H%M%S).aes.json"
+  if ! docker run --rm --network none --env SCALETAG_ENCRYPTION_KEY \
+    --mount "type=bind,src=$SCALETAG_DATA_SOURCE,dst=/data,readonly" \
+    --entrypoint node "$image" /app/src/encrypted-backup.js --plaintext-source > "$snapshot"; then
+    rm -f "$snapshot"
+    echo 'Pre-migration encrypted backup failed; database unchanged' >&2
+    compose start app1 app2
+    exit 1
+  fi
+  docker run --rm -i --network none --env SCALETAG_ENCRYPTION_KEY \
+    --entrypoint node "$image" /app/src/encrypted-backup.js --verify < "$snapshot"
+  docker run --rm --network none --user "${SCALETAG_UID}:${SCALETAG_GID}" \
+    --env SCALETAG_ENCRYPTION_KEY --mount "type=bind,src=$SCALETAG_DATA_SOURCE,dst=/data" \
+    --entrypoint node "$image" /app/src/encrypt-database.js
+  # Previous application images cannot open the encrypted file. Start both new
+  # images; subsequent deployments use the normal rolling-update path.
+  export APP1_IMAGE=$image APP2_IMAGE=$image APP1_REVISION=$revision APP2_REVISION=$revision
+  save
+  wait_slot app1
+  wait_slot app2
+  compose up --detach --no-deps ingress
+  route app1 "$revision"
+  echo "Encryption migration and deployment verified at $revision"
+  exit 0
+fi
 if [[ ! -f "$state/images.env" ]]; then
   export APP1_IMAGE=$image APP2_IMAGE=$image APP1_REVISION=$revision APP2_REVISION=$revision
   save

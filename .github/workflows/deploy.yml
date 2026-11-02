@@ -32,7 +32,14 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$DEPLOY_REVISION"
           test -f /etc/scaletag-ha/enabled
       - run: npm ci --ignore-scripts
+      - run: npm rebuild better-sqlite3-multiple-ciphers
       - run: npm run check
       - run: npm test
+      - name: Install database key without logging its value
+        env:
+          SCALETAG_ENCRYPTION_KEY: ${{ secrets.SCALETAG_ENCRYPTION_KEY }}
+        run: |
+          test -n "$SCALETAG_ENCRYPTION_KEY"
+          printf '%s' "$SCALETAG_ENCRYPTION_KEY" | sudo /usr/local/sbin/scaletag-install-encryption-key
       - name: Update app2, fail over, update app1 and verify automatic failback
         run: bash deploy/deploy.sh

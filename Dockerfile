@@ -8,7 +8,9 @@ RUN printf 'System update revision: %s\n' "$SYSTEM_UPDATE_REVISION" \
 FROM base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+RUN apk add --no-cache python3 make g++ \
+    && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && npm rebuild better-sqlite3-multiple-ciphers --build-from-source
 
 FROM base AS runtime
 RUN apk add --no-cache flock \

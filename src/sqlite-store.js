@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { openDatabase } from "./database.js";
 import { mkdir, readdir } from "node:fs/promises";
 import { statfsSync, chmodSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -19,7 +19,7 @@ export class SQLiteStore extends PollStore {
     const legacy = (await readdir(this.directory)).some(n => /^[a-f0-9]{24}\.json$/.test(n));
     if (!allowImport && legacy && !existsSync(this.filename))
       throw Error("Legacy JSON found: stop the JSON writer and run npm run migrate:sqlite first.");
-    this.db = new DatabaseSync(this.filename);
+    this.db = openDatabase(this.filename);
     chmodSync(this.filename, 0o600);
     this.db.exec(`
       PRAGMA busy_timeout=3000;
