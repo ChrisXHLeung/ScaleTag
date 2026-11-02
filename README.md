@@ -4,7 +4,7 @@
 
 ScaleTag is a small, location-aware platform for polls and tasks with an English interface. No accounts, no image storage, no self-hosted map server, and no separate database server.
 
-Development site: **https://scaletag.risinfo.cn**
+Development site: **https://risinfo.cn** (the previous `scaletag.risinfo.cn` hostname redirects here).
 
 The development site runs the lightweight **Nginx + two Node instances + shared SQLite** HA demonstration. The existing cloudflared tunnel connects to Nginx ingress. See the [architecture and demo commands](docs/ha-demo.md) and [verification results](docs/ha-verification.md).
 
@@ -165,11 +165,11 @@ Poll JSON is stored in the **`poll-data` named volume**, mounted at `/data`. `do
 
 To use an existing host directory, set `SCALETAG_DATA_SOURCE` to its absolute path and `SCALETAG_UID` / `SCALETAG_GID` to its numeric owner. Prepare a new directory with that ownership and mode `0700` before starting; the non-root container will not change its ownership for you. The default named volume uses UID/GID 1000.
 
-Only one app instance may use a data directory. The entrypoint's `flock` prevents a second container or the native service from writing concurrently. Stop the existing service before migrating the same directory. Compose files and images contain no tunnel credentials.
+For the legacy JSON backend, only one app instance may use a data directory. The entrypoint's `flock` prevents a second JSON container or the native service from writing concurrently. Stop the existing service before migrating the same directory. Compose files and images contain no tunnel credentials.
 
 ## Storage and concurrency
 
-For the HA demo, set `STORAGE_BACKEND=sqlite` (already configured in `compose.ha.yaml`). Both apps mount the same local directory, and SQLite transactions protect counts, deduplication and shared rate limits. Lists/maps read current database data. Native development defaults to `json`; the following file-lock restrictions apply to that legacy backend only.
+For the HA demo, set `STORAGE_BACKEND=sqlite` (already configured in `compose.ha.yaml`). Both apps mount the same local directory, and SQLite transactions protect counts, deduplication and shared rate limits. Lists/maps read current database data. Each post is a JSON document inside the `posts.document` column of `/data/scaletag.sqlite`; SQLite is the primary store, not just an index. The deployed database is encrypted as described below. Native development defaults to `json`; the following file-lock restrictions apply to that legacy backend only.
 
 [lowdb](https://github.com/typicode/lowdb) is the embedded JSON document store. Each poll lives in its own `<id>.json` file under `DATA_DIR`. An in-memory metadata index is rebuilt from files at startup; it is not a second retained copy. Voter identifiers are hashed and kept only for the voting period. No voter IPs, user agents, or browser fingerprints are stored.
 
@@ -183,65 +183,141 @@ Each poll uses a different random cookie, scoped to that poll's API path, with `
 
 Location filters use a POST body, so the querying coordinates are not added to URLs, and are discarded after the request. No analytics, request access logs, or account system are included. The ordinary interface uses system fonts; optional maps load map-label glyphs and basemap resources from OpenFreeMap. Cloudflare and the host still process network information. External images load only when the viewer explicitly asks; their hosts may receive connection information.
 
-Expired records are inaccessible at the exact 30-day deadline. A cleanup runs every 30 seconds and on startup to remove active files and erase closed polls' deduplication hashes. Private daily backups can contain poll contents, GPS and hashes that existed at backup time. Each archive is retained for 90 days after its creation, so a poll's final archived copy can remain for up to about 120 days after publication. There is no public recovery interface; recovering a record does not extend its original public expiry.
+Expired records are inaccessible at the exact 30-day deadline. A cleanup runs every 30 seconds and on startup to remove active records and clear closed polls' deduplication hashes. Private daily backups can contain poll contents, GPS and hashes that existed at backup time. Each archive is retained for 90 days after its creation, so a poll's final archived copy can remain for up to about 120 days after publication. There is no public recovery interface; recovering a record does not extend its original public expiry.
 
 Filesystem cleanup and archive pruning can be delayed by downtime or storage failure. Deletion unlinks files; it is not forensic erasure of underlying storage sectors. Provider snapshots and external backups are separate operator policies. Downloaded QR images and copies made by third parties cannot be recalled.
 
+## Security and encryption
+
+The deployed HA service encrypts its SQLite database and private backups. Native
+JSON development and SQLite instances started without a key remain unencrypted;
+creating a GitHub Secret alone does not enable encryption in another installation.
+
+| Layer | Deployed design |
+| --- | --- |
+| Network entry | Cloudflare HTTPS → cloudflared → loopback Nginx → two Node containers. The host firewall denies unsolicited inbound traffic except management access; SSH uses key authentication. |
+| Database at rest | `better-sqlite3-multiple-ciphers` uses its SQLCipher AES cipher to encrypt database pages, including schema and document contents. Both instances share the encrypted `scaletag.sqlite` file. |
+| Key delivery | GitHub Actions reads the repository secret `SCALETAG_ENCRYPTION_KEY` and sends it on stdin to a root-owned installation helper. The helper atomically updates `/etc/scaletag.env`, owned by root with mode `0600`. Systemd and Compose supply the key to both containers as a runtime environment variable. |
+| Filesystem access | The app runs as the data directory's non-root UID/GID. The data directory is private and the database is mode `0600`. Private archives use a root-only directory (`0700`) and files (`0600`), with no archive-directory mount in the app containers. |
+| Backup at rest | Consistent database exports are encrypted with AES-256-GCM, a fresh random 12-byte IV per export, and an authentication tag. Existing local legacy archives are encrypted and verified before their plaintext source files are unlinked. |
+
+The only operator-provided encryption secret is **`SCALETAG_ENCRYPTION_KEY`**.
+Generate it locally and save the complete output as a **Repository secret** in
+GitHub → Settings → Secrets and variables → Actions:
+
+```sh
+openssl rand -hex 32
+```
+
+The result must be exactly 64 hexadecimal characters (256 random bits). No separate
+IV secret is needed: the database engine manages page IVs and salts; the backup
+code generates a new IV for each encryption. IVs and authentication tags are stored
+with ciphertext and do not need to be secret. Keys are never committed, baked into
+images, passed as command-line arguments, or intentionally written to logs.
+
+The installation helper rejects an invalid key or replacement of an existing key.
+The first migration stops both writers, creates and verifies an encrypted recovery
+export, encrypts the database, then starts both new instances. Later updates use
+rolling deployment. Missing or incorrect keys cannot open the encrypted database;
+the application does not silently fall back to plaintext. See the
+[bootstrap, migration and recovery instructions](docs/encryption.md).
+
+**Protection boundary:** encryption protects a database or backup file obtained
+without its key. The running application decrypts data in memory. The key remains
+in the root-managed host environment file and Docker container configuration so
+restarts can recover automatically. Host root and Docker administrators can read
+it, including through `docker inspect`; runtime environment injection was chosen
+for deployment simplicity. Firewall and Tunnel routing restrict network access,
+but do not replace application validation or protect against every application
+vulnerability. Encryption does not hide content intentionally returned by public
+APIs, including task reply contact details.
+
+Keep a secure recovery copy of the key outside GitHub. Losing it can make the
+stored data unrecoverable. Changing the GitHub Secret is not a key rotation
+procedure: existing databases and archives still need their original key.
+Removing plaintext files is not forensic erasure, and independent offsite copies
+or provider snapshots are outside this local encryption migration.
+
 ## Deployment on the development VM
 
-The new pipeline deploys the [Nginx HA topology](docs/ha-demo.md#rolling-pipeline) only after CI passes on the exact main SHA. A one-time administrator conversion is required; the following describes the previous single-instance deployment for migration reference.
+The [HA pipeline](docs/ha-demo.md#rolling-pipeline) deploys only after CI passes
+on the exact main SHA. Pull-request tests run on GitHub-hosted runners; production
+deployment runs on the dedicated self-hosted runner **eons**.
 
-```
-Cloudflare HTTPS → cloudflared → 127.0.0.1:3000 → Docker → /ScaleTag/data/*.json
+```text
+Cloudflare HTTPS → cloudflared → loopback Nginx
+                                  ├─ Node app1 ─┐
+                                  └─ Node app2 ─┴─ /data/scaletag.sqlite (encrypted)
 ```
 
 - `/ScaleTag/releases/<commit>/`: source releases and Docker build context.
-- `/ScaleTag/current`: symlink to the running release.
-- `/ScaleTag/data/`: runtime JSON documents, bind-mounted at `/data`; never copied into an image or release.
-- `/etc/scaletag.env`: root-managed environment, including `PUBLIC_ORIGIN=https://scaletag.risinfo.cn`.
-- `scaletag.service`: root-managed Docker lifecycle; the application inside the container runs with the numeric UID/GID of the `scaletag` user.
-- `/usr/local/sbin/scaletag-container`: root-owned helper with fixed port, mount, non-root user and runtime restrictions.
-- UFW: deny incoming by default; keep management SSH; no public 80/443/3000 rule.
-- Cloudflare Tunnel `ScaleTag`: routes the hostname to the host's loopback port.
+- `/ScaleTag/current`: symlink to the selected release.
+- `/ScaleTag/data/`: persistent encrypted SQLite storage, mounted at `/data` in both apps; never copied into images or releases.
+- `/etc/scaletag.env`: root-only environment, including `PUBLIC_ORIGIN=https://risinfo.cn` and the encryption key.
+- `/etc/scaletag-ha/`: root-managed Compose and ingress configuration. Preserve the production hostname redirects when updating templates.
+- `scaletag.service`: invokes the root-owned `/usr/local/sbin/scaletag-ha-rollout` helper.
 
-The VM uses the Docker CLI under a fixed systemd unit rather than giving the runner access to the Docker socket. The runner only needs its existing `sudo /usr/bin/systemctl restart scaletag.service` permission. `deploy/scaletag-container.service` and `deploy/scaletag-container.sh` are installed root-owned by the operator; configure the numeric `SCALETAG_UID` and `SCALETAG_GID` to match the data directory. The original `deploy/scaletag.service` remains available for native installations.
+The runner has no Docker socket access. Its narrowly scoped passwordless sudo
+commands install the key through `/usr/local/sbin/scaletag-install-encryption-key`
+and restart `scaletag.service`. Host bootstrap installs these reviewed helpers
+outside runner-writable release directories. Building the native SQLite driver
+requires Python, `make` and a C++ compiler; the Docker build supplies these in its
+build stage, and the self-hosted runner also needs them for deployment tests.
 
-`deploy/deploy.sh` stages a release, switches the symlink and restarts the service. The root-managed helper pulls the current base image, passes the commit as `SYSTEM_UPDATE_REVISION` to invalidate the system-update layer for every new release, builds a revision-tagged image and starts the container with `/ScaleTag/data` mounted directly. Failed restarts or host health checks restore the previous release. The previous native release remains usable for the initial migration rollback. Current and previous source releases are retained separately from the daily data archives. Review old `scaletag:<commit>` images periodically and remove unused revisions explicitly; never prune unrelated images or volumes on a shared server.
-
-GitHub Actions tests pull requests on GitHub-hosted Ubuntu, including a real Docker image build and isolated container persistence test. Deployment only runs on `main` using the self-hosted runner **eons**. The VM's Docker access stays restricted to the root-managed service. Protect `main` before accepting outside contributions.
+`deploy/deploy.sh` stages a release and restarts the root-managed service. The
+helper builds revision-tagged images, updates app2, checks readiness, moves traffic
+off app1, updates app1 and verifies failback. The initial encryption conversion has
+a short maintenance window. Previous images using the unencrypted driver cannot
+open the encrypted database; recovery after conversion requires an
+encryption-capable image or an offline restore. Protect `main` and deployment
+permissions, since deployed code can access plaintext data and the runtime key.
+The [earlier JSON deployment notes](docs/ha-demo.md#one-time-conversion-of-the-existing-vm)
+are migration reference, not the current persistence layout.
 
 ## Daily archives and 90-day retention
 
-In SQLite mode the updated helper uses the online backup API for a consistent snapshot, then exports documents into the same verified JSON archive format. It never copies a live database file or falls back to stale JSON on a database error. Install the updated helper during HA bootstrap; see [migration instructions](docs/ha-demo.md#one-time-conversion-of-the-existing-vm). The source and per-document snapshot descriptions below apply to the legacy JSON backend.
+The VM runs `scaletag-backup.timer` at **03:00 America/Toronto** daily, with
+`Persistent=true` to catch up after downtime. The root-owned backup service uses
+`deploy/backup-encrypted.py`, installed as `/usr/local/sbin/scaletag-backup`.
 
-The development VM runs `scaletag-backup.timer` at **03:00 America/Toronto** every day. `Persistent=true` catches up after downtime. The root-owned `scaletag-backup.service` runs `/usr/local/sbin/scaletag-backup`; the app and runner cannot read the archive directory through the container.
-
-- Source: `/ScaleTag/data/<poll-id>.json` only; environment files, Docker layers, code, locks, external images and credentials are excluded.
-- Destination: `/ScaleTag/backups/scaletag-data-<UTC-timestamp>.tar.gz`.
-- Permissions: root-only directory `0700`, archive files `0600`.
-- Retention: each archive is removed once it reaches 90 days, on the next successful daily cleanup. Only this tool's matching archive names are pruned.
-- Integrity: gzip CRC, JSON parsing and a SHA-256 manifest are verified before the archive is atomically published. Failed/incomplete jobs do not publish a final archive.
-- Availability: backup reads atomically replaced JSON documents without stopping the app. Each poll is consistent individually; the entire archive is not one global point-in-time transaction.
-- Resource guard: reserve at least 512 MiB free disk space. Jobs are serialized and run with low CPU/I/O priority. Interrupted partial archives are cleared on the next run.
-
-Install `deploy/backup.py`, `deploy/scaletag-backup.service` and `deploy/scaletag-backup.timer` root-owned at the paths above. Keep the helper outside runner-writable release directories. The app's data is not mounted into a backup container, and archives are not mounted into the app container.
+- Source: a consistent read transaction exports posts, metadata and rate-limit state through a running application container. A live database file is never copied directly.
+- Destination: `/ScaleTag/backups/scaletag-data-<UTC-timestamp>.aes.json`. The JSON envelope contains ciphertext, IV and authentication tag; its payload is not readable without the key.
+- Verification: the export is authenticated and decrypted for verification before the archive is atomically published. Failed jobs do not publish a completed new archive.
+- Legacy conversion: retained `scaletag-data-*.tar.gz` archives are encrypted, verified and then replaced by `.tar.gz.aes.json` envelopes. These use a separate legacy-archive payload format.
+- Retention: matching daily archives are removed after 90 days, during a successful backup run. Jobs are serialized with a file lock.
+- Permissions: backup directory `0700`, archive files `0600`; the host backup directory is not mounted into application containers.
 
 ```sh
 sudo systemctl start scaletag-backup.service
 sudo systemctl list-timers scaletag-backup.timer
 sudo journalctl -u scaletag-backup.service -n 20
-sudo /usr/local/sbin/scaletag-backup --verify /ScaleTag/backups/<archive>.tar.gz
 ```
 
-For recovery, first verify and inspect an archive in a private staging directory. Stop the app before replacing any active records, preserve the original timestamps, and set recovered JSON ownership to the numeric app user with mode `0600`. Expired records will be pruned at startup. Historical records may be inspected offline by the administrator. No automated restore overwrites live data.
+With the same key supplied securely through the environment, restore a current
+export to a **new** database path in a private staging directory:
 
-These are local archives on the same VM, not an offsite copy. Include their disk use when sizing the host.
+```sh
+node src/restore-encrypted-backup.js /private/staging/restored.sqlite < backup.aes.json
+```
+
+The tool authenticates the backup before creating the target, restores records
+in a transaction, and checks database integrity. It refuses an existing target.
+Legacy `.tar.gz.aes.json` envelopes instead use `src/encrypt-archive.js` to decrypt
+the original archive to stdout; they are not inputs to the database restore tool.
+
+Validate a restored database offline before replacing active storage, stop both
+instances for the swap, preserve timestamps and ownership, and retain the original
+until recovery is verified. Expired records are cleaned up on application startup;
+restoration does not extend public expiry. These archives are on the same VM;
+offsite copies require a separate operator policy. The former unencrypted
+`deploy/backup.py` remains for legacy development and must not replace the
+production encrypted backup entrypoint.
 
 ## Initial operating cost
 
 The existing VM, runner, and Cloudflare Tunnel are reused. The app introduces no separately billed database, image-storage service, paid maps API, or SaaS subscription. The optional map uses OpenFreeMap’s public service and adds client-side download/rendering work plus a locally served MapLibre dependency; it does not require a map server on the VM. Existing VM, domain, Cloudflare plan, bandwidth and host backup charges still depend on the operator's plans.
 
-Default safety limits: 20 creations/minute globally, 10,000 retained polls, 50,000 votes per poll, and a 256 MiB free-disk reserve before accepting writes. The global creation limit uses no IP identifier and is a resource guard, not a strong abuse-prevention system. Each vote rewrites that poll's JSON, so very popular polls need a different persistence design. Start small, measure latency, memory and disk use, and scale only when needed. The 256 MiB application/container limit is a ceiling, not measured consumption. Docker Engine and containerd add their own host overhead; measure them separately.
+Default safety limits: 20 creations/minute globally, 10,000 retained polls, 50,000 votes per poll, and a 256 MiB free-disk reserve before accepting writes. The global creation limit uses no IP identifier and is a resource guard, not a strong abuse-prevention system. Each vote updates its post document; SQLite serializes writers, so measure contention before supporting very popular polls. Start small, measure latency, memory and disk use, and scale only when needed. The 256 MiB application/container limit is a ceiling, not measured consumption. Docker Engine and containerd add their own host overhead; measure them separately.
 
 ## Tests
 
