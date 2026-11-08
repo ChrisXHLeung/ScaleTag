@@ -80,8 +80,8 @@ test("anonymous task publication, persistent likes and public email reply work e
   await f.page.locator("#task-map-consent").check();
   await f.page.locator("#task-retention").check();
   await f.page.getByRole("button", { name: "Publish my task" }).click();
-  await f.page.waitForURL(/\/task\/[a-f0-9]{24}/);
-  const id = new URL(f.page.url()).pathname.split("/").pop();
+  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1#key=[a-f0-9]{64}$/);
+  const id = new URL(f.page.url()).pathname.split("/")[2];
   await f.page.getByRole("heading", { name: f.input.title }).waitFor();
   await f.page.getByRole("heading", { name: f.input.reward }).waitFor();
   const like = f.page.locator("#like-post");
@@ -279,5 +279,94 @@ test("offline social writes are disabled, contacts are not cached, and task expi
     await f.page.getByText("expiry@example.com", { exact: false }).count(),
     0,
   );
+  assert.deepEqual(f.errors, []);
+});
+
+test("private management link changes progress; final states stop replies for every visitor", async (t) => {
+  const f = await fixture(t),
+    task = await f.store.create(f.input);
+  const requests = [];
+  f.page.on("request", (r) => requests.push(r.url()));
+  // An incomplete or wrong link never shows management controls.
+  await f.page.goto(f.origin + `/task/${task.id}/manage`);
+  await f.page.getByText("management link is incomplete", { exact: false }).waitFor();
+  // Hash-only changes do not reload a page; reset between navigations.
+  await f.page.goto("about:blank");
+  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${"0".repeat(64)}`);
+  await f.page.getByText("management link is invalid", { exact: false }).waitFor();
+  assert.equal(await f.page.locator("[data-task-state]").count(), 0);
+  await f.page.goto("about:blank");
+  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.getByRole("heading", { name: "Manage this task" }).waitFor();
+  assert.equal(await f.page.locator("#task-state").textContent(), "Open");
+  assert.ok(
+    (await f.page.locator("#manage-link").inputValue()).endsWith(
+      `/task/${task.id}/manage#key=${task.manageKey}`,
+    ),
+  );
+  await f.page.locator('[data-task-state="in_progress"]').click();
+  await f.page.locator("#task-state", { hasText: "In progress" }).waitFor();
+  assert.equal((await f.store.get(task.id)).taskState, "in_progress");
+  // Public visitors see the status and may still reply while in progress.
+  const other = await f.browser.newContext();
+  const visitor = await other.newPage();
+  await visitor.goto(f.origin + `/task/${task.id}`);
+  await visitor.locator("#task-state", { hasText: "In progress" }).waitFor();
+  assert.equal(await visitor.locator("[data-task-state]").count(), 0);
+  assert.equal(await visitor.locator(".manage-card").count(), 0);
+  await visitor.waitForFunction(
+    () => !document.querySelector("#send-reply")?.disabled,
+  );
+  // Completing requires confirmation and is final.
+  f.page.once("dialog", (d) => d.accept());
+  await f.page.locator('[data-task-state="completed"]').click();
+  await f.page.locator("#task-state", { hasText: "Completed" }).waitFor();
+  await f.page.locator("#replies-closed", { hasText: "completed" }).waitFor();
+  assert.equal(await f.page.locator("#reply-form").isHidden(), true);
+  assert.equal(
+    await f.page.locator('[data-task-state="open"]').isDisabled(),
+    true,
+  );
+  await visitor.reload();
+  await visitor.locator("#replies-closed", { hasText: "no longer accepts" }).waitFor();
+  assert.equal(await visitor.locator("#reply-form").isHidden(), true);
+  await other.close();
+  // The secret never appears in any request URL.
+  assert.ok(requests.every((url) => !url.includes(task.manageKey)));
+  assert.deepEqual(f.errors, []);
+});
+
+test("public link copy fallback on the management page never exposes the private key", async (t) => {
+  const f = await fixture(t),
+    task = await f.store.create(f.input);
+  // Simulate a browser that denies clipboard access.
+  await f.page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error("denied")) },
+    });
+  });
+  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.getByRole("heading", { name: "Manage this task" }).waitFor();
+  assert.equal(await f.page.locator("#public-link-fallback").isHidden(), true);
+  await f.page.locator("#copy-task-link").click();
+  const input = f.page.locator("#public-task-link");
+  await input.waitFor({ state: "visible" });
+  const publicLink = `${f.origin}/task/${task.id}`;
+  assert.equal(await input.inputValue(), publicLink);
+  assert.deepEqual(
+    await input.evaluate((el) => [
+      document.activeElement === el,
+      el.selectionStart,
+      el.selectionEnd,
+    ]),
+    [true, 0, publicLink.length],
+  );
+  const toast = await f.page.locator("#toast").textContent();
+  assert.match(toast, /public task link/);
+  assert.ok(!/address bar/i.test(toast));
+  assert.ok(!toast.includes(task.manageKey));
+  assert.ok(!(await input.inputValue()).includes(task.manageKey));
+  assert.ok(!(await input.inputValue()).includes("manage"));
   assert.deepEqual(f.errors, []);
 });

@@ -5,6 +5,27 @@ export class AppError extends Error {
   }
 }
 
+// Task progress. "completed" and "closed" are final and stop new replies.
+export const TASK_STATES = ["open", "in_progress", "completed", "closed"];
+export const FINAL_TASK_STATES = ["completed", "closed"];
+// 256-bit random management key, hex-encoded.
+export const MANAGE_KEY_PATTERN = /^[a-f0-9]{64}$/;
+
+// The key travels only in a POST body; never in the URL or logs.
+export function manageKeyInput(body) {
+  const key = body && typeof body === "object" ? body.key : undefined;
+  if (typeof key !== "string" || !MANAGE_KEY_PATTERN.test(key))
+    throw new AppError(403, "This management link is invalid for this task.");
+  return key;
+}
+
+export function taskStateInput(body) {
+  const key = manageKeyInput(body);
+  if (!TASK_STATES.includes(body.state))
+    throw new AppError(400, "Choose a valid task status.");
+  return { key, state: body.state };
+}
+
 function text(value, name, max, required = true) {
   if (
     typeof value !== "string" ||

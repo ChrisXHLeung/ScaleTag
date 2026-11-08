@@ -142,3 +142,23 @@ test("readiness reflects storage access and includes instance/revision for the d
   a.close();
   assert.equal((await fetch(url)).status, 503);
 });
+
+test("SQLite shares task progress states between connections without exposing management hashes", async t => {
+  const { a, b } = await fixture(t);
+  const task = await a.create({ ...input, type: "task", options: [], reward: "Coffee" });
+  assert.match(task.manageKey, /^[a-f0-9]{64}$/);
+  await assert.rejects(b.setTaskState(task.id, "0".repeat(64), "closed"), { status: 403 });
+  assert.equal((await b.setTaskState(task.id, task.manageKey, "in_progress")).taskState, "in_progress");
+  assert.equal((await a.get(task.id)).taskState, "in_progress");
+  await a.reply(task.id, "helper", { message: "Available", email: "helper@example.com" });
+  await a.setTaskState(task.id, task.manageKey, "completed");
+  await assert.rejects(b.reply(task.id, "late", { message: "Late", email: "late@example.com" }), { status: 409 });
+  await assert.rejects(b.setTaskState(task.id, task.manageKey, "open"), { status: 409 });
+  const listed = b.list({ type: "task", status: "closed" });
+  assert.equal(listed.polls[0].taskState, "completed");
+  assert.equal(b.list({ type: "task", status: "open" }).polls.length, 0);
+  const hash = a.read(task.id).data.manageKeyHash;
+  assert.match(hash, /^[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify([listed, b.map(), await b.get(task.id), await b.getSocial(task.id)]).includes(hash));
+  assert.equal(a.read(task.id).data.deleteAt, task.deleteAt);
+});

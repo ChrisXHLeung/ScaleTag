@@ -837,3 +837,248 @@ test("legacy listing links redirect to PostList and preserve query parameters", 
     ),
   );
 });
+
+// ---------------------------------------------------------------------------
+// Task progress states and private management links
+// ---------------------------------------------------------------------------
+const manage = (f, id, body, headers) =>
+  f.request(`/api/tasks/${id}/manage`, body, undefined, headers);
+const setState = (f, id, body, headers) =>
+  f.request(`/api/tasks/${id}/state`, body, undefined, headers);
+
+test("task creation returns a private management key once; only its hash is stored and it never leaks", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f, {
+    taskState: "completed",
+    manageKeyHash: "0".repeat(64),
+    manageKey: "f".repeat(64),
+  });
+  assert.match(task.manageKey, /^[a-f0-9]{64}$/);
+  assert.notEqual(task.manageKey, "f".repeat(64));
+  assert.equal(task.taskState, "open");
+  assert.equal(task.status, "open");
+  assert.equal(task.manageKeyHash, undefined);
+  const disk = JSON.parse(
+    await readFile(join(f.directory, `${task.id}.json`), "utf8"),
+  );
+  assert.equal(disk.manageKeyHash, voterHash(task.manageKey));
+  assert.equal(disk.taskState, "open");
+  assert.ok(!JSON.stringify(disk).includes(task.manageKey));
+  assert.ok(!("manageKey" in disk));
+  const session = await socialSession(f, task.id);
+  for (const response of [
+    await f.request(`/api/tasks/${task.id}`),
+    await f.request("/api/posts"),
+    await f.request("/api/posts/search", { type: "task" }),
+    await f.request("/api/map/search", {}),
+    await f.request(`/api/posts/${task.id}/social`, undefined, session.cookie),
+  ]) {
+    const text = await response.text();
+    assert.ok(!text.includes(task.manageKey), "management key leaked");
+    assert.ok(!text.includes(disk.manageKeyHash), "management hash leaked");
+    assert.ok(!text.includes("manageKey"), "management field leaked");
+  }
+  const reopened = new PollStore(f.directory, { clock: f.now });
+  await reopened.init();
+  assert.ok(!JSON.stringify(reopened.list()).includes(disk.manageKeyHash));
+  // Polls have no management links or task states.
+  const poll = await f.create();
+  assert.equal(poll.manageKey, undefined);
+  assert.equal(poll.taskState, undefined);
+});
+
+test("only the matching management key can read management state or change status", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f),
+    other = await createTask(f);
+  const poll = await f.create();
+  for (const body of [
+    {},
+    { key: "" },
+    { key: "nope" },
+    { key: "A".repeat(64) },
+    { key: "0".repeat(64) },
+    { key: other.manageKey },
+    { key: [task.manageKey] },
+  ]) {
+    assert.equal((await manage(f, task.id, body)).status, 403);
+    assert.equal(
+      (await setState(f, task.id, { ...body, state: "completed" })).status,
+      403,
+    );
+  }
+  // Cross-site requests are rejected even with the correct key.
+  assert.equal(
+    (
+      await setState(
+        f,
+        task.id,
+        { key: task.manageKey, state: "closed" },
+        { origin: "https://evil.example" },
+      )
+    ).status,
+    403,
+  );
+  // Keys are never accepted from the URL.
+  assert.equal(
+    (await f.request(`/api/tasks/${task.id}/state?key=${task.manageKey}`, { state: "closed" })).status,
+    403,
+  );
+  assert.equal(
+    (await setState(f, poll.id, { key: task.manageKey, state: "closed" })).status,
+    404,
+  );
+  assert.equal(
+    (await setState(f, task.id, { key: task.manageKey, state: "deleted" })).status,
+    400,
+  );
+  assert.equal((await f.store.get(task.id)).taskState, "open");
+  const ok = await manage(f, task.id, { key: task.manageKey });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("cache-control"), "no-store, max-age=0");
+  const data = await ok.json();
+  assert.equal(data.taskState, "open");
+  assert.equal(data.manageKey, undefined);
+  assert.equal(data.manageKeyHash, undefined);
+  assert.equal((await f.request(`/task/${task.id}/manage`)).status, 200);
+  assert.equal((await f.request(`/task/${poll.id}/manage`)).status, 404);
+});
+
+test("progress states: in progress accepts replies; completed and closed are final and reject new replies", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f);
+  const session = await socialSession(f, task.id);
+  const reply = () =>
+    f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie);
+  let r = await setState(f, task.id, { key: task.manageKey, state: "in_progress" });
+  assert.equal(r.status, 200);
+  let data = await r.json();
+  assert.equal(data.taskState, "in_progress");
+  assert.equal(data.status, "open");
+  assert.equal(data.endsAt, task.endsAt);
+  assert.equal(data.deleteAt, task.deleteAt);
+  assert.equal((await reply()).status, 201);
+  f.advance(60000);
+  r = await setState(f, task.id, { key: task.manageKey, state: "open" });
+  assert.equal((await r.json()).taskState, "open");
+  r = await setState(f, task.id, { key: task.manageKey, state: "completed" });
+  data = await r.json();
+  assert.equal(data.taskState, "completed");
+  assert.equal(data.status, "closed");
+  assert.equal(data.deleteAt, task.deleteAt, "retention must not change");
+  const rejected = await reply();
+  assert.equal(rejected.status, 409);
+  assert.match((await rejected.json()).error, /no longer accepts replies/);
+  for (const state of ["open", "in_progress", "closed"])
+    assert.equal(
+      (await setState(f, task.id, { key: task.manageKey, state })).status,
+      409,
+    );
+  // Repeating the current final state is idempotent.
+  assert.equal(
+    (await setState(f, task.id, { key: task.manageKey, state: "completed" })).status,
+    200,
+  );
+  const social = await (
+    await f.request(`/api/posts/${task.id}/social`, undefined, session.cookie)
+  ).json();
+  assert.equal(social.taskState, "completed");
+  assert.equal(social.replies.length, 1, "existing replies stay visible");
+  // Likes remain available; they never reopen a task.
+  assert.equal(
+    (await f.request(`/api/posts/${task.id}/likes`, {}, session.cookie)).status,
+    200,
+  );
+  // Closed tasks behave the same.
+  const closed = await createTask(f);
+  const closedSession = await socialSession(f, closed.id);
+  await setState(f, closed.id, { key: closed.manageKey, state: "closed" });
+  assert.equal(
+    (
+      await f.request(
+        `/api/posts/${closed.id}/replies`,
+        replyBody(),
+        closedSession.cookie,
+      )
+    ).status,
+    409,
+  );
+  // Status filters and map reflect final states.
+  const open = await (
+    await f.request("/api/posts/search", { type: "task", status: "open" })
+  ).json();
+  assert.deepEqual(open.polls.map((p) => p.id), []);
+  const ended = await (
+    await f.request("/api/posts/search", { type: "task", status: "closed" })
+  ).json();
+  assert.deepEqual(
+    ended.polls.map((p) => [p.id, p.taskState]).sort(),
+    [
+      [task.id, "completed"],
+      [closed.id, "closed"],
+    ].sort(),
+  );
+  const pins = await (await f.request("/api/map/search", { type: "task" })).json();
+  assert.ok(pins.polls.every((p) => p.status === "closed"));
+  assert.deepEqual(
+    pins.polls.map((p) => p.taskState).sort(),
+    ["closed", "completed"],
+  );
+  // Persisted across restart.
+  const reopened = new PollStore(f.directory, { clock: f.now });
+  await reopened.init();
+  assert.equal((await reopened.get(task.id)).taskState, "completed");
+});
+
+test("managed tasks still leave the website at exactly 30 days, including management endpoints", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f);
+  await setState(f, task.id, { key: task.manageKey, state: "in_progress" });
+  f.advance(30 * DAY - 1);
+  assert.equal((await manage(f, task.id, { key: task.manageKey })).status, 200);
+  f.advance(1);
+  for (const response of [
+    await manage(f, task.id, { key: task.manageKey }),
+    await setState(f, task.id, { key: task.manageKey, state: "completed" }),
+    await f.request(`/task/${task.id}/manage`),
+    await f.request(`/api/tasks/${task.id}`),
+  ])
+    assert.equal(response.status, 404);
+  await f.store.sweep();
+  assert.equal(
+    (await readdir(f.directory)).filter((n) => n.endsWith(".json")).length,
+    0,
+  );
+});
+
+test("legacy tasks without progress fields stay open, accept replies and cannot be managed", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f);
+  const path = join(f.directory, `${task.id}.json`),
+    disk = JSON.parse(await readFile(path, "utf8"));
+  delete disk.taskState;
+  delete disk.manageKeyHash;
+  await writeFile(path, JSON.stringify(disk));
+  const fresh = new PollStore(f.directory, { clock: f.now });
+  await fresh.init();
+  assert.equal((await fresh.get(task.id)).taskState, "open");
+  const result = await (await f.request(`/api/tasks/${task.id}`)).json();
+  assert.equal(result.taskState, "open");
+  assert.equal(result.status, "open");
+  const session = await socialSession(f, task.id);
+  assert.equal(session.data.taskState, "open");
+  assert.equal(
+    (await f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie))
+      .status,
+    201,
+  );
+  // The originally issued key no longer matches anything stored.
+  assert.equal(
+    (await setState(f, task.id, { key: task.manageKey, state: "closed" })).status,
+    403,
+  );
+  const list = await (
+    await f.request("/api/posts/search", { type: "task", status: "open" })
+  ).json();
+  assert.deepEqual(list.polls.map((p) => p.id), [task.id]);
+});

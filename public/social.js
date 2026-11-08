@@ -1,8 +1,8 @@
 import { api, escape, date, count, toast } from "/common.js";
 
-export function mountSocial(id, allowReplies, onUnavailable) {
+export function mountSocial(id, allowReplies, onUnavailable, onState) {
   const host = document.querySelector("#social");
-  host.innerHTML = `<section class="social-card"><h2>Show your support.</h2><button id="like-post" class="button secondary" type="button" aria-pressed="false" disabled><span id="like-label">♡ Like</span> <span id="like-count">…</span></button><p class="field-hint">One like per browser, as far as an anonymous cookie allows. No account needed.</p><p id="social-error" class="form-error" role="alert" hidden></p>${allowReplies ? `<div class="replies-heading"><h2>Replies</h2><span id="reply-count"></span></div><div id="reply-list" aria-live="polite"></div><form id="reply-form"><h3>Leave a reply</h3><label for="reply-name">Name <span class="optional">optional, unverified</span></label><input id="reply-name" maxlength="60" placeholder="Anonymous"><label for="reply-message">Your reply</label><textarea id="reply-message" maxlength="2000" rows="4" required></textarea><fieldset class="contact-fields"><legend>How can the poster reach you?</legend><p class="field-hint">Add a phone number or email address. You can provide both.</p><label for="reply-phone">Phone <span class="optional">optional if you provide email</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">Email <span class="optional">optional if you provide phone</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span>I understand that my reply and contact details will be publicly visible until this task leaves the website. Private backups follow the 90-day archive policy. I am sharing contact details I have permission to publish.</span></label><p class="field-hint">Contact each other directly. ScaleTag does not handle payments or transactions. Replies and contact details are unverified.</p><button id="send-reply" class="button" type="submit" disabled>Post reply</button><p id="reply-error" class="form-error" role="alert" hidden></p></form>` : ""}</section>`;
+  host.innerHTML = `<section class="social-card"><h2>Show your support.</h2><button id="like-post" class="button secondary" type="button" aria-pressed="false" disabled><span id="like-label">♡ Like</span> <span id="like-count">…</span></button><p class="field-hint">One like per browser, as far as an anonymous cookie allows. No account needed.</p><p id="social-error" class="form-error" role="alert" hidden></p>${allowReplies ? `<div class="replies-heading"><h2>Replies</h2><span id="reply-count"></span></div><div id="reply-list" aria-live="polite"></div><p id="replies-closed" class="replies-closed" role="status" hidden></p><form id="reply-form"><h3>Leave a reply</h3><label for="reply-name">Name <span class="optional">optional, unverified</span></label><input id="reply-name" maxlength="60" placeholder="Anonymous"><label for="reply-message">Your reply</label><textarea id="reply-message" maxlength="2000" rows="4" required></textarea><fieldset class="contact-fields"><legend>How can the poster reach you?</legend><p class="field-hint">Add a phone number or email address. You can provide both.</p><label for="reply-phone">Phone <span class="optional">optional if you provide email</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">Email <span class="optional">optional if you provide phone</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span>I understand that my reply and contact details will be publicly visible until this task leaves the website. Private backups follow the 90-day archive policy. I am sharing contact details I have permission to publish.</span></label><p class="field-hint">Contact each other directly. ScaleTag does not handle payments or transactions. Replies and contact details are unverified.</p><button id="send-reply" class="button" type="submit" disabled>Post reply</button><p id="reply-error" class="form-error" role="alert" hidden></p></form>` : ""}</section>`;
   const like = host.querySelector("#like-post");
   let state,
     liking = false,
@@ -32,8 +32,20 @@ export function mountSocial(id, allowReplies, onUnavailable) {
           )
           .join("")
       : '<p class="field-hint">No replies yet. Start the conversation.</p>';
+    // Completed/closed tasks keep existing replies visible but accept no new ones.
+    const final = ["completed", "closed"].includes(state.taskState);
+    const closedNote = host.querySelector("#replies-closed");
+    closedNote.hidden = !final;
+    closedNote.textContent = final
+      ? `This task is ${state.taskState === "completed" ? "completed" : "closed"}. It no longer accepts new replies.`
+      : "";
+    host.querySelector("#reply-form").hidden = final;
     host.querySelector("#send-reply").disabled =
-      replying || expired || !navigator.onLine || state.replies.length >= 200;
+      final ||
+      replying ||
+      expired ||
+      !navigator.onLine ||
+      state.replies.length >= 200;
   }
   like.onclick = async () => {
     if (liking || !state || state.hasLiked) return;
@@ -79,6 +91,8 @@ export function mountSocial(id, allowReplies, onUnavailable) {
       } catch (e) {
         target.textContent = e.message;
         target.hidden = false;
+        // A 409 can mean the task was completed or closed meanwhile.
+        if (e.status === 409) setTimeout(refresh);
       } finally {
         replying = false;
         render();
@@ -91,6 +105,7 @@ export function mountSocial(id, allowReplies, onUnavailable) {
       state = await api(`/api/posts/${id}/social`);
       host.querySelector("#social-error").hidden = true;
       render();
+      onState?.(state);
     } catch (e) {
       if (e.status === 404) {
         expired = true;
@@ -113,4 +128,5 @@ export function mountSocial(id, allowReplies, onUnavailable) {
     once: true,
   });
   refresh();
+  return { refresh };
 }

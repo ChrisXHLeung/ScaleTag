@@ -9,6 +9,8 @@ import {
   pollInput,
   taskInput,
   replyInput,
+  manageKeyInput,
+  taskStateInput,
 } from "./validation.js";
 import { ID_PATTERN } from "./store.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
@@ -221,6 +223,15 @@ export function createApp(
     if (task.type !== "task") throw new AppError(404, "Task not found.");
     res.json(task);
   });
+  // Private management: the key is accepted only in a same-origin JSON POST
+  // body (see the /api origin check above), never from the URL.
+  app.post("/api/tasks/:id/manage", async (req, res) =>
+    res.json(await store.manageTask(req.params.id, manageKeyInput(req.body))),
+  );
+  app.post("/api/tasks/:id/state", async (req, res) => {
+    const { key, state } = taskStateInput(req.body);
+    res.json(await store.setTaskState(req.params.id, key, state));
+  });
   app.get("/api/tasks/:id/qr.png", async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
@@ -345,7 +356,7 @@ export function createApp(
     if (poll.type === "task") throw new AppError(404, "Poll not found.");
     res.sendFile(join(publicDir, "index.html"));
   });
-  app.get("/task/:id", async (req, res) => {
+  app.get(["/task/:id", "/task/:id/manage"], async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
     res.sendFile(join(publicDir, "index.html"));

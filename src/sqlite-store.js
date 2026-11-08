@@ -89,7 +89,7 @@ export class SQLiteStore extends PollStore {
 
   refreshIndex() {
     this.index = new Map(this.db.prepare(`SELECT json_set(
-      json_remove(document,'$.voters','$.likers','$.replies','$.replyAuthors'),
+      json_remove(document,'$.voters','$.likers','$.replies','$.replyAuthors','$.manageKeyHash'),
       '$.replyCount',coalesce(json_array_length(document,'$.replies'),0)) AS document
       FROM posts WHERE delete_at>?`)
       .all(this.clock()).map(({ document }) => {

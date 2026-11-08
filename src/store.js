@@ -1,14 +1,30 @@
 import { mkdir, readdir, unlink, chmod, statfs } from "node:fs/promises";
 import { join } from "node:path";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
-import { AppError, distanceKm } from "./validation.js";
+import {
+  AppError,
+  distanceKm,
+  TASK_STATES,
+  FINAL_TASK_STATES,
+  MANAGE_KEY_PATTERN,
+} from "./validation.js";
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const ID_PATTERN = /^[a-f0-9]{24}$/;
 export const voterHash = (value) =>
   createHash("sha256").update(value).digest("hex");
+
+// Tasks created before progress states existed have no taskState and are open.
+const taskStateOf = (p) =>
+  (p.type ?? "poll") === "task" ? (p.taskState ?? "open") : undefined;
+// Completed/closed tasks count as ended in status filters; retention is unchanged.
+export function postStatus(p, now) {
+  if (FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
+  return now < p.endsAt ? "open" : "closed";
+}
+const INVALID_MANAGE_LINK = "This management link is invalid for this task.";
 
 export class PollStore {
   constructor(
@@ -57,6 +73,7 @@ export class PollStore {
       id: p.id,
       type: p.type ?? "poll",
       reward: p.reward,
+      taskState: p.taskState,
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
       title: p.title,
@@ -161,9 +178,17 @@ export class PollStore {
         replies: [],
         replyAuthors: {},
       };
+      // Tasks get a private management key. Only its SHA-256 hash is stored;
+      // the key itself is returned once, in this creation response.
+      let manageKey;
+      if (p.type === "task") {
+        manageKey = randomBytes(32).toString("hex");
+        p.taskState = "open";
+        p.manageKeyHash = voterHash(manageKey);
+      }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
       await this.write(db);
-      return this.public(p);
+      return manageKey ? { ...this.public(p), manageKey } : this.public(p);
     });
   }
 
@@ -180,18 +205,23 @@ export class PollStore {
       likers,
       replies,
       replyAuthors,
+      manageKeyHash,
+      manageKey,
+      taskState,
       ...result
     } = p;
+    const now = this.clock();
     return {
       ...result,
       type: p.type ?? "poll",
+      ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
-      status: this.clock() < p.endsAt ? "open" : "closed",
+      status: postStatus(p, now),
       hasVoted: Boolean(
         token && voters && Object.hasOwn(voters, voterHash(token)),
       ),
-      serverTime: this.clock(),
+      serverTime: now,
     };
   }
 
@@ -244,9 +274,7 @@ export class PollStore {
     let rows = [...this.index.values()].filter((p) => p.deleteAt > now);
     if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
-      rows = rows.filter(
-        (p) => (p.endsAt > now ? "open" : "closed") === status,
-      );
+      rows = rows.filter((p) => postStatus(p, now) === status);
     if (before)
       rows = rows.filter(
         (p) =>
@@ -274,10 +302,7 @@ export class PollStore {
     const rows = [...this.index.values()]
       .filter((p) => p.mapVisible && p.deleteAt > now)
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
-      .filter(
-        (p) =>
-          status === "all" || (p.endsAt > now ? "open" : "closed") === status,
-      )
+      .filter((p) => status === "all" || postStatus(p, now) === status)
       .filter((p) => !location || distanceKm(location, p.location) <= 100)
       .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
     return {
@@ -288,12 +313,13 @@ export class PollStore {
         id: p.id,
         type: p.type ?? "poll",
         reward: p.reward,
+        ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
         totalVotes: p.totalVotes,
         createdAt: p.createdAt,
         endsAt: p.endsAt,
         deleteAt: p.deleteAt,
-        status: p.endsAt > now ? "open" : "closed",
+        status: postStatus(p, now),
         // One stable grid prevents averaging multiple requests to recover GPS.
         // Rounding is a coarse public position, not an anonymity guarantee.
         position: [
@@ -312,6 +338,7 @@ export class PollStore {
         token && Object.hasOwn(p.likers ?? {}, voterHash(token)),
       ),
       replies: p.type === "task" ? (p.replies ?? []) : [],
+      ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       deleteAt: p.deleteAt,
       serverTime: this.clock(),
     };
@@ -346,6 +373,11 @@ export class PollStore {
         p = db.data;
       if (p.type !== "task")
         throw new AppError(400, "Replies are available on tasks only.");
+      if (FINAL_TASK_STATES.includes(taskStateOf(p)))
+        throw new AppError(
+          409,
+          `This task is ${taskStateOf(p)} and no longer accepts replies.`,
+        );
       p.replies ??= [];
       p.replyAuthors ??= {};
       if (p.replies.length >= 200)
@@ -368,6 +400,54 @@ export class PollStore {
       p.replyAuthors[hash] = now;
       await this.write(db);
       return this.social(p, token);
+    });
+  }
+
+  // Returns the live task document only when `key` matches its stored hash.
+  // Legacy tasks (no hash), polls and malformed keys are all rejected.
+  async authorizedTask(id, key) {
+    const db = await this.live(id),
+      p = db.data;
+    if (p.type !== "task") throw new AppError(404, "Task not found.");
+    if (
+      typeof key !== "string" ||
+      !MANAGE_KEY_PATTERN.test(key) ||
+      typeof p.manageKeyHash !== "string" ||
+      !MANAGE_KEY_PATTERN.test(p.manageKeyHash) ||
+      !timingSafeEqual(
+        Buffer.from(voterHash(key), "hex"),
+        Buffer.from(p.manageKeyHash, "hex"),
+      )
+    )
+      throw new AppError(403, INVALID_MANAGE_LINK);
+    return db;
+  }
+
+  async manageTask(id, key) {
+    return this.exclusive(id, async () =>
+      this.public((await this.authorizedTask(id, key)).data),
+    );
+  }
+
+  async setTaskState(id, key, state) {
+    return this.exclusive(id, async () => {
+      const db = await this.authorizedTask(id, key),
+        p = db.data;
+      if (!TASK_STATES.includes(state))
+        throw new AppError(400, "Choose a valid task status.");
+      const current = taskStateOf(p);
+      if (current === state) return this.public(p);
+      if (FINAL_TASK_STATES.includes(current))
+        throw new AppError(
+          409,
+          `This task is already ${current}. Its status can no longer change.`,
+        );
+      // Only progress fields change: createdAt, endsAt and deleteAt (the
+      // 30-day retention deadline) are deliberately left untouched.
+      p.taskState = state;
+      p.stateChangedAt = this.clock();
+      await this.write(db);
+      return this.public(p);
     });
   }
 

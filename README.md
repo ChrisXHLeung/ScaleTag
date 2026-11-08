@@ -12,6 +12,7 @@ The development site runs the lightweight **Nginx + two Node instances + shared 
 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
 - Publish a task at **`/create/task`** with a required title, description and free-text reward offer, plus an optional unverified name. Tasks remain available for 30 days.
+- Track task progress as **Open**, **In progress**, **Completed** or **Closed** using a private management link shown once after publishing. Completed and Closed are final and stop new replies.
 - Like polls and tasks anonymously. Task replies require a phone number or email address (both are allowed), with explicit acknowledgement that the reply and contact details will be public.
 - Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses; publish only rounded map positions after explicit consent.
 - Start immediately; accept a single choice for exactly **168 hours**.
@@ -27,6 +28,7 @@ The development site runs the lightweight **Nginx + two Node instances + shared 
 | `/`            | Introduction and QR code for installing the app; no poll listing.                             |
 | `/create/task` | Publish a local task with a reward offer and required GPS/map acknowledgements.               |
 | `/task/<id>`   | Read a task, like it, reply with public contact details, or save its QR code.                 |
+| `/task/<id>/manage#key=…` | Private management page for changing a task's progress status (requires the secret key). |
 | `/create`      | Publish a single-choice poll with required GPS permission.                                    |
 | `/PostList`    | Browse retained polls and tasks in List or Map view, with status and optional 100 km filters. |
 | `/install`     | Device-specific PWA installation guide.                                                       |
@@ -46,6 +48,24 @@ Each post has a separate random `ss_<id>` cookie, `HttpOnly`, `Secure` over HTTP
 
 Resource bounds: 50,000 likes per post by default, 200 replies per task, one reply per browser per task per minute, and 20 valid reply attempts per minute globally without IP identifiers. Poll/task creation shares the existing creation limit. These are low-cost resource guards, not identity verification or strong spam protection. Old poll JSON remains compatible; social fields initialize on first use. Daily backups include task JSON, replies and private deduplication hashes, with the same root-only permissions and retention.
 
+### Task progress and private management links
+
+Every new task starts **Open**. Publishing returns a 256-bit random management key exactly once; the browser is redirected to `/task/<id>/manage?created=1#key=<key>`, which asks the poster to save that private link. Anyone holding it can change the task's status; there is no account, recovery or reissue.
+
+| State         | Public badge | New replies | Can change to                     |
+| ------------- | ------------ | ----------- | --------------------------------- |
+| `open`        | Open         | Accepted    | `in_progress`, `completed`, `closed` |
+| `in_progress` | In progress  | Accepted    | `open`, `completed`, `closed`     |
+| `completed`   | Completed    | Rejected (`409`) | — final                      |
+| `closed`      | Closed       | Rejected (`409`) | — final                      |
+
+- **Secret handling.** Only the key's SHA-256 hash (`manageKeyHash`) is stored and compared in constant time. The key and hash are never returned by task, list, map, social or management responses, and SQLite discovery strips the hash before building summaries. The key lives in the URL fragment, which browsers do not send in page requests or `Referer` headers; it reaches the server only in the JSON body of a same-origin `POST`, so it is not in URLs or request logs. Keys in query strings are ignored. Private archives contain the hash under the 90-day policy. The link can still remain in browser history or be exposed by screenshots or sharing.
+- **Authorization.** Missing, malformed or mismatched keys (including another task's key) return `403` and change nothing. The usual origin and JSON content-type checks apply. Polls have no states or keys.
+- **Replies.** Completed and Closed are final; existing replies stay visible, new replies are rejected by the server and the reply form is replaced by a notice. Likes stay available.
+- **Retention.** Changing status updates only `taskState` and `stateChangedAt`. `createdAt`, `endsAt` and the 30-day `deleteAt` are never changed, so a task and its management link stop working exactly 30 days after publication (`404`).
+- **Discovery.** Completed and Closed tasks are treated as ended: they appear under **Ended** in PostList and as ended markers on the map. Open and In progress tasks appear under **Open**. Tasks expose `taskState` publicly.
+- **Compatibility.** Tasks stored before this feature have no `taskState`/`manageKeyHash`. They are shown as **Open**, keep accepting replies and cannot be managed, because no key was ever issued. No data migration is needed for JSON or SQLite storage.
+
 | Endpoint                                   | Purpose                                                                                                                                            |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /api/tasks`                          | Publish a task.                                                                                                                                    |
@@ -55,6 +75,8 @@ Resource bounds: 50,000 likes per post by default, 200 replies per task, one rep
 | `GET /api/posts/<id>/social`               | Public like state and task replies; establishes this post's anonymous cookie.                                                                      |
 | `POST /api/posts/<id>/likes`               | Add one idempotent browser like.                                                                                                                   |
 | `POST /api/posts/<id>/replies`             | Add a task reply with public-contact acknowledgement.                                                                                              |
+| `POST /api/tasks/<id>/manage`              | Verify a management key (`{ "key": "…" }`) and return the task. `403` for a missing or wrong key.                                                  |
+| `POST /api/tasks/<id>/state`               | Change progress with `{ "key": "…", "state": "open" \| "in_progress" \| "completed" \| "closed" }`. `409` once a task is completed or closed.       |
 
 All API responses use `no-store`. No task, reply, contact, like/vote request or QR response is placed in the PWA cache, and offline submissions are never queued. Browser tests run with isolated temporary data:
 

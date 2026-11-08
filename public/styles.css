@@ -412,3 +412,49 @@
 .task-reward { background: #f8f8f3; border-left: 1px solid var(--line); }
 .task-reward h2 { font-weight: 750; }
 #reply-form input[type="tel"], #reply-form input[type="email"] { border-color: #b9c6ce; border-radius: 5px; font-size: 16px; }
+
+/* Task progress states and private management */
+.status-badge.in-progress {
+  background: #fff4d6;
+  color: #7a5200;
+}
+.manage-card {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 2px dashed #173b7a;
+  border-radius: 12px;
+  display: grid;
+  gap: 0.6rem;
+}
+.manage-card h2 {
+  margin: 0;
+}
+.manage-card input[readonly] {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  width: 100%;
+}
+.state-buttons {
+  border: 0;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.state-buttons > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.state-buttons .selected {
+  outline: 2px solid #173b7a;
+  outline-offset: 1px;
+}
+.replies-closed {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #f1f3f7;
+  font-weight: 600;
+}
+#reply-form[hidden],
+.replies-closed[hidden] {
+  display: none;
+}
