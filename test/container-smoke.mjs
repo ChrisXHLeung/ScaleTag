@@ -119,7 +119,7 @@ try {
         {
           message: "I can help.",
           phone: "+1 416 555 0123",
-          contactAccepted: true,
+          privacyAccepted: true,
         },
         socialCookie,
       )
@@ -163,7 +163,12 @@ try {
   assert.equal(restoredSocial.totalLikes, 1);
   assert.equal(restoredSocial.hasLiked, true);
   assert.equal(restoredSocial.replies.length, 1);
-  assert.equal(restoredSocial.replies[0].phone, "+1 416 555 0123");
+  assert.equal(restoredSocial.replies[0].phone, undefined);
+  assert.equal(restoredSocial.replies[0].email, undefined);
+  const managedTask = await (
+    await request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })
+  ).json();
+  assert.equal(managedTask.replies[0].phone, "+1 416 555 0123");
   assert.equal((await request(`/api/tasks/${task.id}`)).status, 200);
   assert.equal(restored.totalVotes, 1);
   assert.equal(restored.options[0].votes, 1);

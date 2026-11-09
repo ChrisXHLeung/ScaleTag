@@ -107,12 +107,16 @@ try {
   const task = await taskResponse.json();
   const social = await request(`/api/posts/${task.id}/social`);
   const helper = social.headers.get("set-cookie").split(";")[0];
-  const reply = { message: "I can help", email: "helper@example.com", contactAccepted: true };
+  const reply = { message: "I can help", email: "helper@example.com", privacyAccepted: true };
   assert.equal((await request(`/api/posts/${task.id}/replies`, reply, helper)).status, 201);
   await compose("start", "app1");
   await routed("app1", old);
   assert.equal((await (await request("/api/posts")).json()).polls.length, 2);
-  assert.equal((await (await request(`/api/posts/${task.id}/social`)).json()).replies[0].email, reply.email);
+  const publicSocial = await (await request(`/api/posts/${task.id}/social`)).json();
+  assert.equal(publicSocial.replies[0].phone, undefined);
+  assert.equal(publicSocial.replies[0].email, undefined);
+  const managedTask = await (await request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })).json();
+  assert.equal(managedTask.replies[0].email, reply.email);
   assert.equal((await request(`/api/posts/${task.id}/replies`, reply, helper)).status, 429);
   console.log("PASS: failover/failback preserve posts, votes, deduplication and replies.");
 
