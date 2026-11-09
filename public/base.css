@@ -2054,3 +2054,31 @@ input[type="text"], input:not([type]), textarea { font-size: 16px; border-color:
 .device-picker button.selected { background: var(--ink); }
 .step-number, .empty-symbol { background: #eaece4; color: var(--ink); }
 .list-empty, .install-browser-hint { background: #f8f8f3; border-color: var(--line); }
+
+.language-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.language-control select {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--paper, #fff);
+  color: var(--ink);
+  font: inherit;
+}
+.language-storage-note {
+  margin: 0;
+  padding: 0 24px 12px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .header-inner { flex-wrap: wrap; }
+  .language-control { margin-left: auto; }
+  .language-control label { font-size: 11px; }
+}

@@ -1,3 +1,4 @@
+import { localizedPath } from "/locale.js";
 import {
   main,
   api,
@@ -59,7 +60,7 @@ export function createTask() {
       });
       // The management key goes in the fragment, which browsers never send
       // to the server or in Referer headers.
-      location.assign(`/task/${task.id}/manage?created=1#key=${task.manageKey}`);
+      location.assign(localizedPath(`/task/${task.id}/manage?created=1#key=${task.manageKey}`));
     } catch (e) {
       error.textContent = e.message;
       error.hidden = false;

@@ -4,8 +4,95 @@ export function languageFor(languages = []) {
 export function translate(language, english, chinese) {
   return language === 'zh' ? chinese : english;
 }
-export const language = languageFor(typeof navigator === 'undefined' ? [] : (navigator.languages?.length ? navigator.languages : [navigator.language]));
+const preferenceKey = 'scaletag-language';
+const validLanguage = value => value === 'en' || value === 'zh';
+let savedLanguage;
+let storageAvailable = false;
+if (typeof window !== 'undefined') {
+  try {
+    savedLanguage = window.localStorage.getItem(preferenceKey);
+    // Test writes too: some environments allow reads but reject writes.
+    window.localStorage.setItem(preferenceKey, savedLanguage ?? '');
+    if (savedLanguage === null) window.localStorage.removeItem(preferenceKey);
+    storageAvailable = true;
+  } catch { /* Private/restricted browsers can still switch through the URL. */ }
+}
+const urlLanguage = typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('lang');
+export const language = storageAvailable && validLanguage(savedLanguage) ? savedLanguage :
+  validLanguage(urlLanguage) ? urlLanguage : validLanguage(savedLanguage) ? savedLanguage :
+  languageFor(typeof navigator === 'undefined' ? [] : (navigator.languages?.length ? navigator.languages : [navigator.language]));
 export const t = (english, chinese) => translate(language, english, chinese);
+if (validLanguage(urlLanguage) && storageAvailable) {
+  try { window.localStorage.setItem(preferenceKey, language); }
+  catch { storageAvailable = false; }
+}
+
+// Keep fallback navigation local; never copy a management fragment to another URL.
+export function localizedPath(path) {
+  const url = new URL(path, location.href);
+  if (!storageAvailable && url.origin === location.origin) url.searchParams.set('lang', language);
+  return url.href;
+}
+
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = language === 'zh' ? 'zh-Hans' : 'en';
+  const header = document.querySelector('.header-inner');
+  if (header) {
+    const control = document.createElement('div');
+    control.className = 'language-control';
+    const label = document.createElement('label');
+    label.htmlFor = 'language-select';
+    label.textContent = 'Language / 语言';
+    const select = document.createElement('select');
+    select.id = 'language-select';
+    for (const [value, text] of [['en', 'English'], ['zh', '中文']]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      option.lang = value === 'zh' ? 'zh-Hans' : 'en';
+      select.append(option);
+    }
+    select.value = language;
+    control.append(label, select);
+    header.append(control);
+    if (!storageAvailable) {
+      const warning = document.createElement('p');
+      warning.className = 'language-storage-note';
+      warning.id = 'language-storage-note';
+      warning.textContent = t('Language cannot be saved in this browser. It stays with this URL and links opened here.', '此浏览器无法保存语言偏好；语言仅随当前网址及从此处打开的站内链接保留。');
+      header.after(warning);
+      select.setAttribute('aria-describedby', warning.id);
+    }
+    select.addEventListener('change', () => {
+      if (select.value === language) return;
+      const hasDraft = [...document.querySelectorAll('form input, form textarea, form select')].some(field => {
+        if (field.type === 'hidden' || field.type === 'submit' || field.type === 'button') return false;
+        if (field.type === 'checkbox' || field.type === 'radio') return field.checked !== field.defaultChecked;
+        return field.value !== field.defaultValue && field.value !== '';
+      });
+      if (hasDraft && !window.confirm(t('Changing language reloads this page and discards your unsent draft. Continue?', '切换语言将重新加载此页面，并丢弃尚未提交的草稿。是否继续？'))) {
+        select.value = language;
+        return;
+      }
+      let saved = false;
+      try { window.localStorage.setItem(preferenceKey, select.value); saved = true; }
+      catch { /* The URL carries the choice even without storage. */ }
+      const url = new URL(location.href);
+      if (saved) url.searchParams.delete('lang');
+      else url.searchParams.set('lang', select.value);
+      if (url.href === location.href) location.reload();
+      else location.assign(url.href);
+    });
+  }
+  if (!storageAvailable) {
+    document.addEventListener('click', event => {
+      const link = event.target.closest?.('a[href]');
+      if (!link || link.hasAttribute('download') || link.getAttribute('href').startsWith('#')) return;
+      const url = new URL(link.href, location.href);
+      if (url.origin === location.origin && !url.pathname.startsWith('/api/') && /^https?:$/.test(url.protocol)) link.href = localizedPath(link.href);
+    }, true);
+  }
+}
 
 const serverErrors = {
   'Invalid request origin. Please use the ScaleTag website.': '请求来源无效，请使用 ScaleTag 网站。',
