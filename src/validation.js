@@ -137,9 +137,10 @@ export function taskInput(body) {
 // matched (e.g. "2026-11-09 10:00" or "CAD 30").
 const PUBLIC_EMAIL_PATTERN = /[^\s@<>]+@[^\s@<>]+\.[a-z]{2,}/i;
 const PUBLIC_PHONE_PATTERN =
-  /(?:^|[^\d])(?:\+\d[\d\s().-]{7,}\d|\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/;
+  /(?:^|[^\d])(?:\+\d[\d\s()/.#x-]{7,}\d|\(?\d{3}\)?[\s/.-]?\d{3}[\s/.-]?\d{4}|\d{3}[\s/.-]\d{4})(?!\d)/i;
 export function looksLikeContact(value) {
-  return PUBLIC_EMAIL_PATTERN.test(value) || PUBLIC_PHONE_PATTERN.test(value);
+  const normalized = value.normalize("NFKC");
+  return PUBLIC_EMAIL_PATTERN.test(normalized) || PUBLIC_PHONE_PATTERN.test(normalized);
 }
 export const CONTACT_IN_PUBLIC_TEXT =
   "Your name and message are public. Remove the phone number or email address from them. If this task offers private contact fields, use those instead.";
@@ -189,4 +190,26 @@ export function distanceKm(a, b) {
       Math.cos(b.latitude * rad) *
       Math.sin(dLon / 2) ** 2;
   return 6371.0088 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
+
+export function saleInput(body) {
+  const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
+  return { ...common, type: "sale", options: [],
+    description: text(body.description, "Description", 4000),
+    price: text(body.price, "Asking price", 160) };
+}
+export function offerInput(body) {
+  const reply = replyInput(body);
+  if (body.nonBindingAccepted !== true)
+    throw new AppError(400, "Confirm that your offer is non-binding communication only. ScaleTag does not handle payments, transactions, reservations or completed sales.");
+  const amount = text(body.amount, "Offer", 160);
+  if (looksLikeContact(amount)) throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
+  // An offer is a price, never a free-text public contact channel. Permit
+  // a plain nonnegative decimal with one optional currency prefix/suffix.
+  const number = "(?:0|[1-9]\\d{0,8}|[1-9]\\d{0,2}(?:,\\d{3}){1,2})(?:\\.\\d{1,2})?";
+  const currency = "(?:[A-Z]{3}|[A-Z]{0,2}\\$|[€£¥])";
+  if (!new RegExp(`^(?:${number}|${currency}\\s*${number}|${number}\\s+${currency})$`).test(amount))
+    throw new AppError(400, "Enter a nonnegative offer amount with up to two decimal places and an optional currency, for example CAD 40 or $40.50. Keep contact details in the private fields.");
+  return { ...reply, amount };
 }

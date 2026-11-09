@@ -480,3 +480,16 @@
 .private-replies #refresh-private-replies {
   margin-top: 0.75rem;
 }
+
+.sale-photos, .sale-photo-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; margin: 20px 0; }
+.sale-photos img, .sale-photo-preview img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; background: #f2f4ee; border-radius: 6px; }
+.sale-photo-preview figure { margin: 0; min-width: 0; }
+.sale-photo-preview img { height: 140px; object-fit: cover; }
+.sale-photo-preview figcaption { font-size: .75rem; margin-top: 6px; overflow-wrap: anywhere; }
+#sale-images { width: 100%; padding: 12px; white-space: normal; }
+.sale-offer-amount, .private-offer > strong { display: block; margin-top: 12px; overflow-wrap: anywhere; }
+#sale-progress { font-size: .9rem; color: var(--muted); }
+.home-actions { flex-wrap: wrap; }
+@media (max-width: 420px) { .post-kind-switch { display: flex; flex-wrap: wrap; } .post-kind-switch a { flex: 1; text-align: center; } }
+
+@media (max-width: 600px) { #sale-form .location-box { flex-wrap: wrap; gap: 12px; } #sale-form .location-box > div { flex: 1 1 180px; } #sale-locate { width: 100%; } }

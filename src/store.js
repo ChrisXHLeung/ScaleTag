@@ -24,7 +24,7 @@ const taskStateOf = (p) =>
 // Only tasks with a stored management-key hash have someone who can read
 // private reply contacts. Legacy tasks never had a key issued.
 export const hasManageKey = (p) =>
-  (p.type ?? "poll") === "task" &&
+  ["task", "sale"].includes(p.type) &&
   typeof p.manageKeyHash === "string" &&
   MANAGE_KEY_PATTERN.test(p.manageKeyHash);
 // Public reply view: name and message only. Phone and email are never
@@ -35,6 +35,7 @@ const publicReply = (r) => ({
   name: r.name,
   message: r.message,
   createdAt: r.createdAt,
+  ...(r.amount ? { amount: r.amount } : {}),
 });
 // Private reply view, returned only after management-key verification.
 const privateReply = (r) => ({
@@ -44,7 +45,7 @@ const privateReply = (r) => ({
 });
 // Completed/closed tasks count as ended in status filters; retention is unchanged.
 export function postStatus(p, now) {
-  if (FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
+  if (p.saleState === "closed" || FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
   return now < p.endsAt ? "open" : "closed";
 }
 const INVALID_MANAGE_LINK = "This management link is invalid for this task.";
@@ -96,6 +97,8 @@ export class PollStore {
       id: p.id,
       type: p.type ?? "poll",
       reward: p.reward,
+      price: p.price,
+      saleState: p.saleState,
       taskState: p.taskState,
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
@@ -187,7 +190,7 @@ export class PollStore {
         ...input,
         id,
         createdAt: now,
-        endsAt: now + (input.type === "task" ? 30 : 7) * DAY,
+        endsAt: now + (["task", "sale"].includes(input.type) ? 30 : 7) * DAY,
         deleteAt: now + 30 * DAY,
         options: input.options.map((label, n) => ({
           id: n + 1,
@@ -204,9 +207,10 @@ export class PollStore {
       // Tasks get a private management key. Only its SHA-256 hash is stored;
       // the key itself is returned once, in this creation response.
       let manageKey;
-      if (p.type === "task") {
+      if (["task", "sale"].includes(p.type)) {
         manageKey = randomBytes(32).toString("hex");
-        p.taskState = "open";
+        if (p.type === "sale") p.saleState = "open";
+        else p.taskState = "open";
         p.manageKeyHash = voterHash(manageKey);
       }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
@@ -258,8 +262,8 @@ export class PollStore {
     return this.exclusive(id, async () => {
       const db = await this.live(id);
       const p = db.data;
-      if (p.type === "task")
-        throw new AppError(400, "Tasks do not accept votes.");
+      if (["task", "sale"].includes(p.type))
+        throw new AppError(400, "This post does not accept votes.");
       if (this.clock() >= p.endsAt)
         throw new AppError(
           409,
@@ -336,6 +340,8 @@ export class PollStore {
         id: p.id,
         type: p.type ?? "poll",
         reward: p.reward,
+        price: p.price,
+        saleState: p.saleState,
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
         totalVotes: p.totalVotes,
@@ -354,7 +360,7 @@ export class PollStore {
   }
 
   social(p, token) {
-    const task = (p.type ?? "poll") === "task";
+    const task = ["task", "sale"].includes(p.type);
     return {
       type: p.type ?? "poll",
       totalLikes: p.totalLikes ?? 0,
@@ -364,6 +370,7 @@ export class PollStore {
       // Unauthenticated: never includes phone or email.
       replies: task ? (p.replies ?? []).map(publicReply) : [],
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) } : {}),
+      ...(p.type === "sale" ? { saleState: p.saleState ?? "open" } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       deleteAt: p.deleteAt,
       serverTime: this.clock(),
@@ -397,8 +404,10 @@ export class PollStore {
     return this.exclusive(id, async () => {
       const db = await this.live(id),
         p = db.data;
-      if (p.type !== "task")
-        throw new AppError(400, "Replies are available on tasks only.");
+      if (!["task", "sale"].includes(p.type))
+        throw new AppError(400, "Replies are available on tasks and sales only.");
+      if (postStatus(p, this.clock()) === "closed")
+        throw new AppError(409, "This post is closed and no longer accepts replies.");
       if (FINAL_TASK_STATES.includes(taskStateOf(p)))
         throw new AppError(
           409,
@@ -427,6 +436,7 @@ export class PollStore {
         id: randomBytes(12).toString("hex"),
         name: input.name ?? "Anonymous",
         message: input.message,
+        ...(p.type === "sale" ? { amount: input.amount } : {}),
         ...(input.phone ? { phone: input.phone } : {}),
         ...(input.email ? { email: input.email } : {}),
         createdAt: now,
@@ -439,10 +449,10 @@ export class PollStore {
 
   // Returns the live task document only when `key` matches its stored hash.
   // Legacy tasks (no hash), polls and malformed keys are all rejected.
-  async authorizedTask(id, key) {
+  async authorizedTask(id, key, type = "task") {
     const db = await this.live(id),
       p = db.data;
-    if (p.type !== "task") throw new AppError(404, "Task not found.");
+    if (p.type !== type) throw new AppError(404, "Post not found.");
     if (
       typeof key !== "string" ||
       !MANAGE_KEY_PATTERN.test(key) ||
@@ -484,6 +494,22 @@ export class PollStore {
       p.stateChangedAt = this.clock();
       await this.write(db);
       return this.public(p);
+    });
+  }
+
+  async manageSale(id, key) {
+    return this.exclusive(id, async () => {
+      const p = (await this.authorizedTask(id, key, "sale")).data;
+      return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
+    });
+  }
+
+  async closeSale(id, key) {
+    return this.exclusive(id, async () => {
+      const db = await this.authorizedTask(id, key, "sale");
+      db.data.saleState = "closed";
+      await this.write(db);
+      return this.public(db.data);
     });
   }
 
