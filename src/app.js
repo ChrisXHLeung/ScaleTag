@@ -224,10 +224,17 @@ export function createApp(
     res.json(task);
   });
   // Private management: the key is accepted only in a same-origin JSON POST
-  // body (see the /api origin check above), never from the URL.
-  app.post("/api/tasks/:id/manage", async (req, res) =>
-    res.json(await store.manageTask(req.params.id, manageKeyInput(req.body))),
-  );
+  // body (see the /api origin check above), never from the URL. After key
+  // verification this is the only endpoint that returns reply phone/email,
+  // so it additionally forbids shared/intermediary caching.
+  app.post("/api/tasks/:id/manage", async (req, res) => {
+    const key = manageKeyInput(req.body);
+    res.set({
+      "Cache-Control": "no-store, private, max-age=0",
+      Pragma: "no-cache",
+    });
+    res.json(await store.manageTask(req.params.id, key));
+  });
   app.post("/api/tasks/:id/state", async (req, res) => {
     const { key, state } = taskStateInput(req.body);
     res.json(await store.setTaskState(req.params.id, key, state));

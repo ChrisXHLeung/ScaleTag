@@ -13,7 +13,7 @@ The development site runs the lightweight **Nginx + two Node instances + shared 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
 - Publish a task at **`/create/task`** with a required title, description and free-text reward offer, plus an optional unverified name. Tasks remain available for 30 days.
 - Track task progress as **Open**, **In progress**, **Completed** or **Closed** using a private management link shown once after publishing. Completed and Closed are final and stop new replies.
-- Like polls and tasks anonymously. Task replies require a phone number or email address (both are allowed), with explicit acknowledgement that the reply and contact details will be public.
+- Like polls and tasks anonymously. Task reply names and messages are public; the required phone number or email address (both are allowed) is private and shown only on the task's secret management page. Respondents explicitly acknowledge both rules.
 - Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses; publish only rounded map positions after explicit consent.
 - Start immediately; accept a single choice for exactly **168 hours**.
 - Display vote counts and percentages before and after voting. Refresh results every 15 seconds on visible poll pages.
@@ -27,8 +27,8 @@ The development site runs the lightweight **Nginx + two Node instances + shared 
 | -------------- | --------------------------------------------------------------------------------------------- |
 | `/`            | Introduction and QR code for installing the app; no poll listing.                             |
 | `/create/task` | Publish a local task with a reward offer and required GPS/map acknowledgements.               |
-| `/task/<id>`   | Read a task, like it, reply with public contact details, or save its QR code.                 |
-| `/task/<id>/manage#key=…` | Private management page for changing a task's progress status (requires the secret key). |
+| `/task/<id>`   | Read a task, like it, reply (public name/message, private contact), or save its QR code.      |
+| `/task/<id>/manage#key=…` | Private management page: change a task's progress status and read reply contacts (requires the secret key). |
 | `/create`      | Publish a single-choice poll with required GPS permission.                                    |
 | `/PostList`    | Browse retained polls and tasks in List or Map view, with status and optional 100 km filters. |
 | `/install`     | Device-specific PWA installation guide.                                                       |
@@ -38,11 +38,22 @@ Each published poll also has its own shareable URL and downloadable QR code. Ins
 
 The combined listing is named **PostList**. Old `/VoteList` links and installed-app shortcuts redirect permanently to `/PostList`, preserving query parameters. Poll and task URLs are unchanged.
 
-## Tasks, likes and public replies
+## Tasks, likes and replies
 
-Select **Poll** or **Task** in the publishing form. Tasks use the same required GPS permission, explicit approximate-map acknowledgement and 30-day website retention as polls. Reward is a required text description (for example, “CAD 30” or “a coffee”), not a payment instruction processed by ScaleTag. There are no accounts, checkout, deposits, escrow, bookings or transaction handling. Posters and respondents arrange details directly using the contact information in replies.
+Select **Poll** or **Task** in the publishing form. Tasks use the same required GPS permission, explicit approximate-map acknowledgement and 30-day website retention as polls. Reward is a required text description (for example, “CAD 30” or “a coffee”), not a payment instruction processed by ScaleTag. There are no accounts, checkout, deposits, escrow, bookings or transaction handling. The poster contacts respondents directly using the private contact details shown on the management page.
 
-Task replies require a message and **at least one of phone or email**; both are accepted. Names are optional and unverified. The submission form requires an acknowledgement that contact details are public. Replies are plain text and contacts are format-checked, not identity-verified. Reply contacts are returned only on the post's public social endpoint, never in map/list summaries or basemap requests. Replies share the **parent task's** 30-day deadline; replying does not extend it. There is no account-based editing, private messaging or self-service recovery. Private archives may retain contact details under the existing 90-day archive policy.
+### Reply privacy
+
+| Reply field | Who can see it |
+| --- | --- |
+| Name (optional, unverified) and message | **Public**: everyone, via the task page and `GET /api/posts/<id>/social`. Reply counts stay public in PostList and summaries. |
+| Phone and/or email | **Private**: only someone holding the task's management link, via the authenticated `POST /api/tasks/<id>/manage`; plus administrators with server access and the encrypted private backups (90-day policy). |
+
+- On tasks with a management key, a reply requires a message and **at least one of phone or email**. The form separates the *public* name/message from the *private* contact fields and requires a `privacyAccepted` acknowledgement stating exactly this. Older clients that still send the former `contactAccepted` field are rejected with a message asking them to reload.
+- Respondents are told never to put contact information in their name or message. The server rejects names/messages that look like they contain an email address or phone number (`+` international numbers, or 3-3-4 digit groups). This is a safety net, not a guarantee; dates, times and prices are not matched.
+- No unauthenticated endpoint returns phone or email: `GET /api/tasks/<id>`, `GET /api/posts/<id>/social`, `POST /api/posts/<id>/likes`, `POST /api/posts/<id>/replies`, list/search, map and QR responses all omit them. Public replies contain only `id`, `name`, `message` and `createdAt`. This applies equally to replies stored before this change, whose contacts were previously public.
+- **Legacy tasks** (published before management links) have no key, so nobody could ever view private contacts for them. ScaleTag therefore does not collect contacts there: the social response sets `acceptsPrivateContacts: false`, the form hides the contact fields and explains why, and the server rejects replies that include a phone or email (`400`). Contacts already stored on legacy tasks are hidden from everyone and removed with the task at its 30-day deadline.
+- Replies share the **parent task's** 30-day deadline; replying does not extend it. There is no account-based editing, private messaging or self-service recovery. Private archives may retain contact details under the existing 90-day archive policy.
 
 Each post has a separate random `ss_<id>` cookie, `HttpOnly`, `Secure` over HTTPS and `SameSite=Strict`, scoped to `/api/posts/<id>` and expiring at post deletion. Only its SHA-256 hash is stored for one-like-per-browser deduplication and reply throttling. This cookie is separate from the seven-day voting cookie, with no cross-post identifier, IP logging or device fingerprint. Clearing cookies or changing browsers can bypass browser-based limits. Likes are idempotent and serialized with votes/replies in the same per-document queue; liking never casts a vote. Polls support likes; replies are available on tasks.
 
@@ -50,7 +61,7 @@ Resource bounds: 50,000 likes per post by default, 200 replies per task, one rep
 
 ### Task progress and private management links
 
-Every new task starts **Open**. Publishing returns a 256-bit random management key exactly once; the browser is redirected to `/task/<id>/manage?created=1#key=<key>`, which asks the poster to save that private link. Anyone holding it can change the task's status; there is no account, recovery or reissue.
+Every new task starts **Open**. Publishing returns a 256-bit random management key exactly once; the browser is redirected to `/task/<id>/manage?created=1#key=<key>`, which asks the poster to save that private link. Anyone holding it can change the task's status and read reply phone numbers and email addresses; there is no account, recovery or reissue.
 
 | State         | Public badge | New replies | Can change to                     |
 | ------------- | ------------ | ----------- | --------------------------------- |
@@ -64,7 +75,7 @@ Every new task starts **Open**. Publishing returns a 256-bit random management k
 - **Replies.** Completed and Closed are final; existing replies stay visible, new replies are rejected by the server and the reply form is replaced by a notice. Likes stay available.
 - **Retention.** Changing status updates only `taskState` and `stateChangedAt`. `createdAt`, `endsAt` and the 30-day `deleteAt` are never changed, so a task and its management link stop working exactly 30 days after publication (`404`).
 - **Discovery.** Completed and Closed tasks are treated as ended: they appear under **Ended** in PostList and as ended markers on the map. Open and In progress tasks appear under **Open**. Tasks expose `taskState` publicly.
-- **Compatibility.** Tasks stored before this feature have no `taskState`/`manageKeyHash`. They are shown as **Open**, keep accepting replies and cannot be managed, because no key was ever issued. No data migration is needed for JSON or SQLite storage.
+- **Compatibility.** Tasks stored before this feature have no `taskState`/`manageKeyHash`. They are shown as **Open**, keep accepting replies (public name and message only — no contacts, see [Reply privacy](#reply-privacy)) and cannot be managed, because no key was ever issued. No data migration is needed for JSON or SQLite storage.
 
 | Endpoint                                   | Purpose                                                                                                                                            |
 | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,10 +83,10 @@ Every new task starts **Open**. Publishing returns a 256-bit random management k
 | `GET /api/tasks/<id>`                      | Read public task content, without reply contacts.                                                                                                  |
 | `GET /api/tasks/<id>/qr.png`               | Canonical task QR; `?download=1` saves a PNG.                                                                                                      |
 | `GET /api/posts`, `POST /api/posts/search` | Mixed newest-first discovery with `type=all/poll/task`, status and optional nearby filters. Historic `/api/polls` discovery routes remain aliases. |
-| `GET /api/posts/<id>/social`               | Public like state and task replies; establishes this post's anonymous cookie.                                                                      |
-| `POST /api/posts/<id>/likes`               | Add one idempotent browser like.                                                                                                                   |
-| `POST /api/posts/<id>/replies`             | Add a task reply with public-contact acknowledgement.                                                                                              |
-| `POST /api/tasks/<id>/manage`              | Verify a management key (`{ "key": "…" }`) and return the task. `403` for a missing or wrong key.                                                  |
+| `GET /api/posts/<id>/social`               | Public like state and task replies (name/message only, never phone/email) plus `acceptsPrivateContacts` for tasks; establishes this post's anonymous cookie. |
+| `POST /api/posts/<id>/likes`               | Add one idempotent browser like. Returns the same public social data.                                                                              |
+| `POST /api/posts/<id>/replies`             | Add a task reply with `privacyAccepted: true`. Returns public social data without contacts.                                                        |
+| `POST /api/tasks/<id>/manage`              | Verify a management key (`{ "key": "…" }`) and return the task **with reply phone/email**. `403` for a missing or wrong key. `Cache-Control: no-store, private`. |
 | `POST /api/tasks/<id>/state`               | Change progress with `{ "key": "…", "state": "open" \| "in_progress" \| "completed" \| "closed" }`. `409` once a task is completed or closed.       |
 
 All API responses use `no-store`. No task, reply, contact, like/vote request or QR response is placed in the PWA cache, and offline submissions are never queued. Browser tests run with isolated temporary data:
@@ -252,7 +263,8 @@ it, including through `docker inspect`; runtime environment injection was chosen
 for deployment simplicity. Firewall and Tunnel routing restrict network access,
 but do not replace application validation or protect against every application
 vulnerability. Encryption does not hide content intentionally returned by public
-APIs, including task reply contact details.
+APIs, such as task reply names and messages, nor contacts returned to a valid
+management-link holder.
 
 Keep a secure recovery copy of the key outside GitHub. Losing it can make the
 stored data unrecoverable. Changing the GitHub Secret is not a key rotation

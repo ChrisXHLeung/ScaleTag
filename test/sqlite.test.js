@@ -33,8 +33,9 @@ test("SQLite shares fresh discovery, counters, contacts and deduplication betwee
   assert.equal((await a.getSocial(poll.id, "same")).totalLikes, 1);
   const task = await b.create({ ...input, type: "task", options: [], reward: "Coffee" });
   await a.reply(task.id, "helper", { message: "Available", email: "helper@example.com" });
-  assert.equal((await b.getSocial(task.id)).replies[0].email, "helper@example.com");
-  await assert.rejects(b.reply(task.id, "helper", { message: "Again" }), { status: 429 });
+  assert.equal((await b.getSocial(task.id)).replies[0].email, undefined);
+  assert.equal((await b.manageTask(task.id, task.manageKey)).replies[0].email, "helper@example.com");
+  await assert.rejects(b.reply(task.id, "helper", { message: "Again", email: "helper@example.com" }), { status: 429 });
   assert.equal(a.list({ type: "task" }).polls[0].replyCount, 1);
 });
 

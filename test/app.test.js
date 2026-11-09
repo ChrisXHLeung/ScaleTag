@@ -587,9 +587,30 @@ const replyBody = (extra = {}) => ({
   name: "Neighbour",
   message: "I can help on Saturday.",
   email: "helper@example.com",
-  contactAccepted: true,
+  privacyAccepted: true,
   ...extra,
 });
+const CONTACT_STRINGS = [
+  "helper@example.com",
+  "both@example.com",
+  "+1 (416) 555-0123",
+  "416-555-0124",
+  // JSON keys; error messages may mention the words, never these keys.
+  '"phone"',
+  '"email"',
+];
+function assertNoContacts(text, label) {
+  for (const value of CONTACT_STRINGS)
+    assert.ok(!text.includes(value), `${label} leaked ${value}`);
+}
+// Hoisted so the reply-privacy tests below can use them before the
+// management-link section defines its own helpers.
+function manageRequest(f, id, body, headers) {
+  return f.request(`/api/tasks/${id}/manage`, body, undefined, headers);
+}
+function stateRequest(f, id, body, headers) {
+  return f.request(`/api/tasks/${id}/state`, body, undefined, headers);
+}
 
 test("tasks require title, description, reward and GPS; discover by type and share a canonical QR", async (t) => {
   const f = await fixture(t);
@@ -682,28 +703,34 @@ test("anonymous likes are atomic and idempotent on polls and tasks, independent 
   assert.ok(reload.list().polls.every((p) => p.totalLikes === 1));
 });
 
-test("task replies require public contact consent; phone-only, email-only and both work; contacts stay out of discovery", async (t) => {
+test("task replies require privacy consent; phone-only, email-only and both work; no public endpoint returns contacts", async (t) => {
   const f = await fixture(t),
     task = await createTask(f),
     session = await socialSession(f, task.id);
+  assert.equal(session.data.acceptsPrivateContacts, true);
   for (const extra of [
     { email: "", phone: "" },
     { email: "bad" },
     { email: "", phone: "abc" },
-    { contactAccepted: false },
+    { privacyAccepted: false },
+    // The former "contacts are public" acknowledgement is no longer accepted.
+    { privacyAccepted: undefined, contactAccepted: true },
     { message: "" },
     { email: "bad\r\n@example.com" },
-  ])
-    assert.equal(
-      (
-        await f.request(
-          `/api/posts/${task.id}/replies`,
-          replyBody(extra),
-          session.cookie,
-        )
-      ).status,
-      400,
+    // Contact details in public fields are rejected.
+    { message: "Email me at helper@example.com" },
+    { message: "Call +44 20 7946 0958 any time" },
+    { message: "Text me: (416) 555-0123" },
+    { name: "helper@example.com" },
+  ]) {
+    const r = await f.request(
+      `/api/posts/${task.id}/replies`,
+      replyBody(extra),
+      session.cookie,
     );
+    assert.equal(r.status, 400, JSON.stringify(extra));
+    assertNoContacts(await r.text(), "rejection");
+  }
   for (const extra of [
     { email: "", phone: "+1 (416) 555-0123" },
     { email: "helper@example.com" },
@@ -716,21 +743,58 @@ test("task replies require public contact consent; phone-only, email-only and bo
     );
     assert.equal(r.status, 201);
     assert.equal(r.headers.get("cache-control"), "no-store, max-age=0");
+    // The unauthenticated reply response is public social data.
+    assertNoContacts(await r.text(), "POST replies");
     f.advance(60000);
   }
+  // Public text, counts and order are preserved.
   const state = await (await f.request(`/api/posts/${task.id}/social`)).json();
   assert.equal(state.replies.length, 3);
-  assert.equal(state.replies[0].phone, "+1 (416) 555-0123");
-  for (const route of ["/api/polls", `/api/tasks/${task.id}`]) {
-    const text = await (await f.request(route)).text();
-    assert.ok(!text.includes("helper@example.com"));
-    assert.ok(!text.includes("replyAuthors"));
-    assert.ok(!text.includes("likers"));
+  assert.deepEqual(Object.keys(state.replies[0]).sort(), [
+    "createdAt",
+    "id",
+    "message",
+    "name",
+  ]);
+  assert.equal(state.replies[0].message, "I can help on Saturday.");
+  assert.equal(state.replies[0].name, "Neighbour");
+  const like = await f.request(`/api/posts/${task.id}/likes`, {}, session.cookie);
+  assert.equal(like.status, 200);
+  for (const [label, response] of [
+    ["GET social", await f.request(`/api/posts/${task.id}/social`)],
+    ["GET social with cookie", await f.request(`/api/posts/${task.id}/social`, undefined, session.cookie)],
+    ["POST likes", like],
+    ["GET task", await f.request(`/api/tasks/${task.id}`)],
+    ["GET posts", await f.request("/api/posts")],
+    ["GET polls", await f.request("/api/polls")],
+    ["POST search", await f.request("/api/posts/search", { type: "task" })],
+    ["POST map", await f.request("/api/map/search", {})],
+    ["POST state", await stateRequest(f, task.id, { key: task.manageKey, state: "in_progress" })],
+  ]) {
+    const text = await response.text();
+    assertNoContacts(text, label);
+    assert.ok(!text.includes("replyAuthors"), label);
+    assert.ok(!text.includes("likers"), label);
   }
-  const map = await (await f.request("/api/map/search", {})).text();
-  assert.ok(!map.includes("@example.com"));
+  const listed = (await (await f.request("/api/posts")).json()).polls[0];
+  assert.equal(listed.replyCount, 3);
+  assert.equal((await (await f.request(`/api/tasks/${task.id}`)).json()).replyCount, 3);
+  // Only the authenticated management POST returns contacts.
+  const managed = await (await manageRequest(f, task.id, { key: task.manageKey })).json();
+  assert.deepEqual(
+    managed.replies.map((r) => [r.message, r.phone, r.email]),
+    [
+      ["I can help on Saturday.", "+1 (416) 555-0123", undefined],
+      ["I can help on Saturday.", undefined, "helper@example.com"],
+      ["I can help on Saturday.", "416-555-0124", "both@example.com"],
+    ],
+  );
+  // Contacts remain in the private store (and therefore in private backups).
+  const disk = JSON.parse(await readFile(join(f.directory, `${task.id}.json`), "utf8"));
+  assert.equal(disk.replies[2].email, "both@example.com");
   const poll = await f.create(),
     pollSession = await socialSession(f, poll.id);
+  assert.equal(pollSession.data.acceptsPrivateContacts, undefined);
   assert.equal(
     (
       await f.request(
@@ -741,6 +805,106 @@ test("task replies require public contact consent; phone-only, email-only and bo
     ).status,
     400,
   );
+});
+
+test("reply contacts are returned only after management-key verification, with private no-store caching", async (t) => {
+  const f = await fixture(t),
+    task = await createTask(f),
+    other = await createTask(f),
+    session = await socialSession(f, task.id);
+  assert.equal(
+    (await f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie)).status,
+    201,
+  );
+  for (const body of [
+    {},
+    { key: "0".repeat(64) },
+    { key: other.manageKey },
+    { key: task.manageKey.toUpperCase() },
+  ]) {
+    const r = await manageRequest(f, task.id, body);
+    assert.equal(r.status, 403);
+    assertNoContacts(await r.text(), "rejected manage");
+  }
+  // Keys in the URL are ignored, so contacts cannot be fetched via a link.
+  const viaQuery = await f.request(`/api/tasks/${task.id}/manage?key=${task.manageKey}`, {});
+  assert.equal(viaQuery.status, 403);
+  assertNoContacts(await viaQuery.text(), "query-string manage");
+  // GET is not a management route.
+  assert.equal((await f.request(`/api/tasks/${task.id}/manage`)).status, 404);
+  // Cross-origin requests are rejected even with the right key.
+  const crossSite = await manageRequest(f, task.id, { key: task.manageKey }, { origin: "https://evil.example" });
+  assert.equal(crossSite.status, 403);
+  assertNoContacts(await crossSite.text(), "cross-site manage");
+  // Another task's key never reveals this task's contacts.
+  const otherManaged = await (await manageRequest(f, other.id, { key: other.manageKey })).json();
+  assert.deepEqual(otherManaged.replies, []);
+  const ok = await manageRequest(f, task.id, { key: task.manageKey });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("cache-control"), "no-store, private, max-age=0");
+  assert.equal(ok.headers.get("pragma"), "no-cache");
+  const data = await ok.json();
+  assert.equal(data.replies[0].email, "helper@example.com");
+  assert.equal(data.manageKey, undefined);
+  assert.equal(data.manageKeyHash, undefined);
+  assert.equal(data.replyAuthors, undefined);
+  // Contacts share the task's 30-day lifecycle.
+  f.advance(30 * DAY - 1);
+  assert.equal((await manageRequest(f, task.id, { key: task.manageKey })).status, 200);
+  f.advance(1);
+  const expired = await manageRequest(f, task.id, { key: task.manageKey });
+  assert.equal(expired.status, 404);
+  assertNoContacts(await expired.text(), "expired manage");
+});
+
+test("replies stored before contacts became private are hidden publicly but shown to the management link", async (t) => {
+  const f = await fixture(t),
+    task = await createTask(f);
+  const path = join(f.directory, `${task.id}.json`),
+    disk = JSON.parse(await readFile(path, "utf8"));
+  // Shape written by the previous version: contacts at top level, empty
+  // strings for omitted fields.
+  disk.replies = [
+    { id: "a".repeat(24), name: "Old helper", message: "Still available.", phone: "+1 416 555 0199", email: "", createdAt: f.now() },
+    { id: "b".repeat(24), name: "Anonymous", message: "Me too.", phone: "", email: "old@example.com", createdAt: f.now() },
+  ];
+  await writeFile(path, JSON.stringify(disk));
+  const social = await f.request(`/api/posts/${task.id}/social`);
+  const text = await social.text();
+  assert.ok(!text.includes("+1 416 555 0199"));
+  assert.ok(!text.includes("old@example.com"));
+  const data = JSON.parse(text);
+  assert.deepEqual(data.replies.map((r) => [r.name, r.message]), [
+    ["Old helper", "Still available."],
+    ["Anonymous", "Me too."],
+  ]);
+  const managed = await (await manageRequest(f, task.id, { key: task.manageKey })).json();
+  assert.deepEqual(
+    managed.replies.map((r) => [r.phone, r.email]),
+    [["+1 416 555 0199", undefined], [undefined, "old@example.com"]],
+  );
+});
+
+test("contact detection in public reply fields ignores dates, times and prices", async () => {
+  const { looksLikeContact } = await import("../src/validation.js");
+  for (const value of [
+    "Reach me at someone@example.org",
+    "+1 416 555 0123",
+    "+442079460958",
+    "(416) 555-0123",
+    "416.555.0123",
+    "4165550123",
+  ])
+    assert.equal(looksLikeContact(value), true, value);
+  for (const value of [
+    "I can help on Saturday.",
+    "Available 2026-11-09 10:00 to 14:30",
+    "CAD 30 or a coffee",
+    "Around 1,000,000 leaves to rake",
+    "Unit 12, 3 hours",
+    "@neighbour sure",
+  ])
+    assert.equal(looksLikeContact(value), false, value);
 });
 
 test("reply bursts serialize and full post expiry removes likes, replies, contacts and all endpoints", async (t) => {
@@ -935,9 +1099,10 @@ test("only the matching management key can read management state or change statu
   assert.equal((await f.store.get(task.id)).taskState, "open");
   const ok = await manage(f, task.id, { key: task.manageKey });
   assert.equal(ok.status, 200);
-  assert.equal(ok.headers.get("cache-control"), "no-store, max-age=0");
+  assert.equal(ok.headers.get("cache-control"), "no-store, private, max-age=0");
   const data = await ok.json();
   assert.equal(data.taskState, "open");
+  assert.deepEqual(data.replies, []);
   assert.equal(data.manageKey, undefined);
   assert.equal(data.manageKeyHash, undefined);
   assert.equal((await f.request(`/task/${task.id}/manage`)).status, 200);
@@ -1051,13 +1216,17 @@ test("managed tasks still leave the website at exactly 30 days, including manage
   );
 });
 
-test("legacy tasks without progress fields stay open, accept replies and cannot be managed", async (t) => {
+test("legacy tasks without progress fields stay open, reject new replies and cannot be managed", async (t) => {
   const f = await fixture(t);
   const task = await createTask(f);
   const path = join(f.directory, `${task.id}.json`),
     disk = JSON.parse(await readFile(path, "utf8"));
   delete disk.taskState;
   delete disk.manageKeyHash;
+  // A reply stored by the previous version, when contacts were public.
+  disk.replies = [
+    { id: "c".repeat(24), name: "Earlier", message: "Earlier reply.", phone: "", email: "legacy@example.com", createdAt: f.now() },
+  ];
   await writeFile(path, JSON.stringify(disk));
   const fresh = new PollStore(f.directory, { clock: f.now });
   await fresh.init();
@@ -1067,16 +1236,31 @@ test("legacy tasks without progress fields stay open, accept replies and cannot 
   assert.equal(result.status, "open");
   const session = await socialSession(f, task.id);
   assert.equal(session.data.taskState, "open");
+  // Nobody holds a key, so contacts cannot be retrieved and new replies are prevented.
+  assert.equal(session.data.acceptsPrivateContacts, false);
+  assert.ok(!JSON.stringify(session.data).includes("legacy@example.com"));
+  assert.deepEqual(session.data.replies.map((r) => r.message), ["Earlier reply."]);
+  for (const extra of [{}, { email: "", phone: "+1 416 555 0123" }, { email: "", phone: "" }]) {
+    const rejected = await f.request(`/api/posts/${task.id}/replies`, replyBody(extra), session.cookie);
+    assert.equal(rejected.status, 409);
+    const { error } = await rejected.json();
+    assert.match(error, /no private management link/);
+    assert.match(error, /cannot retrieve contact details/);
+  }
+  // Contact details smuggled into public fields are rejected by input validation first.
   assert.equal(
-    (await f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie))
-      .status,
-    201,
+    (await f.request(`/api/posts/${task.id}/replies`, replyBody({ email: "", message: "Mail me: x@example.com" }), session.cookie)).status,
+    400,
   );
-  // The originally issued key no longer matches anything stored.
+  // The originally issued key no longer matches anything stored, so the
+  // management view (and its contacts) is unavailable.
   assert.equal(
     (await setState(f, task.id, { key: task.manageKey, state: "closed" })).status,
     403,
   );
+  const managed = await manage(f, task.id, { key: task.manageKey });
+  assert.equal(managed.status, 403);
+  assert.ok(!(await managed.text()).includes("legacy@example.com"));
   const list = await (
     await f.request("/api/posts/search", { type: "task", status: "open" })
   ).json();

@@ -9,6 +9,8 @@ import {
   TASK_STATES,
   FINAL_TASK_STATES,
   MANAGE_KEY_PATTERN,
+  LEGACY_TASK_NO_REPLIES,
+  REPLY_CONTACT_REQUIRED,
 } from "./validation.js";
 
 export const DAY = 24 * 60 * 60 * 1000;
@@ -19,6 +21,27 @@ export const voterHash = (value) =>
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
   (p.type ?? "poll") === "task" ? (p.taskState ?? "open") : undefined;
+// Only tasks with a stored management-key hash have someone who can read
+// private reply contacts. Legacy tasks never had a key issued.
+export const hasManageKey = (p) =>
+  (p.type ?? "poll") === "task" &&
+  typeof p.manageKeyHash === "string" &&
+  MANAGE_KEY_PATTERN.test(p.manageKeyHash);
+// Public reply view: name and message only. Phone and email are never
+// included, for new replies or for replies stored before contacts became
+// private (including legacy tasks, whose contacts nobody can view any more).
+const publicReply = (r) => ({
+  id: r.id,
+  name: r.name,
+  message: r.message,
+  createdAt: r.createdAt,
+});
+// Private reply view, returned only after management-key verification.
+const privateReply = (r) => ({
+  ...publicReply(r),
+  ...(r.phone ? { phone: r.phone } : {}),
+  ...(r.email ? { email: r.email } : {}),
+});
 // Completed/closed tasks count as ended in status filters; retention is unchanged.
 export function postStatus(p, now) {
   if (FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
@@ -331,13 +354,16 @@ export class PollStore {
   }
 
   social(p, token) {
+    const task = (p.type ?? "poll") === "task";
     return {
       type: p.type ?? "poll",
       totalLikes: p.totalLikes ?? 0,
       hasLiked: Boolean(
         token && Object.hasOwn(p.likers ?? {}, voterHash(token)),
       ),
-      replies: p.type === "task" ? (p.replies ?? []) : [],
+      // Unauthenticated: never includes phone or email.
+      replies: task ? (p.replies ?? []).map(publicReply) : [],
+      ...(task ? { acceptsPrivateContacts: hasManageKey(p) } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       deleteAt: p.deleteAt,
       serverTime: this.clock(),
@@ -378,6 +404,11 @@ export class PollStore {
           409,
           `This task is ${taskStateOf(p)} and no longer accepts replies.`,
         );
+      if (!hasManageKey(p))
+        throw new AppError(409, LEGACY_TASK_NO_REPLIES);
+      const hasContact = Boolean(input.phone || input.email);
+      if (!hasContact)
+        throw new AppError(400, REPLY_CONTACT_REQUIRED);
       p.replies ??= [];
       p.replyAuthors ??= {};
       if (p.replies.length >= 200)
@@ -394,7 +425,10 @@ export class PollStore {
         );
       p.replies.push({
         id: randomBytes(12).toString("hex"),
-        ...input,
+        name: input.name ?? "Anonymous",
+        message: input.message,
+        ...(input.phone ? { phone: input.phone } : {}),
+        ...(input.email ? { email: input.email } : {}),
         createdAt: now,
       });
       p.replyAuthors[hash] = now;
@@ -423,10 +457,12 @@ export class PollStore {
     return db;
   }
 
+  // Authenticated view: the only response that includes reply phone/email.
   async manageTask(id, key) {
-    return this.exclusive(id, async () =>
-      this.public((await this.authorizedTask(id, key)).data),
-    );
+    return this.exclusive(id, async () => {
+      const p = (await this.authorizedTask(id, key)).data;
+      return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
+    });
   }
 
   async setTaskState(id, key, state) {

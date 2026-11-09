@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -56,6 +56,7 @@ async function fixture(t) {
   };
   return {
     origin,
+    directory,
     page,
     context,
     browser,
@@ -68,7 +69,7 @@ async function fixture(t) {
   };
 }
 
-test("anonymous task publication, persistent likes and public email reply work end to end", async (t) => {
+test("anonymous task publication, persistent likes and private email reply work end to end", async (t) => {
   const f = await fixture(t);
   await f.page.goto(f.origin + "/create");
   await f.page.locator('.post-kind-switch a[href="/create/task"]').click();
@@ -94,9 +95,7 @@ test("anonymous task publication, persistent likes and public email reply work e
   assert.equal(await f.page.locator("#like-count").textContent(), "1");
   await f.page.reload();
   await f.page.locator('#like-post[aria-pressed="true"]').waitFor();
-  await f.page
-    .getByLabel("Your reply", { exact: true })
-    .fill("I can help on Saturday.");
+  await f.page.locator("#reply-message").fill("I can help on Saturday.");
   await f.page.locator("#contact-consent").check();
   await f.page.locator("#send-reply").click();
   await f.page
@@ -110,9 +109,10 @@ test("anonymous task publication, persistent likes and public email reply work e
     .getByText("I can help on Saturday.", { exact: true })
     .waitFor();
   assert.equal(
-    await f.page.locator(".reply-contacts a").textContent(),
+    await f.page.locator("#private-reply-list .reply-contacts a").textContent(),
     "Email: helper@example.com",
   );
+  assert.equal(await f.page.locator("#reply-list .reply-contacts").count(), 0);
   const other = await f.browser.newContext();
   const second = await other.newPage();
   await second.goto(f.origin + `/task/${id}`);
@@ -123,6 +123,7 @@ test("anonymous task publication, persistent likes and public email reply work e
   await second.locator('#like-post[aria-pressed="true"]').waitFor();
   assert.equal(await second.locator("#like-count").textContent(), "2");
   assert.equal((await f.store.getSocial(id)).replies.length, 1);
+  assert.equal(await second.locator(".reply-contacts").count(), 0);
   await other.close();
   assert.deepEqual(f.errors, []);
 });
@@ -143,6 +144,7 @@ test("phone-only and dual-contact replies are escaped; polls have likes without 
   await f.page.locator(".reply-card").waitFor();
   assert.equal(await f.page.locator(".reply-card img").count(), 0);
   assert.equal(await f.page.evaluate(() => window.injected), undefined);
+  assert.equal(await f.page.locator(".reply-contacts").count(), 0);
   f.advance(60000);
   await f.page.locator("#reply-message").fill("A second reply");
   await f.page.locator("#reply-phone").fill("416-555-0124");
@@ -152,7 +154,12 @@ test("phone-only and dual-contact replies are escaped; polls have likes without 
   await f.page.waitForFunction(
     () => document.querySelectorAll(".reply-card").length === 2,
   );
-  assert.equal(await f.page.locator(".reply-contacts a").count(), 3);
+  assert.equal(await f.page.locator(".reply-contacts").count(), 0);
+  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.waitForFunction(
+    () => document.querySelectorAll("#private-reply-list .reply-card").length === 2,
+  );
+  assert.equal(await f.page.locator("#private-reply-list .reply-contacts a").count(), 3);
   const poll = await f.store.create({
     ...f.input,
     type: "poll",
@@ -368,5 +375,22 @@ test("public link copy fallback on the management page never exposes the private
   assert.ok(!toast.includes(task.manageKey));
   assert.ok(!(await input.inputValue()).includes(task.manageKey));
   assert.ok(!(await input.inputValue()).includes("manage"));
+  assert.deepEqual(f.errors, []);
+});
+
+test("legacy tasks without management keys show explanation and prevent replies", async (t) => {
+  const f = await fixture(t),
+    task = await f.store.create(f.input);
+  const path = join(f.directory, `${task.id}.json`),
+    disk = JSON.parse(await readFile(path, "utf8"));
+  delete disk.manageKeyHash;
+  await writeFile(path, JSON.stringify(disk));
+  await f.store.init();
+  await f.page.goto(f.origin + `/task/${task.id}`);
+  await f.page.waitForFunction(
+    () => !document.querySelector(".loading-state"),
+  );
+  await f.page.locator("#replies-closed", { hasText: "no private management link" }).waitFor();
+  assert.equal(await f.page.locator("#reply-form").isHidden(), true);
   assert.deepEqual(f.errors, []);
 });

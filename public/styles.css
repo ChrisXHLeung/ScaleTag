@@ -458,3 +458,25 @@
 .replies-closed[hidden] {
   display: none;
 }
+
+/* Reply privacy: public name/message notice and private contacts on the management page. */
+.reply-privacy-note {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #c2410c;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #431407;
+  line-height: 1.5;
+}
+.private-replies {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(23, 59, 122, 0.15);
+}
+.private-replies .reply-card + .reply-card {
+  margin-top: 0.75rem;
+}
+.private-replies #refresh-private-replies {
+  margin-top: 0.75rem;
+}

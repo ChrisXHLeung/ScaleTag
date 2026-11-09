@@ -131,6 +131,26 @@ export function taskInput(body) {
   };
 }
 
+// Reply names and messages are public. These patterns catch the common ways
+// people paste an email address or phone number into a public field. They are
+// a safety net, not a guarantee: dates, prices and times are deliberately not
+// matched (e.g. "2026-11-09 10:00" or "CAD 30").
+const PUBLIC_EMAIL_PATTERN = /[^\s@<>]+@[^\s@<>]+\.[a-z]{2,}/i;
+const PUBLIC_PHONE_PATTERN =
+  /(?:^|[^\d])(?:\+\d[\d\s().-]{7,}\d|\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/;
+export function looksLikeContact(value) {
+  return PUBLIC_EMAIL_PATTERN.test(value) || PUBLIC_PHONE_PATTERN.test(value);
+}
+export const CONTACT_IN_PUBLIC_TEXT =
+  "Your name and message are public. Remove the phone number or email address from them. If this task offers private contact fields, use those instead.";
+export const LEGACY_TASK_NO_REPLIES =
+  "This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies.";
+export const LEGACY_TASK_CONTACTS = LEGACY_TASK_NO_REPLIES;
+export const REPLY_CONTACT_REQUIRED =
+  "Provide a phone number or email address, or both. Only the task creator can see them.";
+
+// Validates reply fields. New replies require a task with a private management link;
+// legacy tasks without one cannot accept replies because contacts cannot be retrieved.
 export function replyInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete your reply.");
@@ -138,11 +158,8 @@ export function replyInput(body) {
   const name = text(body.name || "Anonymous", "Name", 60);
   const phone = text(body.phone ?? "", "Phone", 40, false);
   const email = text(body.email ?? "", "Email", 254, false);
-  if (!phone && !email)
-    throw new AppError(
-      400,
-      "Provide a phone number or email address, or both.",
-    );
+  if (looksLikeContact(message) || looksLikeContact(name))
+    throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
   if (
     phone &&
     (!/^[+0-9(). #x-]+$/i.test(phone) ||
@@ -152,10 +169,12 @@ export function replyInput(body) {
     throw new AppError(400, "Enter a valid phone number.");
   if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
     throw new AppError(400, "Enter a valid email address.");
-  if (body.contactAccepted !== true)
+  // A new acknowledgement field: older clients that showed the previous
+  // "contact details are public" notice must reload to see the current terms.
+  if (body.privacyAccepted !== true)
     throw new AppError(
       400,
-      "Please confirm that your reply and contact details will be public.",
+      "Please confirm that your name and message will be public and that contact details stay private to the task creator. Reload the page if you do not see this notice.",
     );
   return { message, name, phone, email };
 }
