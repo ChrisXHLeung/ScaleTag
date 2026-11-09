@@ -149,6 +149,119 @@ function locate() {
 function notice() {
   return `<div class="retention-note">${icons.clock}<div><strong>${t("Public for 30 days. Backed up for recovery.", "公开 30 天，并保留用于灾难恢复的备份。")}</strong><p>${t("Posts leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.", "帖子发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。请在公开链接失效前保存需要的内容。")}</p></div></div>`;
 }
+const DATA_IMAGE_PATTERN =
+  /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function photoFields(prefix, label = t("Photos (optional)", "照片（选填）")) {
+  return `<label for="${prefix}-images">${label}</label><input id="${prefix}-images" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-describedby="${prefix}-image-hint ${prefix}-image-error"><p class="field-hint" id="${prefix}-image-hint">${t("Up to 3 JPEG, PNG or WebP photos. Each original must be at most 1 MiB (1,048,576 bytes). Originals are uploaded to the server for validation. Photos over 600 KiB are compressed to at most 300 KiB; smaller photos keep as much quality as possible. Photos are public; check for faces, addresses and other private details.", "最多 3 张 JPEG、PNG 或 WebP 照片，每张原图不超过 1 MiB（1,048,576 字节）。原图上传后由服务器验证，超过 600 KiB 的照片会压至不超过 300 KiB；较小的照片尽量保留画质。照片会公开，请先检查是否露出人脸、地址或其他隐私。")}</p><p id="${prefix}-image-error" class="form-error" role="alert" hidden></p><div id="${prefix}-photo-preview" class="sale-photo-preview"></div>`;
+}
+function bindPhotoInput(root, prefix) {
+  const filesInput = root.querySelector(`#${prefix}-images`);
+  const imageError = root.querySelector(`#${prefix}-image-error`);
+  const preview = root.querySelector(`#${prefix}-photo-preview`);
+  function validateFiles() {
+    const files = [...(filesInput?.files ?? [])];
+    if (files.length > 3)
+      throw new Error(
+        t("Choose no more than 3 photos.", "最多只能选择 3 张照片。"),
+      );
+    for (const file of files) {
+      if (file.size > 1048576)
+        throw new Error(
+          t(
+            `${file.name}: the original photo exceeds 1 MiB. Choose a smaller original.`,
+            `${file.name}：原图超过 1 MiB，请选择较小的原图。`,
+          ),
+        );
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+        throw new Error(
+          t(
+            `${file.name}: choose a JPEG, PNG or WebP photo.`,
+            `${file.name}：请选择 JPEG、PNG 或 WebP 照片。`,
+          ),
+        );
+    }
+    return files;
+  }
+  let previewURLs = [];
+  function clearPreviews() {
+    previewURLs.forEach((url) => URL.revokeObjectURL(url));
+    previewURLs = [];
+    preview?.replaceChildren();
+  }
+  filesInput.onchange = () => {
+    clearPreviews();
+    imageError.hidden = true;
+    try {
+      for (const file of validateFiles()) {
+        const url = URL.createObjectURL(file);
+        previewURLs.push(url);
+        const figure = document.createElement("figure"),
+          img = document.createElement("img"),
+          caption = document.createElement("figcaption");
+        img.src = url;
+        img.alt = file.name;
+        caption.textContent = `${file.name} · ${Math.ceil(file.size / 1024)} KiB`;
+        figure.append(img, caption);
+        preview.append(figure);
+      }
+    } catch (e) {
+      imageError.textContent = e.message;
+      imageError.hidden = false;
+    }
+  };
+  window.addEventListener(
+    "pagehide",
+    () => previewURLs.forEach((url) => URL.revokeObjectURL(url)),
+    { once: true },
+  );
+  return {
+    validateFiles,
+    async readImages(progressNode) {
+      const files = validateFiles();
+      if (!files.length) return [];
+      if (progressNode)
+        progressNode.textContent = t(
+          "Preparing original photos…",
+          "正在读取原始照片…",
+        );
+      const images = await Promise.all(
+        files.map(
+          (file) =>
+            new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () =>
+                reject(
+                  new Error(
+                    t(
+                      "Could not read a photo. Select it again.",
+                      "无法读取照片，请重新选择。",
+                    ),
+                  ),
+                );
+              reader.readAsDataURL(file);
+            }),
+        ),
+      );
+      if (progressNode)
+        progressNode.textContent = t(
+          "Uploading and checking photos. Please wait…",
+          "正在上传并验证照片，请稍候…",
+        );
+      return images;
+    },
+  };
+}
+function uploadedPhotosHtml(images = [], labelEn = "Photo", labelZh = "照片") {
+  const valid = (images ?? []).filter((src) => DATA_IMAGE_PATTERN.test(src));
+  if (!valid.length) return "";
+  return `<div class="sale-photos">${valid
+    .map(
+      (src, i) =>
+        `<img src="${escape(src)}" alt="${t(`${labelEn} ${i + 1}`, `${labelZh} ${i + 1}`)}" loading="lazy">`,
+    )
+    .join("")}</div>`;
+}
 
 export {
   t,
@@ -164,4 +277,8 @@ export {
   api,
   locate,
   notice,
+  DATA_IMAGE_PATTERN,
+  photoFields,
+  bindPhotoInput,
+  uploadedPhotosHtml,
 };

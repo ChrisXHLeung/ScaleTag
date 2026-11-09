@@ -333,6 +333,16 @@ test("origin enforcement, payload limits, cache policy and data path isolation",
   assert.equal(
     (await f.request("/api/polls", input({ description: "x".repeat(30000) })))
       .status,
+    400,
+  );
+  assert.equal(
+    (await f.request("/api/polls", input({ images: ["x".repeat(4300000)] })))
+      .status,
+    413,
+  );
+  assert.equal(
+    (await f.request("/api/polls/search", { padding: "x".repeat(30000) }))
+      .status,
     413,
   );
   for (const path of [`/data/${p.id}.json`, "/.env", "/src/app.js"])

@@ -22,7 +22,7 @@ for(const Store of [PollStore,SQLiteStore]) test(`${Store.name}: sale offers sta
  assert.equal((await store.map({type:'sale'})).polls[0].type,'sale');
  if(Store===SQLiteStore){ const other=new SQLiteStore(dir,{clock:()=>now,diskReserveBytes:0}); await other.init(); try { assert.equal((await other.get(sale.id)).images[0],sale.images[0]); assert.equal((await other.list({type:'sale'})).polls[0].id,sale.id); } finally {other.close();} }
  assert.equal((await request(`/api/sales/${sale.id}/qr.png`)).status,200);
- assert.equal((await request('/api/polls',{...input,options:['A','B'],description:'x'.repeat(25000)})).status,413);
+ assert.equal((await request('/api/polls',{...input,options:['A','B'],signature:'Neighbour',description:'x'.repeat(25000)})).status,400);
  assert.equal((await request('/api/sales',{...input,images:['x'.repeat(4300000)]})).status,413);
  const social=await request(`/api/posts/${sale.id}/social`);const cookie=social.headers.get('set-cookie').split(';')[0];
  const offer={name:'Buyer',message:'Interested',amount:'CAD 40',email:'buyer@example.com',phone:'+1 416 555 1234',privacyAccepted:true,nonBindingAccepted:true};

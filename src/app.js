@@ -63,7 +63,7 @@ export function createApp(
     next();
   });
   // Only image publication accepts a larger body; every other route retains 24 KiB.
-  app.post("/api/sales", express.json({ limit: 4300000, strict: true }));
+  app.post(["/api/polls", "/api/tasks", "/api/sales"], express.json({ limit: 4300000, strict: true }));
   app.use(express.json({ limit: "24kb", strict: true }));
   let windowStart = store.clock();
   let creations = 0;
@@ -97,14 +97,25 @@ export function createApp(
     }
     creations++;
   }
+  async function publicationImages(images) {
+    const result = [];
+    for (const image of images) {
+      // HTTPS URLs were validated by baseInput; retain old-client support
+      // without fetching them server-side. Uploaded bytes use the sale policy.
+      result.push(image.startsWith("data:") ? (await saleImages([image]))[0] : image);
+    }
+    return result;
+  }
   app.post("/api/polls", async (req, res) => {
     const input = pollInput(req.body);
     await takeCreation(res);
+    input.images = await publicationImages(input.images);
     res.status(201).json(await store.create(input));
   });
   app.post("/api/tasks", async (req, res) => {
     const input = taskInput(req.body);
     await takeCreation(res);
+    input.images = await publicationImages(input.images);
     res.status(201).json(await store.create(input));
   });
   app.post("/api/sales", async (req, res) => {

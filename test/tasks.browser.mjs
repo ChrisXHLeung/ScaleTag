@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+import sharp from "sharp";
+import { randomBytes } from "node:crypto";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -392,5 +394,146 @@ test("legacy tasks without management keys show explanation and prevent replies"
   );
   await f.page.locator("#replies-closed", { hasText: "no private management link" }).waitFor();
   assert.equal(await f.page.locator("#reply-form").isHidden(), true);
+  assert.deepEqual(f.errors, []);
+});
+
+test("poll and task real photo uploads, >600 KiB compression, legacy external poll images, bilingual UI and 30-day expiry", async (t) => {
+  const f = await fixture(t);
+  const largePng = await sharp(randomBytes(500 * 500 * 3), {
+    raw: { width: 500, height: 500, channels: 3 },
+  })
+    .withMetadata({ exif: { IFD0: { Artist: "Private creator" } } })
+    .png()
+    .toBuffer();
+  assert.ok(largePng.length > 614400 && largePng.length <= 1048576);
+  const smallPng = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: "#234567" },
+  })
+    .png()
+    .toBuffer();
+
+  // 1. Poll creation: photo limits (EN + ZH), real upload + compression, display on /vote/:id
+  await f.page.goto(f.origin + "/create");
+  assert.equal(await f.page.locator("#poll-images").getAttribute("type"), "file");
+  await f.page.locator("#poll-images").setInputFiles({
+    name: "too-big.png",
+    mimeType: "image/png",
+    buffer: Buffer.alloc(1048577),
+  });
+  await f.page.locator("#poll-image-error", { hasText: "1 MiB" }).waitFor();
+  await f.page.locator("#poll-images").setInputFiles([
+    { name: "1.png", mimeType: "image/png", buffer: smallPng },
+    { name: "2.png", mimeType: "image/png", buffer: smallPng },
+    { name: "3.png", mimeType: "image/png", buffer: smallPng },
+    { name: "4.png", mimeType: "image/png", buffer: smallPng },
+  ]);
+  await f.page.locator("#poll-image-error", { hasText: "no more than 3" }).waitFor();
+  await f.page.locator("#poll-images").setInputFiles([]);
+  await f.page.locator("#language-select").selectOption("zh");
+  await f.page.getByRole("heading", { name: "创建投票" }).waitFor();
+  await f.page.locator("#poll-images").setInputFiles({
+    name: "too-big.png",
+    mimeType: "image/png",
+    buffer: Buffer.alloc(1048577),
+  });
+  await f.page.locator("#poll-image-error", { hasText: "超过 1 MiB" }).waitFor();
+  await f.page.locator("#poll-images").setInputFiles([]);
+  await f.page.locator("#language-select").selectOption("en");
+  await f.page.getByRole("heading", { name: "Your new poll" }).waitFor();
+
+  await f.page.getByLabel("The question").fill("Which park bench design?");
+  await f.page.getByRole("textbox", { name: "Option 1", exact: true }).fill("Cedar");
+  await f.page.getByRole("textbox", { name: "Option 2", exact: true }).fill("Steel");
+  await f.page.getByLabel("Your signature").fill("Planner");
+  await f.page.locator("#poll-images").setInputFiles([
+    { name: "bench-large.png", mimeType: "image/png", buffer: largePng },
+    { name: "bench-small.png", mimeType: "image/png", buffer: smallPng },
+  ]);
+  await f.page.locator("#poll-photo-preview img").nth(1).waitFor();
+  await f.page.locator("#map-consent").check();
+  await f.page.locator("#retention").check();
+  await f.page.getByRole("button", { name: "Publish my poll" }).click();
+  await f.page.waitForURL(/\/vote\/[a-f0-9]{24}\?created=1$/);
+  const pollId = new URL(f.page.url()).pathname.split("/")[2];
+  assert.equal(await f.page.locator(".sale-photos img").count(), 2);
+  assert.equal(await f.page.locator("#load-images").count(), 0);
+  const storedPoll = await f.store.get(pollId);
+  assert.equal(storedPoll.images.length, 2);
+  const compressedPollBytes = Buffer.from(storedPoll.images[0].split(",")[1], "base64");
+  assert.ok(compressedPollBytes.length <= 307200);
+  assert.equal((await sharp(compressedPollBytes).metadata()).exif, undefined);
+
+  // 2. Task creation: photo limits, real upload + compression, display on manage and public pages
+  await f.page.goto(f.origin + "/create/task");
+  assert.equal(await f.page.locator("#task-images").getAttribute("type"), "file");
+  await f.page.locator("#task-images").setInputFiles({
+    name: "too-big.png",
+    mimeType: "image/png",
+    buffer: Buffer.alloc(1048577),
+  });
+  await f.page.locator("#task-image-error", { hasText: "1 MiB" }).waitFor();
+  await f.page.getByLabel("Title", { exact: true }).fill("Repair garden gate");
+  await f.page.getByLabel("Description", { exact: true }).fill("Hinge is loose; see photo.");
+  await f.page.getByLabel("Reward", { exact: true }).fill("CAD 40");
+  await f.page.locator("#task-images").setInputFiles({
+    name: "gate.png",
+    mimeType: "image/png",
+    buffer: largePng,
+  });
+  await f.page.locator("#task-photo-preview img").waitFor();
+  await f.page.locator("#task-map-consent").check();
+  await f.page.locator("#task-retention").check();
+  await f.page.getByRole("button", { name: "Publish my task" }).click();
+  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1#key=[a-f0-9]{64}$/);
+  const taskId = new URL(f.page.url()).pathname.split("/")[2];
+  assert.equal(await f.page.locator(".sale-photos img").count(), 1);
+  const storedTask = await f.store.get(taskId);
+  const compressedTaskBytes = Buffer.from(storedTask.images[0].split(",")[1], "base64");
+  assert.ok(compressedTaskBytes.length <= 307200);
+  assert.equal((await sharp(compressedTaskBytes).metadata()).exif, undefined);
+  await f.page.goto(f.origin + `/task/${taskId}`);
+  assert.equal(await f.page.locator(".sale-photos img").count(), 1);
+
+  // 3. List endpoints never return large base64 images
+  const listJson = await f.page.evaluate(async () => (await fetch("/api/posts")).json());
+  assert.ok(!JSON.stringify(listJson).includes("data:image/"));
+
+  // 4. Historical poll with external HTTPS image URL retains on-demand loading & privacy notice (EN + ZH)
+  const legacyPoll = await f.store.create({
+    title: "Historic external image poll",
+    description: "Legacy external link",
+    signature: "Archivist",
+    options: ["Keep", "Replace"],
+    images: ["https://example.test/legacy-photo.png"],
+    location: { latitude: 43.65, longitude: -79.38 },
+    mapVisible: true,
+  });
+  let externalRequested = 0;
+  await f.context.route("https://example.test/legacy-photo.png", (route) => {
+    externalRequested++;
+    return route.fulfill({ body: smallPng, contentType: "image/png" });
+  });
+  await f.page.goto(f.origin + `/vote/${legacyPoll.id}`);
+  await f.page.locator("#load-images", { hasText: "Show 1 external image" }).waitFor();
+  await f.page.getByText("Images load from third-party hosts, which may receive your IP address.").waitFor();
+  assert.equal(externalRequested, 0);
+  assert.equal(await f.page.locator("#poll-images img").count(), 0);
+  await f.page.locator("#language-select").selectOption("zh");
+  await f.page.locator("#load-images", { hasText: "显示 1 张外部图片" }).waitFor();
+  await f.page.getByText("图片从第三方服务器加载，该服务可能接收你的 IP 地址。").waitFor();
+  assert.equal(externalRequested, 0);
+  await f.page.locator("#load-images").click();
+  await f.page.locator("#poll-images img").waitFor();
+  assert.equal(externalRequested, 1);
+  await f.page.locator("#language-select").selectOption("en");
+  await f.page.locator("#load-images", { hasText: "Show 1 external image" }).waitFor();
+
+  // 5. 30-day expiry removes poll, task and all photos
+  f.advance(30 * DAY);
+  for (const path of [`/vote/${pollId}`, `/task/${taskId}`, `/vote/${legacyPoll.id}`]) {
+    const res = await f.page.goto(f.origin + path);
+    assert.equal(res.status(), 404);
+    assert.equal(await f.page.locator(".sale-photos img").count(), 0);
+  }
   assert.deepEqual(f.errors, []);
 });

@@ -486,10 +486,10 @@
 .sale-photo-preview figure { margin: 0; min-width: 0; }
 .sale-photo-preview img { height: 140px; object-fit: cover; }
 .sale-photo-preview figcaption { font-size: .75rem; margin-top: 6px; overflow-wrap: anywhere; }
-#sale-images { width: 100%; padding: 12px; white-space: normal; }
+#sale-images, #task-images, input#poll-images { width: 100%; max-width: 100%; padding: 12px; white-space: normal; }
 .sale-offer-amount, .private-offer > strong { display: block; margin-top: 12px; overflow-wrap: anywhere; }
 #sale-progress { font-size: .9rem; color: var(--muted); }
 .home-actions { flex-wrap: wrap; }
 @media (max-width: 420px) { .post-kind-switch { display: flex; flex-wrap: wrap; } .post-kind-switch a { flex: 1; text-align: center; } }
 
-@media (max-width: 600px) { #sale-form .location-box { flex-wrap: wrap; gap: 12px; } #sale-form .location-box > div { flex: 1 1 180px; } #sale-locate { width: 100%; } }
+@media (max-width: 600px) { .location-box { flex-wrap: wrap; gap: 12px; } .location-box > div { flex: 1 1 180px; } #sale-locate, #task-locate, #locate { width: 100%; } }

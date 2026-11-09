@@ -65,9 +65,17 @@ function baseInput(body) {
   const description = text(body.description ?? "", "Description", 4000, false);
   const signature = text(body.signature, "Signature", 60);
   if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 3) {
-    throw new AppError(400, "You can add up to 3 external images.");
+    throw new AppError(400, "Upload at most 3 images.");
   }
   const images = (body.images ?? []).map((v) => {
+    // Only creation routes accept bounded upload data. Full decoding and
+    // metadata removal happen asynchronously before any document is stored.
+    if (typeof v === "string" && v.startsWith("data:")) {
+      if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(v) ||
+          v.length > Math.ceil(1048576 / 3) * 4 + 32)
+        throw new AppError(400, "Each image must be a JPEG, PNG or WebP no larger than 1 MiB.");
+      return v;
+    }
     const raw = text(v, "Image URL", 2048);
     let url;
     try {
