@@ -19,10 +19,10 @@ test('browser language, manual preference, storage fallback and offline switchin
   const browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
   t.after(async () => { await browser.close(); await new Promise(r => server.close(r)); await rm(directory, {recursive:true, force:true}); });
   for (const [locale, language, home, task, privacy] of [
-    ['zh-CN', 'zh', '身边的问题', '发布任务', '隐私'],
+    ['zh-CN', 'zh', '关心身边事', '发布任务', '隐私'],
     ['en-US', 'en', 'Local questions', 'Your new task', 'Privacy'],
     ['fr-FR', 'en', 'Local questions', 'Your new task', 'Privacy'],
-    ['zh-TW', 'zh', '身边的问题', '发布任务', '隐私'],
+    ['zh-TW', 'zh', '关心身边事', '发布任务', '隐私'],
   ]) {
     const context = await browser.newContext({locale}); const page = await context.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -101,7 +101,7 @@ test('browser language, manual preference, storage fallback and offline switchin
   const errors = []; fallback.on('pageerror', error => errors.push(error.message));
   await fallback.goto(origin);
   await fallback.locator('#language-select').selectOption('zh');
-  await fallback.getByRole('heading', {name: /身边的问题/}).waitFor();
+  await fallback.getByRole('heading', {name: /关心身边事/}).waitFor();
   assert.equal(new URL(fallback.url()).searchParams.get('lang'), 'zh');
   await fallback.locator('#language-storage-note').waitFor();
   await fallback.getByRole('link', {name: '创建任务', exact: true}).first().click();
@@ -122,7 +122,7 @@ test('browser language, manual preference, storage fallback and offline switchin
   });
   await readOnlyPage.reload();
   await readOnlyPage.locator('#language-select').selectOption('zh');
-  await readOnlyPage.getByRole('heading', {name: /身边的问题/}).waitFor();
+  await readOnlyPage.getByRole('heading', {name: /关心身边事/}).waitFor();
   assert.equal(await readOnlyPage.locator('#language-select').inputValue(), 'zh');
   await readOnly.close();
 

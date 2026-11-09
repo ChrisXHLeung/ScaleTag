@@ -23,7 +23,7 @@ export async function createPollMap() {
     ready = false;
   const fail = () => {
     message.textContent =
-      t("The map could not load. Try Map again or use List to browse posts.", "地图无法加载。请重试或使用列表浏览帖子。");
+      t("The map could not load. Try Map again or use List to browse posts.", "地图加载失败，请重试或切换到列表查看。");
   };
   try {
     map = new gl.Map({
@@ -83,7 +83,7 @@ export async function createPollMap() {
       const detail = document.createElement("span");
       detail.textContent =
         p.type === "task"
-          ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 报酬：${p.reward} · 查看任务 ↗`)
+          ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
       link.append(title, detail);
       content.append(link);
@@ -100,7 +100,7 @@ export async function createPollMap() {
     ready = true;
     clearTimeout(timeout);
     message.textContent =
-      t("Select a dot to open a post. Select a numbered group to explore.", "选择圆点打开帖子，选择数字组可展开查看。");
+      t("Select a dot to open a post. Select a numbered group to explore.", "点击圆点打开帖子，点击数字可展开查看。");
     map.addSource("polls", {
       type: "geojson",
       data: geojson(),

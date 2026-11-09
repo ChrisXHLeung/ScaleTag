@@ -7,8 +7,8 @@ if (language === "zh") {
     ".site-footer > div:first-child p": "一个问题，一个地方，七天时间。",
     "#install-app": "安装应用",
     '.footer-links a[href="/privacy"]': "隐私与数据保留",
-    ".footer-links span": "为小小的交流而创建。",
-    "#connection-status": "当前离线。发布、投票、点赞和回复需要网络连接，显示的结果可能不是最新的。",
+    ".footer-links span": "让身边的交流更简单。",
+    "#connection-status": "当前处于离线状态。发布、投票、点赞和回复需要联网，显示的结果可能不是最新的。",
     "#install-title": "安装 ScaleTag",
     ".install-dialog > p:not([id])": "将 ScaleTag 放在主屏幕。发布、投票和查看实时结果仍需网络连接。",
     "#install-native": "安装 ScaleTag",
@@ -20,7 +20,7 @@ if (language === "zh") {
     "#app-update p": "更新前请完成或复制草稿。",
     "#apply-update": "更新并重新加载",
     "#dismiss-update": "稍后",
-    ".loading-state": "正在加载 ScaleTag…",
+    ".loading-state": "正在加载…",
   };
   for (const [selector, text] of Object.entries(labels)) {
     const node = document.querySelector(selector);
@@ -147,7 +147,7 @@ function locate() {
   });
 }
 function notice() {
-  return `<div class="retention-note">${icons.clock}<div><strong>${t("Public for 30 days. Backed up for recovery.", "公开 30 天，并保留灾难恢复备份。")}</strong><p>${t("Posts leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.", "帖子发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。请在公开链接失效前保存需要的内容。")}</p></div></div>`;
+  return `<div class="retention-note">${icons.clock}<div><strong>${t("Public for 30 days. Backed up for recovery.", "公开 30 天，并保留用于灾难恢复的备份。")}</strong><p>${t("Posts leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.", "帖子发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。请在公开链接失效前保存需要的内容。")}</p></div></div>`;
 }
 
 export {

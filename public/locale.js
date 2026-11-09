@@ -132,8 +132,8 @@ const serverErrors = {
   'Enter a valid email address.': '请输入有效的电子邮箱地址。',
   'Your name and message are public. Remove the phone number or email address from them. If this task offers private contact fields, use those instead.': '你的姓名和留言是公开的。请删除其中的电话号码或邮箱；如果任务提供私人联系信息字段，请填写在那里。',
   'This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies.': '此旧任务没有私人管理链接，发布者无法查看联系方式，因此不再接受回复。',
-  'Provide a phone number or email address, or both. Only the task creator can see them.': '请提供电话号码或电子邮箱，也可同时提供。联系方式仅供任务创建者查看。',
-  'Please confirm that your name and message will be public and that contact details stay private to the task creator. Reload the page if you do not see this notice.': '请确认你的姓名和留言将公开，而联系方式仅供任务创建者查看。如未看到此提示，请重新加载页面。',
+  'Provide a phone number or email address, or both. Only the task creator can see them.': '请提供电话号码或电子邮箱，也可同时提供。持有私人管理链接的人和 ScaleTag 管理员可以查看，私人备份中也会保留。',
+  'Please confirm that your name and message will be public and that contact details stay private to the task creator. Reload the page if you do not see this notice.': '请确认你的姓名和留言将公开，而持有私人管理链接的人和 ScaleTag 管理员可以查看，私人备份中也会保留。如未看到此提示，请重新加载页面。',
   'This browser has already voted in this poll.': '此浏览器已参与此投票。',
   'Voting has ended. You can still view results and share the QR code.': '投票已结束，你仍可查看结果并分享二维码。',
   'This task has reached its 200-reply limit.': '此任务已达到 200 条回复的上限。',
@@ -147,7 +147,7 @@ export function translateError(message) {
   if (serverErrors[message]) return serverErrors[message];
   const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email) (is required and )?must be at most (\d+) characters\.$/.exec(message);
   if (match) {
-    const names = {Title:'标题', Description:'描述', Signature:'署名', 'Image URL':'图片链接', Option:'选项', Reward:'报酬', Reply:'回复', Name:'姓名', Phone:'电话', Email:'邮箱'};
+    const names = {Title:'标题', Description:'描述', Signature:'署名', 'Image URL':'图片链接', Option:'选项', Reward:'酬谢', Reply:'回复', Name:'姓名', Phone:'电话', Email:'邮箱'};
     return `${names[match[1]]}${match[2] ? '为必填项，且' : ''}最多 ${match[3]} 个字符。`;
   }
   const finalReply = /^This task is (completed|closed) and no longer accepts replies\.$/.exec(message);
