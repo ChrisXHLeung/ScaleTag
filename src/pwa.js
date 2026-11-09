@@ -9,6 +9,7 @@ export const STATIC_ASSETS = [
   "/styles.css",
   "/app.js",
   "/common.js",
+  "/locale.js",
   "/tasks.js",
   "/social.js",
   "/map.js",

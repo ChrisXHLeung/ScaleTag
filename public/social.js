@@ -1,11 +1,11 @@
-import { api, escape, date, count, toast } from "/common.js";
+import { api, escape, date, count, toast, t } from "/common.js";
 
 export function mountSocial(id, allowReplies, onUnavailable, onState) {
   const host = document.querySelector("#social");
   // Name and message are public. Phone/email are private to whoever holds the
   // task's management link; legacy tasks without a link collect no contacts and accept no replies.
-  const replyForm = `<form id="reply-form"><h3>Leave a reply</h3><div class="reply-privacy-note" role="note"><strong>Your name and message are public.</strong> Anyone can read them. Never put a phone number, email address or other contact details in them.</div><label for="reply-name">Public name <span class="optional">optional, unverified, shown to everyone</span></label><input id="reply-name" maxlength="60" placeholder="Anonymous" autocomplete="off"><label for="reply-message">Public message <span class="optional">shown to everyone</span></label><textarea id="reply-message" maxlength="2000" rows="4" required aria-describedby="reply-message-hint"></textarea><p id="reply-message-hint" class="field-hint">Do not include contact details here. Messages that look like they contain a phone number or email address are rejected.</p><fieldset id="private-contact-fields" class="contact-fields"><legend>Private contact for the task creator</legend><p class="field-hint">Add a phone number or email address, or both. These are <strong>not shown publicly</strong>. They are visible only to anyone holding this task’s private management link (normally the person who posted it), and to ScaleTag administrators and private backups.</p><label for="reply-phone">Phone <span class="optional">private · optional if you provide email</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">Email <span class="optional">private · optional if you provide phone</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span id="consent-private">I understand that my name and message are public until this task leaves the website, 30 days after it was published. My phone/email is not public: it is visible to anyone holding this task’s private management link, and to ScaleTag administrators and private backups kept for up to 90 days. I have not put contact details in my name or message.</span></label><p class="field-hint">ScaleTag does not handle payments or transactions. Names, messages and contact details are unverified.</p><button id="send-reply" class="button" type="submit" disabled>Post reply</button><p id="reply-error" class="form-error" role="alert" hidden></p></form>`;
-  host.innerHTML = `<section class="social-card"><h2>Show your support.</h2><button id="like-post" class="button secondary" type="button" aria-pressed="false" disabled><span id="like-label">♡ Like</span> <span id="like-count">…</span></button><p class="field-hint">One like per browser, as far as an anonymous cookie allows. No account needed.</p><p id="social-error" class="form-error" role="alert" hidden></p>${allowReplies ? `<div class="replies-heading"><h2>Public replies</h2><span id="reply-count"></span></div><p class="field-hint">Names and messages are public. Contact details are never shown here.</p><div id="reply-list" aria-live="polite"></div><p id="replies-closed" class="replies-closed" role="status" hidden></p>${replyForm}` : ""}</section>`;
+  const replyForm = `<form id="reply-form"><h3>${t("Leave a reply", "留下回复")}</h3><div class="reply-privacy-note" role="note"><strong>${t("Your name and message are public.", "你的姓名和消息会公开。")}</strong> ${t("Anyone can read them. Never put a phone number, email address or other contact details in them.", "任何人都可以阅读。请勿在其中填写电话号码、电子邮箱或其他联系方式。")}</div><label for="reply-name">${t("Public name ", "公开姓名 ")}<span class="optional">${t("optional, unverified, shown to everyone", "选填，未经验证，所有人可见")}</span></label><input id="reply-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}" autocomplete="off"><label for="reply-message">${t("Public message ", "公开消息 ")}<span class="optional">${t("shown to everyone", "所有人可见")}</span></label><textarea id="reply-message" maxlength="2000" rows="4" required aria-describedby="reply-message-hint"></textarea><p id="reply-message-hint" class="field-hint">${t("Do not include contact details here. Messages that look like they contain a phone number or email address are rejected.", "请勿在此填写联系方式。看似包含电话号码或电子邮箱的消息会被拒绝。")}</p><fieldset id="private-contact-fields" class="contact-fields"><legend>${t("Private contact for the task creator", "提供给任务发布者的私人联系方式")}</legend><p class="field-hint">${t("Add a phone number or email address, or both. These are ", "请填写电话号码或电子邮箱，或两者都填。这些信息")}<strong>${t("not shown publicly", "不会公开显示")}</strong>. ${t("They are visible only to anyone holding this task’s private management link (normally the person who posted it), and to ScaleTag administrators and private backups.", "仅持有任务私人管理链接的人（通常为任务发布者）、ScaleTag 管理员及私人备份可以看到。")}</p><label for="reply-phone">${t("Phone ", "电话 ")}<span class="optional">${t("private · optional if you provide email", "私人信息 · 已提供邮箱时可不填")}</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">${t("Email ", "电子邮箱 ")}<span class="optional">${t("private · optional if you provide phone", "私人信息 · 已提供电话时可不填")}</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span id="consent-private">${t("I understand that my name and message are public until this task leaves the website, 30 days after it was published. My phone/email is not public: it is visible to anyone holding this task’s private management link, and to ScaleTag administrators and private backups kept for up to 90 days. I have not put contact details in my name or message.", "我了解我的姓名和消息会公开，直到任务在发布 30 天后从网站移除。我的电话和邮箱不会公开：持有该任务私人管理链接的人、ScaleTag 管理员以及最多保留 90 天的私人备份可以看到。我没有在姓名或消息中填写联系方式。")}</span></label><p class="field-hint">${t("ScaleTag does not handle payments or transactions. Names, messages and contact details are unverified.", "ScaleTag 不处理付款或交易。姓名、消息和联系方式未经验证。")}</p><button id="send-reply" class="button" type="submit" disabled>${t("Post reply", "发布回复")}</button><p id="reply-error" class="form-error" role="alert" hidden></p></form>`;
+  host.innerHTML = `<section class="social-card"><h2>${t("Show your support.", "表达支持。")}</h2><button id="like-post" class="button secondary" type="button" aria-pressed="false" disabled><span id="like-label">${t("♡ Like", "♡ 点赞")}</span> <span id="like-count">…</span></button><p class="field-hint">${t("One like per browser, as far as an anonymous cookie allows. No account needed.", "匿名 Cookie 尽力限制每个浏览器点赞一次，无需账户。")}</p><p id="social-error" class="form-error" role="alert" hidden></p>${allowReplies ? `<div class="replies-heading"><h2>${t("Public replies", "公开回复")}</h2><span id="reply-count"></span></div><p class="field-hint">${t("Names and messages are public. Contact details are never shown here.", "姓名和消息是公开的，联系方式不会显示在这里。")}</p><div id="reply-list" aria-live="polite"></div><p id="replies-closed" class="replies-closed" role="status" hidden></p>${replyForm}` : ""}</section>`;
   const like = host.querySelector("#like-post");
   let state,
     liking = false,
@@ -20,21 +20,21 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   function render() {
     host.querySelector("#like-count").textContent = count(state.totalLikes);
     host.querySelector("#like-label").textContent = state.hasLiked
-      ? "♥ Liked"
-      : "♡ Like";
+      ? t("♥ Liked", "♥ 已赞")
+      : t("♡ Like", "♡ 点赞");
     like.setAttribute("aria-pressed", String(state.hasLiked));
     like.disabled = state.hasLiked || liking || expired || !navigator.onLine;
     if (!allowReplies) return;
     host.querySelector("#reply-count").textContent =
-      `${count(state.replies.length)} ${state.replies.length === 1 ? "reply" : "replies"}`;
+      t(`${count(state.replies.length)} ${state.replies.length === 1 ? "reply" : "replies"}`, `${count(state.replies.length)} 条回复`);
     host.querySelector("#reply-list").innerHTML = state.replies.length
       ? state.replies
           .map(
             (r) =>
-              `<article class="reply-card"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)} · Unverified</span></div><p class="reply-message">${escape(r.message)}</p></article>`,
+              `<article class="reply-card"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)} · ${t("Unverified", "未经验证")}</span></div><p class="reply-message">${escape(r.message)}</p></article>`,
           )
           .join("")
-      : '<p class="field-hint">No replies yet. Start the conversation.</p>';
+      : `<p class="field-hint">${t("No replies yet. Start the conversation.", "暂无回复，来开启对话吧。")}</p>`;
     // Contacts are collected only when the task has a private management link.
     const privateContacts = state.acceptsPrivateContacts === true;
     host.querySelector("#private-contact-fields").hidden = !privateContacts;
@@ -46,9 +46,9 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     const closedNote = host.querySelector("#replies-closed");
     closedNote.hidden = !closed;
     closedNote.textContent = final
-      ? `This task is ${state.taskState === "completed" ? "completed" : "closed"}. It no longer accepts new replies.`
+      ? t(`This task is ${state.taskState === "completed" ? "completed" : "closed"}. It no longer accepts new replies.`, `此任务${state.taskState === "completed" ? "已完成" : "已关闭"}，不再接受新回复。`)
       : legacy
-        ? "This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies."
+        ? t("This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies.", "此旧任务没有私人管理链接，发布者无法获取联系方式，因此不再接受回复。")
         : "";
     host.querySelector("#reply-form").hidden = closed;
     host.querySelector("#send-reply").disabled =
@@ -84,7 +84,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       const email = value("#reply-email");
       if (!phone && !email) {
         target.textContent =
-          "Provide a phone number or email address, or both. Only the task creator can see them.";
+          t("Provide a phone number or email address, or both. Only the task creator can see them.", "请提供电话号码或电子邮箱，或两者都提供。只有任务发布者可以看到。");
         target.hidden = false;
         return;
       }
@@ -101,7 +101,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
         event.target.reset();
         render();
         toast(
-          "Your name and message are public. Your contact details are visible only to the task creator.",
+          t("Your name and message are public. Your contact details are visible only to the task creator.", "你的姓名和消息是公开的，联系方式仅对任务发布者可见。"),
         );
       } catch (e) {
         target.textContent = e.message;
@@ -126,7 +126,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
         expired = true;
         clearInterval(timer);
         host.innerHTML =
-          '<p role="status">This post and its replies are no longer available.</p>';
+          `<p role="status">${t("This post and its replies are no longer available.", "此帖子及其回复已不可用。")}</p>`;
         onUnavailable?.();
       } else error(e.message);
     } finally {

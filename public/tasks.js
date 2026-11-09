@@ -7,13 +7,14 @@ import {
   locate,
   notice,
   toast,
+  t,
 } from "/common.js";
 import { mountSocial } from "/social.js";
 
 export function createTask() {
-  document.title = "Create a task — ScaleTag";
+  document.title = t("Create a task — ScaleTag", "发布任务 — ScaleTag");
   document.querySelector('[data-nav="create"]').classList.add("active");
-  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">← Back to home</a><span class="eyebrow">MAKE SOMETHING HAPPEN</span><h1>A little help.<br>A local <em>connection.</em></h1><p>Share a task and the reward you offer. People can reply with a way to reach them.</p><div class="rules"><p>${icons.pin} Location is required to publish.</p><p>${icons.clock} Tasks stay on the website for 30 days.</p><p>${icons.shield} No accounts. Contact each other directly.</p></div></aside><form id="task-form" class="form-card"><div class="post-kind-switch" aria-label="Post type"><a href="/create">Poll</a><a href="/create/task" aria-current="page">Task</a></div><div class="form-heading"><h2>Your new task</h2><span class="pill">LOCAL TASK</span></div><label for="task-title">Title</label><input id="task-title" maxlength="140" required placeholder="What could someone help you with?"><label for="task-description">Description</label><textarea id="task-description" maxlength="4000" rows="6" required placeholder="Describe the task and what you need."></textarea><label for="task-reward">Reward</label><input id="task-reward" maxlength="160" required placeholder="e.g. CAD 30, a coffee, or a thank-you"><p class="field-hint">A description of your offer. ScaleTag does not collect, hold or transfer money.</p><label for="task-name">Your name <span class="optional">optional, unverified</span></label><input id="task-name" maxlength="60" placeholder="Anonymous"><div class="location-box"><div><strong>${icons.pin} Give your task a place</strong><p id="task-location-status" aria-live="polite">People can discover your task nearby.</p></div><button id="task-locate" class="button secondary small" type="button">Enable location</button></div><p class="field-hint">Only a rounded area is shown on the map. It can still reveal your neighbourhood.</p><label class="checkbox-row"><input id="task-map-consent" type="checkbox" required><span>I agree to show my task’s approximate area publicly on the map. This does not guarantee anonymity.</span></label>${notice()}<label class="checkbox-row"><input id="task-retention" type="checkbox" required><span>I understand that this task, its replies and contact details leave the website 30 days after publication. Private daily backups are retained for up to 90 days after creation.</span></label><p class="field-hint">Task descriptions, rewards and names are unverified and public. Respondents’ names and messages are public; their phone numbers and email addresses are shown only on your private management page, so keep that link safe.</p><button id="publish-task" class="button publish-button" type="submit">Publish my task ${icons.arrow}</button><p id="task-error" class="form-error" role="alert" hidden></p></form></section>`;
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("MAKE SOMETHING HAPPEN", "让想法成真")}</span><h1>${t("A little help.", "一点帮助，")}<br>${t("A local ", "邻里")}<em>${t("connection.", "相互连接。")}</em></h1><p>${t("Share a task and the reward you offer. People can reply with a way to reach them.", "发布任务和你提供的报酬，其他人可以回复联系方式。")}</p><div class="rules"><p>${icons.pin} ${t("Location is required to publish.", "发布时需要位置信息。")}</p><p>${icons.clock} ${t("Tasks stay on the website for 30 days.", "任务在网站上保留 30 天。")}</p><p>${icons.shield} ${t("No accounts. Contact each other directly.", "无需账户，直接联系对方。")}</p></div></aside><form id="task-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "发布类型")}"><a href="/create">${t("Poll", "投票")}</a><a href="/create/task" aria-current="page">${t("Task", "任务")}</a></div><div class="form-heading"><h2>${t("Your new task", "发布新任务")}</h2><span class="pill">${t("LOCAL TASK", "邻里任务")}</span></div><label for="task-title">${t("Title", "标题")}</label><input id="task-title" maxlength="140" required placeholder="${t("What could someone help you with?", "你需要什么帮助？")}"><label for="task-description">${t("Description", "描述")}</label><textarea id="task-description" maxlength="4000" rows="6" required placeholder="${t("Describe the task and what you need.", "描述任务及你的需求。")}"></textarea><label for="task-reward">${t("Reward", "报酬")}</label><input id="task-reward" maxlength="160" required placeholder="${t("e.g. CAD 30, a coffee, or a thank-you", "例如：30 加元、一杯咖啡或一句感谢")}"><p class="field-hint">${t("A description of your offer. ScaleTag does not collect, hold or transfer money.", "描述你提供的报酬。ScaleTag 不收取、保管或转账资金。")}</p><label for="task-name">${t("Your name ", "你的名字 ")}<span class="optional">${t("optional, unverified", "选填，未经验证")}</span></label><input id="task-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}"><div class="location-box"><div><strong>${icons.pin} ${t("Give your task a place", "为任务添加位置")}</strong><p id="task-location-status" aria-live="polite">${t("People can discover your task nearby.", "附近的人可以发现你的任务。")}</p></div><button id="task-locate" class="button secondary small" type="button">${t("Enable location", "启用位置")}</button></div><p class="field-hint">${t("Only a rounded area is shown on the map. It can still reveal your neighbourhood.", "地图只显示经过取整的区域，但仍可能透露你所在的社区。")}</p><label class="checkbox-row"><input id="task-map-consent" type="checkbox" required><span>${t("I agree to show my task’s approximate area publicly on the map. This does not guarantee anonymity.", "我同意在地图上公开显示任务的大致区域。这不保证匿名。")}</span></label>${notice()}<label class="checkbox-row"><input id="task-retention" type="checkbox" required><span>${t("I understand that this task, its replies and contact details leave the website 30 days after publication. Private daily backups are retained for up to 90 days after creation.", "我了解此任务、回复和联系方式会在发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。")}</span></label><p class="field-hint">${t("Task descriptions, rewards and names are unverified and public. Respondents’ names and messages are public; their phone numbers and email addresses are shown only on your private management page, so keep that link safe.", "任务描述、报酬和姓名未经验证且公开。回复者的姓名和消息公开；其电话号码和电子邮箱仅显示在你的私人管理页面，请妥善保管链接。")}</p><button id="publish-task" class="button publish-button" type="submit">${t("Publish my task ", "发布任务 ")}${icons.arrow}</button><p id="task-error" class="form-error" role="alert" hidden></p></form></section>`;
   let position,
     locatedAt = 0,
     publishing = false;
@@ -22,8 +23,8 @@ export function createTask() {
     position = await locate();
     locatedAt = Date.now();
     main.querySelector("#task-location-status").textContent =
-      "Location ready. Only your approximate area will be public.";
-    locateButton.textContent = "Refresh location";
+      t("Location ready. Only your approximate area will be public.", "位置已就绪，只会公开你的大致区域。");
+    locateButton.textContent = t("Refresh location", "刷新位置");
   }
   locateButton.onclick = async () => {
     locateButton.disabled = true;
@@ -70,13 +71,13 @@ export function createTask() {
 }
 
 export const STATE_LABELS = {
-  open: "Open",
-  in_progress: "In progress",
-  completed: "Completed",
-  closed: "Closed",
+  open: t("Open", "开放中"),
+  in_progress: t("In progress", "进行中"),
+  completed: t("Completed", "已完成"),
+  closed: t("Closed", "已关闭"),
 };
 const FINAL_STATES = ["completed", "closed"];
-export const stateLabel = (state) => STATE_LABELS[state] ?? "Open";
+export const stateLabel = (state) => STATE_LABELS[state] ?? STATE_LABELS.open;
 export const isFinalState = (state) => FINAL_STATES.includes(state);
 
 function manageKeyFromHash() {
@@ -88,11 +89,11 @@ function manageKeyFromHash() {
 // authenticated POST /api/tasks/<id>/manage response. Everything is escaped.
 export function privateRepliesHtml(replies = []) {
   if (!replies.length)
-    return '<p class="field-hint">No replies yet. Contact details from new replies will appear here.</p>';
+    return `<p class="field-hint">${t("No replies yet. Contact details from new replies will appear here.", "暂无回复。新回复的联系方式将显示在这里。")}</p>`;
   return replies
     .map(
       (r) =>
-        `<article class="reply-card private-reply"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)} · Unverified</span></div><p class="reply-message">${escape(r.message)}</p><div class="reply-contacts">${r.phone ? `<a href="tel:${escape(r.phone.replace(/[^+0-9]/g, ""))}">Phone: ${escape(r.phone)}</a>` : ""}${r.email ? `<a href="mailto:${escape(encodeURIComponent(r.email))}">Email: ${escape(r.email)}</a>` : ""}${!r.phone && !r.email ? '<span class="field-hint">No private contact details were provided.</span>' : ""}</div></article>`,
+        `<article class="reply-card private-reply"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)} · ${t("Unverified", "未经验证")}</span></div><p class="reply-message">${escape(r.message)}</p><div class="reply-contacts">${r.phone ? `<a href="tel:${escape(r.phone.replace(/[^+0-9]/g, ""))}">${t("Phone", "电话")}: ${escape(r.phone)}</a>` : ""}${r.email ? `<a href="mailto:${escape(encodeURIComponent(r.email))}">${t("Email", "电子邮箱")}: ${escape(r.email)}</a>` : ""}${!r.phone && !r.email ? `<span class="field-hint">${t("No private contact details were provided.", "未提供私人联系方式。")}</span>` : ""}</div></article>`,
     )
     .join("");
 }
@@ -103,15 +104,15 @@ export async function taskPage(id, { manage = false } = {}) {
     key = manageKeyFromHash();
     if (!key)
       throw new Error(
-        "This management link is incomplete. Open the full private link saved when the task was published.",
+        t("This management link is incomplete. Open the full private link saved when the task was published.", "管理链接不完整。请打开发布任务时保存的完整私人链接。"),
       );
     task = await api(`/api/tasks/${id}/manage`, { key });
   } else task = await api(`/api/tasks/${id}`);
-  document.title = `${manage ? "Manage: " : ""}${task.title} — ScaleTag`;
+  document.title = `${manage ? t("Manage: ", "管理：") : ""}${task.title} — ScaleTag`;
   const created = new URLSearchParams(location.search).has("created");
   const privateLink = `${location.origin}/task/${id}/manage#key=${key}`;
   const manageCard = manage
-    ? `<section class="manage-card" aria-labelledby="manage-title"><span class="eyebrow">PRIVATE · ONLY FOR YOU</span><h2 id="manage-title">Manage this task</h2><p>Anyone with this private link can change the task’s status <strong>and see respondents’ phone numbers and email addresses</strong>. Do not share it or include it in screenshots. It cannot be recovered or reissued if lost. It may remain in this browser’s history; use the public link when sharing.</p><label for="manage-link">Private management link</label><input id="manage-link" readonly value="${escape(privateLink)}"><button class="button secondary small" type="button" id="copy-manage-link">Copy private link</button><fieldset class="state-buttons"><legend>Task status</legend><p class="field-hint">Completed and Closed are final: they stop new replies and cannot be undone. The task still leaves the website on ${escape(date(task.deleteAt))}.</p><div>${Object.entries(
+    ? `<section class="manage-card" aria-labelledby="manage-title"><span class="eyebrow">${t("PRIVATE · ONLY FOR YOU", "私人内容 · 仅供你使用")}</span><h2 id="manage-title">${t("Manage this task", "管理此任务")}</h2><p>${t("Anyone with this private link can change the task’s status ", "任何持有此私人链接的人都能更改任务状态，")}<strong>${t("and see respondents’ phone numbers and email addresses", "并查看回复者的电话号码和电子邮箱")}</strong>. ${t("Do not share it or include it in screenshots. It cannot be recovered or reissued if lost. It may remain in this browser’s history; use the public link when sharing.", "请勿分享该链接或将其包含在截图中。链接丢失后无法恢复或重新签发，且可能保留在浏览器历史记录中；分享时请使用公开链接。")}</p><label for="manage-link">${t("Private management link", "私人管理链接")}</label><input id="manage-link" readonly value="${escape(privateLink)}"><button class="button secondary small" type="button" id="copy-manage-link">${t("Copy private link", "复制私人链接")}</button><fieldset class="state-buttons"><legend>${t("Task status", "任务状态")}</legend><p class="field-hint">${t("Completed and Closed are final: they stop new replies and cannot be undone. The task still leaves the website on ", "“已完成”和“已关闭”为最终状态：停止接收新回复且无法撤销。任务仍将在以下日期从网站移除：")}${escape(date(task.deleteAt))}.</p><div>${Object.entries(
         STATE_LABELS,
       )
         .map(
@@ -120,9 +121,9 @@ export async function taskPage(id, { manage = false } = {}) {
         )
         .join(
           "",
-        )}</div></fieldset><p id="manage-error" class="form-error" role="alert" hidden></p><section class="private-replies" aria-labelledby="private-replies-title"><div class="replies-heading"><h3 id="private-replies-title">Private reply contacts</h3><span id="private-reply-count"></span></div><p class="field-hint">Only visible with this private link. Respondents shared these details so you can contact them about this task; do not republish them. They leave the website with the task on ${escape(date(task.deleteAt))}.</p><div id="private-reply-list" aria-live="polite"></div><button class="button secondary small" type="button" id="refresh-private-replies">Refresh contacts</button><p id="private-replies-error" class="form-error" role="alert" hidden></p></section></section>`
+        )}</div></fieldset><p id="manage-error" class="form-error" role="alert" hidden></p><section class="private-replies" aria-labelledby="private-replies-title"><div class="replies-heading"><h3 id="private-replies-title">${t("Private reply contacts", "回复者的私人联系方式")}</h3><span id="private-reply-count"></span></div><p class="field-hint">${t("Only visible with this private link. Respondents shared these details so you can contact them about this task; do not republish them. They leave the website with the task on ", "仅持此私人链接可见。回复者提供这些信息供你就任务联系他们；请勿再次公开。这些信息将随任务于以下日期从网站移除：")}${escape(date(task.deleteAt))}.</p><div id="private-reply-list" aria-live="polite"></div><button class="button secondary small" type="button" id="refresh-private-replies">${t("Refresh contacts", "刷新联系方式")}</button><p id="private-replies-error" class="form-error" role="alert" hidden></p></section></section>`
     : "";
-  main.innerHTML = `<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">← Back to PostList</a>${created ? `<div class="success-banner" role="status">Your task is live.${manage ? " Save the private management link below before leaving this page." : " Share its QR code to find a little help."}</div>` : ""}<div class="poll-meta"><span class="status-badge">Task</span><span id="task-state" class="status-badge"></span><span>Available until ${date(task.deleteAt)}</span></div><h1 class="poll-title">${escape(task.title)}</h1><p class="byline">Posted by <strong>${escape(task.signature)}</strong><span> · ${date(task.createdAt)}</span><span class="unverified">Unverified name</span></p><p class="poll-description">${escape(task.description)}</p><section class="task-reward"><span class="eyebrow">REWARD OFFERED</span><h2>${escape(task.reward)}</h2><p>Offered by the poster. Arrange details directly. ScaleTag does not handle payments or transactions.</p></section>${manageCard}<section id="social" aria-label="Task likes and replies"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">PASS IT ON</span><h2>A small code.<br>A local connection.</h2><div class="qr-frame"><img src="/api/tasks/${id}/qr.png" width="256" height="256" alt="QR code linking to this task"></div><p>Scan to read. Save to share.</p><a class="button" href="/api/tasks/${id}/qr.png?download=1" download="ScaleTag-task-${id}.png">${icons.download} Save QR image</a><button class="button secondary" id="copy-task-link">Copy ${manage ? "public " : ""}task link</button><div id="public-link-fallback" hidden><label for="public-task-link">Public task link</label><input id="public-task-link" readonly></div></section><section class="timeline-card"><div>${icons.clock}<span>Removed with all replies<strong>${date(task.deleteAt)}</strong></span></div><p>Dates are shown in your local time.</p></section>${notice()}</aside></section>`;
+  main.innerHTML = `<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">${t("← Back to PostList", "← 返回帖子列表")}</a>${created ? `<div class="success-banner" role="status">${t("Your task is live.", "任务已发布。")} ${manage ? t(" Save the private management link below before leaving this page.", " 离开页面前请保存下方的私人管理链接。") : t(" Share its QR code to find a little help.", " 分享二维码，寻找帮助。")}</div>` : ""}<div class="poll-meta"><span class="status-badge">${t("Task", "任务")}</span><span id="task-state" class="status-badge"></span><span>${t("Available until", "有效期至")} ${date(task.deleteAt)}</span></div><h1 class="poll-title">${escape(task.title)}</h1><p class="byline">${t("Posted by", "发布者")} <strong>${escape(task.signature)}</strong><span> · ${date(task.createdAt)}</span><span class="unverified">${t("Unverified name", "姓名未经验证")}</span></p><p class="poll-description">${escape(task.description)}</p><section class="task-reward"><span class="eyebrow">${t("REWARD OFFERED", "提供的报酬")}</span><h2>${escape(task.reward)}</h2><p>${t("Offered by the poster. Arrange details directly. ScaleTag does not handle payments or transactions.", "由发布者提供。请直接商定细节；ScaleTag 不处理付款或交易。")}</p></section>${manageCard}<section id="social" aria-label="${t("Task likes and replies", "任务点赞和回复")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享给邻里")}</span><h2>${t("A small code.", "一个小小的二维码，")}<br>${t("A local connection.", "连接身边的人。")}</h2><div class="qr-frame"><img src="/api/tasks/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this task", "指向此任务的二维码")}"></div><p>${t("Scan to read. Save to share.", "扫码查看，保存后分享。")}</p><a class="button" href="/api/tasks/${id}/qr.png?download=1" download="ScaleTag-task-${id}.png">${icons.download}${t(" Save QR image", " 保存二维码")}</a><button class="button secondary" id="copy-task-link">${manage ? t("Copy public task link", "复制公开任务链接") : t("Copy task link", "复制任务链接")}</button><div id="public-link-fallback" hidden><label for="public-task-link">${t("Public task link", "公开任务链接")}</label><input id="public-task-link" readonly></div></section><section class="timeline-card"><div>${icons.clock}<span>${t("Removed with all replies", "与所有回复一起移除")}<strong>${date(task.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   function renderState(state) {
     const badge = main.querySelector("#task-state");
     badge.textContent = stateLabel(state);
@@ -141,7 +142,7 @@ export async function taskPage(id, { manage = false } = {}) {
     const publicLink = `${location.origin}/task/${id}`;
     try {
       await navigator.clipboard.writeText(publicLink);
-      toast("Task link copied.");
+      toast(t("Task link copied.", "任务链接已复制。"));
     } catch {
       // Never point to the address bar: on the management page it contains
       // the private key. Show and select the canonical public URL instead.
@@ -151,7 +152,7 @@ export async function taskPage(id, { manage = false } = {}) {
       fallback.hidden = false;
       input.focus();
       input.select();
-      toast("Copy the selected public task link.");
+      toast(t("Copy the selected public task link.", "请复制选中的公开任务链接。"));
     }
   };
   let social;
@@ -164,7 +165,7 @@ export async function taskPage(id, { manage = false } = {}) {
     if (!list) return; // The task may have left the website meanwhile.
     list.innerHTML = privateRepliesHtml(privateReplies);
     main.querySelector("#private-reply-count").textContent =
-      `${privateReplies.length} ${privateReplies.length === 1 ? "reply" : "replies"}`;
+      t(`${privateReplies.length} ${privateReplies.length === 1 ? "reply" : "replies"}`, `${privateReplies.length} 条回复`);
   }
   async function refreshPrivateReplies() {
     if (!manage || loadingContacts) return;
@@ -192,10 +193,10 @@ export async function taskPage(id, { manage = false } = {}) {
     main.querySelector("#copy-manage-link").onclick = async () => {
       try {
         await navigator.clipboard.writeText(privateLink);
-        toast("Private management link copied. Keep it safe.");
+        toast(t("Private management link copied. Keep it safe.", "私人管理链接已复制，请妥善保管。"));
       } catch {
         main.querySelector("#manage-link").select();
-        toast("Copy the selected private link and keep it safe.");
+        toast(t("Copy the selected private link and keep it safe.", "请复制选中的私人链接并妥善保管。"));
       }
     };
     let changing = false;
@@ -206,7 +207,7 @@ export async function taskPage(id, { manage = false } = {}) {
         if (
           isFinalState(state) &&
           !confirm(
-            `Mark this task as ${stateLabel(state)}? New replies will stop and this cannot be undone.`,
+            t(`Mark this task as ${stateLabel(state)}? New replies will stop and this cannot be undone.`, `确定将任务标记为${stateLabel(state)}？这将停止新回复且无法撤销。`),
           )
         )
           return;
@@ -218,7 +219,7 @@ export async function taskPage(id, { manage = false } = {}) {
           .forEach((b) => (b.disabled = true));
         try {
           task = await api(`/api/tasks/${id}/state`, { key, state });
-          toast(`Task marked ${stateLabel(task.taskState)}.`);
+          toast(t(`Task marked ${stateLabel(task.taskState)}.`, `任务已标记为${stateLabel(task.taskState)}。`));
           social?.refresh();
         } catch (e) {
           error.textContent = e.message;
@@ -234,9 +235,9 @@ export async function taskPage(id, { manage = false } = {}) {
     id,
     true,
     () => {
-      document.title = "Task unavailable — ScaleTag";
+      document.title = t("Task unavailable — ScaleTag", "任务不可用 — ScaleTag");
       main.innerHTML =
-        '<section class="empty-page"><h1>This page is unavailable.</h1><p>This task and its replies have left the website. Private archives follow the backup retention policy.</p><a class="button" href="/PostList">Back to PostList</a></section>';
+        `<section class="empty-page"><h1>${t("This page is unavailable.", "此页面不可用。")}</h1><p>${t("This task and its replies have left the website. Private archives follow the backup retention policy.", "此任务及其回复已从网站移除。私人存档遵循备份保留政策。")}</p><a class="button" href="/PostList">${t("Back to PostList", "返回帖子列表")}</a></section>`;
     },
     (data) => {
       if (data.taskState && data.taskState !== task.taskState) {

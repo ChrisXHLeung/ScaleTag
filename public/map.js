@@ -1,3 +1,4 @@
+import { t } from "/locale.js";
 // Loaded only after a visitor chooses Map. Poll data stays on ScaleTag.
 const vendor = "/vendor/maplibre/6.16.0/";
 const empty = () => ({ type: "FeatureCollection", features: [] });
@@ -22,7 +23,7 @@ export async function createPollMap() {
     ready = false;
   const fail = () => {
     message.textContent =
-      "The map could not load. Try Map again or use List to browse posts.";
+      t("The map could not load. Try Map again or use List to browse posts.", "地图无法加载。请重试或使用列表浏览帖子。");
   };
   try {
     map = new gl.Map({
@@ -49,7 +50,7 @@ export async function createPollMap() {
   } catch {
     fail();
     throw new Error(
-      "This browser cannot display the map. Please use List view.",
+      t("This browser cannot display the map. Please use List view.", "此浏览器无法显示地图，请使用列表视图。"),
     );
   }
   map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");
@@ -82,13 +83,13 @@ export async function createPollMap() {
       const detail = document.createElement("span");
       detail.textContent =
         p.type === "task"
-          ? `Task · Reward: ${p.reward} · View task ↗`
-          : `${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`;
+          ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 报酬：${p.reward} · 查看任务 ↗`)
+          : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
       link.append(title, detail);
       content.append(link);
     }
     const note = document.createElement("p");
-    note.textContent = "Approximate area, not an exact address.";
+    note.textContent = t("Approximate area, not an exact address.", "这是大致区域，并非精确地址。");
     content.append(note);
     popup = new gl.Popup({ maxWidth: "310px" })
       .setLngLat(coordinates)
@@ -99,7 +100,7 @@ export async function createPollMap() {
     ready = true;
     clearTimeout(timeout);
     message.textContent =
-      "Select a dot to open a post. Select a numbered group to explore.";
+      t("Select a dot to open a post. Select a numbered group to explore.", "选择圆点打开帖子，选择数字组可展开查看。");
     map.addSource("polls", {
       type: "geojson",
       data: geojson(),

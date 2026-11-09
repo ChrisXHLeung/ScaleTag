@@ -1,3 +1,4 @@
+import { t } from "/locale.js";
 const installButton = document.querySelector("#install-app");
 const dialog = document.querySelector("#install-dialog");
 const nativeInstall = document.querySelector("#install-native");
@@ -71,7 +72,7 @@ async function requestInstallation() {
     }
   } catch {
     document.querySelectorAll("[data-install-message]").forEach((message) => {
-      message.textContent = "Use your browser’s menu to install ScaleTag.";
+      message.textContent = t("Use your browser’s menu to install ScaleTag.", "请通过浏览器菜单安装 ScaleTag。");
     });
   } finally {
     installPrompt = undefined;
@@ -102,7 +103,7 @@ function showUpdate() {
 updateButton.addEventListener("click", () => {
   reloadRequested = true;
   updateButton.disabled = true;
-  updateButton.textContent = "Updating…";
+  updateButton.textContent = t("Updating…", "正在更新…");
   if (registration?.waiting)
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
   else location.reload();
