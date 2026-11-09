@@ -33,7 +33,7 @@ test('offline conversion and encrypted export/restore preserve records', async t
  const file=join(dir,'scaletag.sqlite');
  const db=openDatabase(file,{key:''});
  db.exec(`CREATE TABLE posts(id TEXT PRIMARY KEY,document TEXT NOT NULL,created_at INTEGER,ends_at INTEGER,delete_at INTEGER); CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE rate_limits(key TEXT PRIMARY KEY,start INTEGER,count INTEGER);`);
- db.prepare('INSERT INTO posts VALUES(?,?,?,?,?)').run('a'.repeat(24),JSON.stringify({id:'a'.repeat(24),title:'Migration secret'}),1,2,3);db.close();
+ db.prepare('INSERT INTO posts VALUES(?,?,?,?,?)').run('a'.repeat(24),JSON.stringify({id:'a'.repeat(24),type:'sale',title:'Migration secret',images:['data:image/jpeg;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw=='],replies:[{name:'Buyer',amount:'CAD 40',email:'private@example.com'}]}),1,2,3);db.close();
  const env={...process.env,DATA_DIR:dir,SCALETAG_ENCRYPTION_KEY:randomBytes(32).toString('hex')};
  const run=(script,args=[],input)=>execFileSync(process.execPath,[script,...args],{env,input,encoding:'utf8'});
  const initial=run('src/encrypted-backup.js',['--plaintext-source']);
@@ -47,5 +47,11 @@ test('offline conversion and encrypted export/restore preserve records', async t
  const target=join(dir,'restored.sqlite');
  run('src/restore-encrypted-backup.js',[target],encrypted);
  const restored=openDatabase(target,{key:env.SCALETAG_ENCRYPTION_KEY});
- assert.equal(JSON.parse(restored.prepare('SELECT document FROM posts').get().document).title,'Migration secret');restored.close();
+ const document=JSON.parse(restored.prepare('SELECT document FROM posts').get().document);
+ assert.equal(document.title,'Migration secret');
+ assert.deepEqual(document.images,['data:image/jpeg;base64,cHJpdmF0ZS1pbWFnZS1ieXRlcw==']);
+ assert.equal(document.replies[0].email,'private@example.com');
+ assert.ok(!encrypted.includes('private@example.com'));
+ assert.ok(!encrypted.includes('cHJpdmF0ZS1pbWFnZS1ieXRlcw=='));
+ restored.close();
 });

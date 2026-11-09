@@ -76,13 +76,15 @@ export async function createPollMap() {
     content.className = "map-popup-content";
     for (const p of polls) {
       const link = document.createElement("a");
-      link.href = `/${p.type === "task" ? "task" : "vote"}/${p.id}`;
+      link.href = `/${p.type === "sale" ? "sale" : p.type === "task" ? "task" : "vote"}/${p.id}`;
       link.className = "map-poll-link";
       const title = document.createElement("strong");
       title.textContent = p.title;
       const detail = document.createElement("span");
       detail.textContent =
-        p.type === "task"
+        p.type === "sale"
+          ? t(`Sale · Asking: ${p.price} · View item ↗`, `摆卖 · 期望价格：${p.price} · 查看物品 ↗`)
+          : p.type === "task"
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
       link.append(title, detail);

@@ -8,12 +8,16 @@ import {
   coordinates,
   pollInput,
   taskInput,
+  saleInput,
+  offerInput,
   replyInput,
   manageKeyInput,
   taskStateInput,
 } from "./validation.js";
 import { ID_PATTERN } from "./store.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
+
+import { saleImages } from "./sale-images.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
@@ -58,6 +62,8 @@ export function createApp(
     }
     next();
   });
+  // Only image publication accepts a larger body; every other route retains 24 KiB.
+  app.post("/api/sales", express.json({ limit: 4300000, strict: true }));
   app.use(express.json({ limit: "24kb", strict: true }));
   let windowStart = store.clock();
   let creations = 0;
@@ -101,8 +107,14 @@ export function createApp(
     await takeCreation(res);
     res.status(201).json(await store.create(input));
   });
+  app.post("/api/sales", async (req, res) => {
+    const input = saleInput(req.body);
+    await takeCreation(res);
+    input.images = await saleImages(req.body.images);
+    res.status(201).json(await store.create(input));
+  });
   function contentType(data) {
-    if (data.type && !["all", "poll", "task"].includes(data.type))
+    if (data.type && !["all", "poll", "task", "sale"].includes(data.type))
       throw new AppError(400, "Invalid content type.");
     return data.type;
   }
@@ -169,7 +181,7 @@ export function createApp(
   app.get("/api/polls/:id", async (req, res) => {
     let token = tokenFor(req, req.params.id);
     const poll = await store.get(req.params.id, token);
-    if (poll.type === "task") throw new AppError(404, "Poll not found.");
+    if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
     if (poll.status === "open" && !token) {
       token = randomBytes(32).toString("hex");
       res.cookie(cookieName(poll.id), token, {
@@ -203,7 +215,7 @@ export function createApp(
   });
   app.get("/api/polls/:id/qr.png", async (req, res) => {
     const poll = await store.get(req.params.id);
-    if (poll.type === "task") throw new AppError(404, "Poll not found.");
+    if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
     const png = await QRCode.toBuffer(`${origin}/vote/${poll.id}`, {
       type: "png",
       width: 768,
@@ -216,6 +228,26 @@ export function createApp(
         "Content-Disposition",
         `attachment; filename="ScaleTag-${poll.id}.png"`,
       );
+    res.type("png").send(png);
+  });
+  app.get("/api/sales/:id", async (req, res) => {
+    const sale = await store.get(req.params.id);
+    if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
+    res.json(sale);
+  });
+  app.post("/api/sales/:id/manage", async (req, res) => {
+    res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache" });
+    res.json(await store.manageSale(req.params.id, manageKeyInput(req.body)));
+  });
+  app.post("/api/sales/:id/state", async (req, res) => {
+    const key = manageKeyInput(req.body);
+    if (req.body.state !== "closed") throw new AppError(400, "A sale listing can only be closed. No sale or reservation is recorded.");
+    res.json(await store.closeSale(req.params.id, key));
+  });
+  app.get("/api/sales/:id/qr.png", async (req, res) => {
+    const sale = await store.get(req.params.id);
+    if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
+    const png = await QRCode.toBuffer(`${origin}/sale/${sale.id}`, { type: "png", width: 768, margin: 4 });
     res.type("png").send(png);
   });
   app.get("/api/tasks/:id", async (req, res) => {
@@ -286,9 +318,12 @@ export function createApp(
   );
   let replyWindow = store.clock(),
     replyRequests = 0;
-  app.post("/api/posts/:id/replies", async (req, res) => {
+  app.post(["/api/posts/:id/replies", "/api/posts/:id/offers"], async (req, res) => {
     const token = socialToken(req),
-      input = replyInput(req.body);
+      input = req.path.endsWith("/offers") ? offerInput(req.body) : replyInput(req.body);
+    const post = await store.get(req.params.id);
+    if ((post.type === "sale") !== req.path.endsWith("/offers"))
+      throw new AppError(400, "Use the matching reply or offer form.");
     if (store.clock() - replyWindow >= 60000) {
       replyWindow = store.clock();
       replyRequests = 0;
@@ -355,17 +390,22 @@ export function createApp(
     res.redirect(308, "/PostList" + req.originalUrl.slice(req.path.length)),
   );
   app.get(
-    ["/", "/create", "/create/task", "/PostList", "/privacy", "/install"],
+    ["/", "/create", "/create/task", "/create/sale", "/PostList", "/privacy", "/install"],
     (req, res) => res.sendFile(join(publicDir, "index.html")),
   );
   app.get("/vote/:id", async (req, res) => {
     const poll = await store.get(req.params.id);
-    if (poll.type === "task") throw new AppError(404, "Poll not found.");
+    if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
     res.sendFile(join(publicDir, "index.html"));
   });
   app.get(["/task/:id", "/task/:id/manage"], async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
+    res.sendFile(join(publicDir, "index.html"));
+  });
+  app.get(["/sale/:id", "/sale/:id/manage"], async (req, res) => {
+    const sale = await store.get(req.params.id);
+    if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
     res.sendFile(join(publicDir, "index.html"));
   });
   app.use((req, res, next) => next(new AppError(404, "Page not found.")));

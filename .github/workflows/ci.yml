@@ -25,6 +25,7 @@ jobs:
       - run: npm run test:pwa
       - run: npm run test:map
       - run: npm run test:tasks
+      - run: npm run test:sales
       - run: python3 -m unittest discover -s test -p '*_test.py' -v
 
   container:
