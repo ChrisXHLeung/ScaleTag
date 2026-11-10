@@ -4,9 +4,9 @@
 
 ScaleTag is a small, location-aware platform for polls and tasks with an English interface. No accounts, no image storage, no self-hosted map server, and no separate database server.
 
-Development site: **https://risinfo.cn** (the previous `scaletag.risinfo.cn` hostname redirects here).
+Production site: **https://risinfo.cn** and **https://www.risinfo.cn** (the previous `scaletag.risinfo.cn` hostname redirects here).
 
-The development site runs the lightweight **Nginx + two Node instances + shared SQLite** HA demonstration. The existing cloudflared tunnel connects to Nginx ingress. See the [architecture and demo commands](docs/ha-demo.md) and [verification results](docs/ha-verification.md).
+The production site runs on Oracle Cloud Infrastructure (OCI) with the lightweight **Nginx + two Node instances + shared SQLite** HA demonstration. The existing cloudflared tunnel connects to Nginx ingress. See the [architecture and demo commands](docs/ha-demo.md) and [verification results](docs/ha-verification.md).
 
 ## What it does
 
