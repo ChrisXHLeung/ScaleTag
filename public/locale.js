@@ -118,12 +118,12 @@ const serverErrors = {
   'This image is invalid, too large to decode, or cannot be safely compressed. Use another JPEG, PNG or WebP.': '这张照片无法读取、尺寸过大或无法安全压缩，请换一张 JPEG、PNG 或 WebP 照片。',
   'This post is closed and no longer accepts replies.': '这条帖子已关闭，不再接受新回复或出价。',
   'Enter a nonnegative offer amount with up to two decimal places and an optional currency, for example CAD 40 or $40.50. Keep contact details in the private fields.': '请填写非负金额，最多两位小数，可加币种，例如 CAD 40 或 $40.50。联系方式请填写在私密字段。',
-  'Sale not found.': '摆卖不存在或已到期。',
-  'This management link is invalid for this sale.': '这条摆卖的管理链接无效。',
+  'Sale not found.': '出售信息不存在或已到期。',
+  'This management link is invalid for this sale.': '这条出售信息的管理链接无效。',
   'Use the matching reply or offer form.': '请使用此帖对应的回复或出价表单。',
-  'Replies are available on tasks and sales only.': '只有任务和摆卖可以接收回复或出价。',
+  'Replies are available on tasks and sales only.': '只有任务和出售信息可以接收回复或出价。',
   'Confirm that your offer is non-binding communication only. ScaleTag does not handle payments, transactions, reservations or completed sales.': '请确认出价仅表示交流意向，不代表订单或成交。ScaleTag 不处理付款、交易、预订或成交记录。',
-  'A sale listing can only be closed. No sale or reservation is recorded.': '摆卖只能关闭，不记录成交或预订。',
+  'A sale listing can only be closed. No sale or reservation is recorded.': '出售信息只能关闭，不记录成交或预订。',
   'Post not found.': '帖子不存在。',
   'Poll not found.': '投票不存在。',
   'Task not found.': '任务不存在。',
@@ -154,7 +154,11 @@ const serverErrors = {
   'Too many posts are being published. Please try again in a minute.': '发布请求过多，请一分钟后重试。',
 };
 export function translateError(message) {
-  if (language !== 'zh') return message;
+  if (language !== 'zh') return ({
+    'Sale not found.': 'Sale listing not found.',
+    'This management link is invalid for this sale.': 'This management link is invalid for this listing.',
+    'Replies are available on tasks and sales only.': 'Replies are available on tasks and sale listings only.',
+  })[message] ?? message;
   if (serverErrors[message]) return serverErrors[message];
   const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer) (is required and )?must be at most (\d+) characters\.$/.exec(message);
   if (match) {

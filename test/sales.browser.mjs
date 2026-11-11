@@ -74,7 +74,7 @@ async function fixture(t) {
 test("sale discovery links and mobile creation form", async (t) => {
   const f = await fixture(t);
   await f.page.goto(f.origin + "/");
-  await f.page.getByRole("link", { name: "Create a sale", exact: true }).first().waitFor({timeout:3000});
+  await f.page.getByRole("link", { name: "Create a Listing", exact: true }).first().waitFor({timeout:3000});
   await f.page.goto(f.origin + "/create/sale");
   await f.page.locator("#sale-form").waitFor({timeout:3000});
   assert.equal(await f.page.locator('#sale-images').getAttribute('type'), 'file');
@@ -86,7 +86,7 @@ test("sale discovery links and mobile creation form", async (t) => {
   await f.page.screenshot({path:'/tmp/scaletag-sale-create-320.png',fullPage:true});
   await f.page.locator('#sale-images').setInputFiles([]);
   await f.page.locator('#language-select').selectOption('zh');
-  await f.page.getByRole('heading', {name:'发布摆卖'}).waitFor();
+  await f.page.getByRole('heading', {name:'发布出售信息'}).waitFor();
   assert.deepEqual(f.errors, []);
 });
 
@@ -102,7 +102,7 @@ async function publishSale(f) {
   let upload;
   f.page.on('request',r => {if(new URL(r.url()).pathname === '/api/sales') upload = r.postDataJSON();});
   await f.page.locator('#publish-sale').click();
-  await f.page.getByRole('heading', {name:'Manage this sale',exact:true}).waitFor();
+  await f.page.getByRole('heading', {name:'Manage listing',exact:true}).waitFor();
   assert.equal(upload.images[0],png,'original file bytes go to server without browser recompression');
   const id = new URL(f.page.url()).pathname.split('/')[2];
   const key = new URLSearchParams(new URL(f.page.url()).hash.slice(1)).get('key');
@@ -115,10 +115,10 @@ test('original photo upload, public offer privacy, management language hash and 
   assert.equal(await f.page.locator('.poll-title').textContent(),'Reading chair <script>bad()</script>');
   const requests=[]; f.page.on('request',r => requests.push(r.url()));
   await f.page.locator('#language-select').selectOption('zh');
-  await f.page.getByRole('heading',{name:'管理这条摆卖',exact:true}).waitFor();
+  await f.page.getByRole('heading',{name:'管理出售信息',exact:true}).waitFor();
   assert.ok(f.page.url().endsWith('#key='+key));
   await f.page.locator('#language-select').selectOption('en');
-  await f.page.getByRole('heading',{name:'Manage this sale',exact:true}).waitFor();
+  await f.page.getByRole('heading',{name:'Manage listing',exact:true}).waitFor();
   const other = await f.browser.newContext();
   const visitor = await other.newPage(); visitor.setDefaultTimeout(7000);
   await visitor.goto(f.origin+'/sale/'+id);
