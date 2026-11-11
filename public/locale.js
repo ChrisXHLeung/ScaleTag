@@ -160,9 +160,9 @@ export function translateError(message) {
     'Replies are available on tasks and sales only.': 'Replies are available on tasks and sale listings only.',
   })[message] ?? message;
   if (serverErrors[message]) return serverErrors[message];
-  const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer) (is required and )?must be at most (\d+) characters\.$/.exec(message);
+  const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer|Pickup location) (is required and )?must be at most (\d+) characters\.$/.exec(message);
   if (match) {
-    const names = {'Asking price':'期望价格',Offer:'出价',Title:'标题', Description:'描述', Signature:'署名', 'Image URL':'图片链接', Option:'选项', Reward:'酬谢', Reply:'回复', Name:'姓名', Phone:'电话', Email:'邮箱'};
+    const names = {'Pickup location':'领取地点', 'Asking price':'期望价格',Offer:'出价',Title:'标题', Description:'描述', Signature:'署名', 'Image URL':'图片链接', Option:'选项', Reward:'酬谢', Reply:'回复', Name:'姓名', Phone:'电话', Email:'邮箱'};
     return `${names[match[1]]}${match[2] ? '为必填项，且' : ''}最多 ${match[3]} 个字符。`;
   }
   const finalReply = /^This task is (completed|closed) and no longer accepts replies\.$/.exec(message);

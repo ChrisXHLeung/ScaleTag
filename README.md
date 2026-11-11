@@ -38,6 +38,10 @@ Each published poll also has its own shareable URL and downloadable QR code. Ins
 
 The combined listing is named **PostList**. Old `/VoteList` links and installed-app shortcuts redirect permanently to `/PostList`, preserving query parameters. Poll and task URLs are unchanged.
 
+## Free giveaways
+
+The former sale feature now accepts free giveaways at `/create/sale`. A post requires a public pickup location and GPS/map consent, and may include photos. Visitors may like it without supplying contact details. A private management link lets the publisher take it down; new giveaways become inaccessible after 72 hours. Older sale listings are removed from active storage by periodic cleanup, and the old offer endpoint no longer accepts submissions. New giveaways are removed from active storage 30 days after publication. Backups follow the existing 90-day archive retention policy.
+
 ## Tasks, likes and replies
 
 Select **Poll** or **Task** in the publishing form. Tasks use the same required GPS permission, explicit approximate-map acknowledgement and 30-day website retention as polls. Reward is a required text description (for example, “CAD 30” or “a coffee”), not a payment instruction processed by ScaleTag. There are no accounts, checkout, deposits, escrow, bookings or transaction handling. The poster contacts respondents directly using the private contact details shown on the management page.

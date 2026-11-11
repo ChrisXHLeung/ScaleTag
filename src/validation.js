@@ -205,7 +205,7 @@ export function saleInput(body) {
   const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
   return { ...common, type: "sale", options: [],
     description: text(body.description, "Description", 4000),
-    price: text(body.price, "Asking price", 160) };
+    pickupLocation: text(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1 };
 }
 export function offerInput(body) {
   const reply = replyInput(body);

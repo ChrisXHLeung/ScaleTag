@@ -84,7 +84,11 @@ export class SQLiteStore extends PollStore {
   remove(id) { this.db.prepare("DELETE FROM posts WHERE id=?").run(id); }
 
   count() {
-    return this.db.prepare("SELECT count(*) AS count FROM posts WHERE delete_at>?").get(this.clock()).count;
+    return this.db.prepare("SELECT count(*) AS count FROM posts WHERE delete_at>? AND (coalesce(json_extract(document,'$.type'),'poll') <> 'sale' OR (json_extract(document,'$.giveawayVersion') = 1 AND coalesce(json_extract(document,'$.saleState'),'open') <> 'closed' AND ends_at>?))").get(this.clock(), this.clock()).count;
+  }
+
+  storedCount() {
+    return this.db.prepare("SELECT count(*) AS count FROM posts").get().count;
   }
 
   refreshIndex() {
@@ -110,7 +114,7 @@ export class SQLiteStore extends PollStore {
 
   async sweep() {
     return this.exclusive("sweep", () => {
-      this.db.prepare("DELETE FROM posts WHERE delete_at<=?").run(this.clock());
+      this.db.prepare("DELETE FROM posts WHERE delete_at<=? OR (json_extract(document,'$.type') = 'sale' AND coalesce(json_extract(document,'$.giveawayVersion'),0) <> 1)").run(this.clock());
       this.db.prepare(`UPDATE posts SET document=json_set(document,'$.voters',json('{}'))
         WHERE ends_at<=? AND EXISTS(SELECT 1 FROM json_each(document,'$.voters'))`)
         .run(this.clock());

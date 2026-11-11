@@ -330,6 +330,7 @@ export function createApp(
   let replyWindow = store.clock(),
     replyRequests = 0;
   app.post(["/api/posts/:id/replies", "/api/posts/:id/offers"], async (req, res) => {
+    if (req.path.endsWith("/offers")) throw new AppError(410, "Offers are no longer accepted.");
     const token = socialToken(req),
       input = req.path.endsWith("/offers") ? offerInput(req.body) : replyInput(req.body);
     const post = await store.get(req.params.id);

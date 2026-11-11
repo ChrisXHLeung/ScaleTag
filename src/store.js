@@ -85,7 +85,7 @@ export class PollStore {
         ) {
           throw new Error("Invalid poll file; manual inspection required");
         }
-        if (db.data.deleteAt <= this.clock()) await this.remove(id);
+        if (db.data.deleteAt <= this.clock() || (db.data.type === "sale" && db.data.giveawayVersion !== 1)) await this.remove(id);
         else this.index.set(id, this.summary(db.data));
       }
     }
@@ -99,6 +99,7 @@ export class PollStore {
       reward: p.reward,
       price: p.price,
       saleState: p.saleState,
+      giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
@@ -166,8 +167,10 @@ export class PollStore {
         404,
         "This poll does not exist or has been removed from the website.",
       );
+    if (db.data.type === "sale" && (db.data.giveawayVersion !== 1 || db.data.saleState === "closed" || db.data.endsAt <= this.clock()))
+      throw new AppError(404, "This giveaway is no longer available.");
     if (db.data.deleteAt <= this.clock()) {
-      await this.remove(id);
+      if (db.data.type !== "sale") await this.remove(id);
       throw new AppError(
         404,
         "This poll does not exist or has been removed from the website.",
@@ -178,7 +181,7 @@ export class PollStore {
 
   async create(input) {
     return this.exclusive("create", async () => {
-      if ((await this.count()) >= this.maxPolls)
+      if (this.storedCount() >= this.maxPolls)
         throw new AppError(
           503,
           "The service is currently at capacity. Please try again later.",
@@ -190,7 +193,7 @@ export class PollStore {
         ...input,
         id,
         createdAt: now,
-        endsAt: now + (["task", "sale"].includes(input.type) ? 30 : 7) * DAY,
+        endsAt: now + (input.type === "sale" ? 3 : input.type === "task" ? 30 : 7) * DAY,
         deleteAt: now + 30 * DAY,
         options: input.options.map((label, n) => ({
           id: n + 1,
@@ -219,7 +222,11 @@ export class PollStore {
     });
   }
 
-  count() { return this.index.size; }
+  count() { const now = this.clock(); return [...this.index.values()].filter(p => p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now))).length; }
+
+  storedCount() {
+    return this.index.size;
+  }
 
   public(p, token) {
     const {
@@ -298,7 +305,7 @@ export class PollStore {
       }
     }
     const now = this.clock();
-    let rows = [...this.index.values()].filter((p) => p.deleteAt > now);
+    let rows = [...this.index.values()].filter((p) => p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now)));
     if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
       rows = rows.filter((p) => postStatus(p, now) === status);
@@ -327,7 +334,7 @@ export class PollStore {
   map({ location, status = "all", type = "all" } = {}) {
     const now = this.clock();
     const rows = [...this.index.values()]
-      .filter((p) => p.mapVisible && p.deleteAt > now)
+      .filter((p) => p.mapVisible && p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now)))
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
       .filter((p) => status === "all" || postStatus(p, now) === status)
       .filter((p) => !location || distanceKm(location, p.location) <= 100)
@@ -372,7 +379,7 @@ export class PollStore {
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) } : {}),
       ...(p.type === "sale" ? { saleState: p.saleState ?? "open" } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
-      deleteAt: p.deleteAt,
+      deleteAt: p.type === "sale" ? p.endsAt : p.deleteAt,
       serverTime: this.clock(),
     };
   }
@@ -515,7 +522,7 @@ export class PollStore {
 
   async sweep() {
     for (const [id, info] of this.index) {
-      if (info.deleteAt <= this.clock())
+      if (info.deleteAt <= this.clock() || (info.type === "sale" && info.giveawayVersion !== 1))
         await this.exclusive(id, () => this.remove(id));
       else if (info.endsAt <= this.clock() && info.needsPrune)
         await this.exclusive(id, async () => {

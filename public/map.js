@@ -83,7 +83,7 @@ export async function createPollMap() {
       const detail = document.createElement("span");
       detail.textContent =
         p.type === "sale"
-          ? t(`Sale Listing · Asking: ${p.price} · View item ↗`, `出售信息 · 期望价格：${p.price} · 查看物品 ↗`)
+          ? t(`Free Giveaway · View item ↗`, `闲置赠予 · 查看物品 ↗`)
           : p.type === "task"
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
