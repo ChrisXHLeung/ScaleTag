@@ -14,7 +14,7 @@ ScaleTag is an installable, bilingual web app for local polls, tasks and free gi
 
 Each post has a unique ID. PostList combines all three types in one list and an optional map. Publishing requires a location. Public map pins use a rounded 0.01° grid, and posts appear there only with explicit consent. A giveaway’s written pickup location is public. Search coordinates are used for that request and are not stored.
 
-Public task replies show the submitted name and message. A reply’s phone number and email are available through authenticated task management and may be present in private backups. Giveaways use likes and a public pickup location, without an offer or contact form. The app does not process payments.
+Public task replies show the submitted name and message. The reply form encrypts the separate phone and email fields in the sender’s browser. The task publisher’s browser uses the management password to decrypt them. Giveaways use likes and a public pickup location, without an offer or contact form. The app does not process payments.
 
 | Page | Path |
 | --- | --- |
@@ -34,16 +34,30 @@ Browser ─ HTTPS ─ Cloudflare Tunnel ─ Nginx on OCI Host
 
 - **Ingress and runtime.** Nginx forwards to two Node.js 24 containers on the same host. The primary and standby share local storage. This provides app-instance failover, with the host and local disk as shared failure points.
 - **Storage.** SQLite is the production store. The `posts.id` primary key identifies each post, and `posts.document` contains its full JSON record, including uploaded images. SQLite transactions protect state changes, voting and like deduplication, and shared rate limits.
-- **Encryption.** SQLCipher encrypts SQLite pages on disk. Both instances receive the database key from root-managed host configuration at runtime. Daily backup exports use authenticated AES-256-GCM encryption. Application and host administrators with the necessary access can read data in use. See [encryption and recovery](docs/encryption.md) for the storage formats and restore tools.
+- **Encryption.** SQLCipher encrypts SQLite pages on disk. Both instances receive the database key from root-managed host configuration at runtime. Daily backup exports use authenticated AES-256-GCM encryption. Administrators with the necessary access can read application records, which contain ciphertext for browser-encrypted reply contacts. See [encryption and recovery](docs/encryption.md) for the storage formats and restore tools.
 - **Delivery.** GitHub-hosted CI runs application, browser, container and failover tests. Release images are published to Docker Hub by commit SHA. The production deployment timer checks the exact `main` commit’s successful CI run before pulling its image. It updates the standby before the primary and checks readiness. Operations configuration lives outside the public application repository.
+
+## Browser encryption for task reply contacts
+
+Reply authors can send a phone number or email address without knowing the publisher’s password. The public task key lets a reply author encrypt those fields before sending them, so the application database and backups hold contact ciphertext. The reply name and message remain public. The implementation uses Web Crypto in a secure browser context. See [`public/task-crypto.js`](public/task-crypto.js).
+
+1. **Publish.** The browser generates the task management password from 32 random bytes (256 bits) and encodes it as 64 hexadecimal characters. It generates a per-task ECDH P-256 key pair and exports the public key as SPKI and the private key as PKCS#8. HKDF-SHA-256 derives an AES-256-GCM key from the password bytes using a random 16-byte salt and the `scaletag:task:private-key-wrap:v1` label. The browser encrypts the private key with a random 12-byte nonce and authenticates the public key as additional data. It sends the public key, wrapped private key and a separately derived authentication credential to ScaleTag. The task password stays in the browser during publication and management and stays out of the URL.
+2. **Reply.** The sender’s browser gets the task public key and creates a fresh ECDH P-256 key pair for the reply. ECDH produces a 256-bit shared secret. HKDF-SHA-256 uses the 12-byte random AES-GCM nonce as its salt and includes both public keys and the task ID in its derivation context. AES-256-GCM encrypts the phone and email JSON with both public keys and the task ID as additional authenticated data. The server stores the sender’s ephemeral public key, nonce and ciphertext. Both encryption envelopes are versioned and encode binary fields in Base64. AES-GCM uses the Web Crypto default 128-bit authentication tag.
+3. **Manage.** After verifying the separate authentication credential, ScaleTag returns the wrapped private key and encrypted reply contacts. The publisher’s browser uses the password to unwrap the private key, repeats the key agreement for each reply and displays the decrypted contacts. Save the management URL and password when publishing. If you lose the task password, ScaleTag cannot reset it or recover the encrypted contacts, even from a backup.
+
+Access to stored records or storage encryption keys alone leaves the new contacts encrypted. The task publisher can save or share contacts after viewing them.
+
+Tasks created before this feature that lack contact encryption keys cannot accept new replies. Legacy reply contacts may have been stored without browser encryption.
 
 ## Argon2id management passwords
 
-ScaleTag issues a separate password for each new task and giveaway. At publication the server generates 32 cryptographically random bytes (256 bits) and encodes them as 64 hexadecimal characters. The password is returned once in the uncached creation response. The management page can copy the URL and password together as text. The password stays out of the URL and is sent for verification in the body of a same-origin JSON POST over HTTPS in production.
+For tasks, the browser derives a 256-bit authentication credential from the decoded password bytes using HKDF-SHA-256, the fixed salt `scaletag:task:hkdf-salt:v1` and the separate label `scaletag:task:auth-key:v1`. It sends the credential as 64 hexadecimal characters at publication and when requesting management data or changing task status. The credential grants access to the management API. Decrypting the new contact ciphertext requires the private key protected by the task password.
+
+For giveaways, the server generates a separate 32-byte random password, encodes it as 64 hexadecimal characters and returns it once in the uncached creation response. The giveaway browser sends that password for verification. Both flows send the management credential in a same-origin JSON POST over HTTPS in production. The management page can copy the URL and password together as text.
 
 ### Hashing parameters
 
-ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/packages/argon2) to produce an [Argon2id v1.3](https://www.rfc-editor.org/rfc/rfc9106) verifier. The production SQLite post document stores the verifier in `manageKeyHash` as a PHC string containing the algorithm, version, parameters, salt and derived hash.
+ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/packages/argon2) to produce an [Argon2id v1.3](https://www.rfc-editor.org/rfc/rfc9106) verifier for the task authentication credential or giveaway password. The production SQLite post document stores the verifier in `manageKeyHash` as a PHC string containing the algorithm, version, parameters, salt and derived hash.
 
 | Setting | Value |
 | --- | --- |
@@ -56,9 +70,9 @@ ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/pac
 
 ### Verification and compatibility
 
-The server checks the submitted password's format, then verifies it before opening the SQLite write transaction. It rechecks the current post and its verifier inside the transaction before returning private information or changing state. Each application process permits two concurrent Argon2 operations. Excess work receives HTTP 429. Public responses omit the verifier, and ScaleTag cannot recover a lost password.
+The server checks the submitted credential’s format, then verifies it before opening the SQLite write transaction. It rechecks the current post and its verifier inside the transaction before returning private information or changing state. Each application process permits two concurrent Argon2 operations. Excess work receives HTTP 429. Public responses omit the verifier.
 
-Older management links continue to use their original SHA-256 verifiers. The two application instances gained support for reading both formats before new posts began issuing Argon2id credentials. Argon2id protects the management password. SQLCipher separately encrypts the SQLite database pages at rest.
+The server also supports older management links with SHA-256 verifiers. SQLCipher separately encrypts the SQLite database pages at rest.
 
 ## Data and retention
 

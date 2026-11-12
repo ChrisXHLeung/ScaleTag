@@ -566,15 +566,29 @@ function privacy() {
     <h2>${t("What other people can see", "其他人能看到什么")}</h2>
     <ul>
       <li>${t("Polls: Anyone can see the question, options and results. Voting ends after seven days. Results stay visible until day 30.", "投票：任何人都能看到问题、选项和结果。投票在七天后结束，结果保留至发布后第 30 天。")}</li>
-      <li>${t("Tasks: The task, reward, reply names and reply messages are public. New replies encrypt phone numbers and email addresses in the browser; the task management password is needed to decrypt them. Encrypted copies may remain in private backups. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。新回复的电话和邮箱在浏览器中加密，需要任务管理密码才能解密；私有备份中可能保留加密副本。标为已完成或已关闭的任务停止接收回复。")}</li>
+      <li>${t("Tasks: The task, reward, reply names and reply messages are public. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。标为已完成或已关闭的任务停止接收回复。")}</li>
       <li>${t("Giveaways: The pickup location you write is public. Visitors can like the post. Giveaways are visible for up to 72 hours, or until the publisher takes them down. ScaleTag does not collect contact details for giveaways.", "闲置赠予：你填写的领取地点会公开。访客可以点赞。帖子公开最多 72 小时，发布者也可以提前下架。ScaleTag 不会收集赠予参与者的联系方式。")}</li>
     </ul>
     <p>${t("Names are self-reported. Keep private contact details out of public text, pickup directions and photos.", "名字由用户自行填写，未经身份验证。请勿在公开文字、领取说明或照片中留下私人联系方式。")}</p>
 
+    <h2>${t("Private contact details in task replies", "任务回复中的私人联系方式")}</h2>
+    <p>${t(
+      "When you enter a phone number or email address in the private fields of a task reply, your browser encrypts it with the task’s public key before sending it to ScaleTag. The task publisher’s browser uses the management password to decrypt it. ScaleTag stores encrypted contact details, and private backups may retain encrypted copies. Contacts saved before browser encryption was introduced may have been stored without this protection.",
+      "在任务回复的私人栏位填写电话或邮箱时，你的浏览器会先用该任务的公钥加密，再发送给 ScaleTag。任务发布者的浏览器使用管理密码解密。ScaleTag 保存的是加密后的联系方式，私有备份中也可能保留加密副本。启用浏览器加密前保存的联系方式可能没有这层保护。",
+    )}</p>
+    <p>${t(
+      "The task publisher can save or share the contact details after viewing them.",
+      "任务发布者查看联系方式后，可以另行保存或转发。",
+    )}</p>
+
     <h2>${t("Managing a task or giveaway", "管理任务或闲置赠予")}</h2>
     <p>${t(
-      "When you publish, you can copy the management address and a randomly generated password together. The password is sent separately from the address. ScaleTag stores a salted Argon2id verifier and cannot recover your password. Older private management links still work. Keep your management information private: it lets someone change the task status and see private reply contacts, or take a giveaway down.",
-      "发布后，你可以一次复制管理网址和随机生成的密码。密码与网址分开提交。ScaleTag 保存带独立盐值的 Argon2id 摘要，无法找回密码。旧版私人管理链接仍可使用。请妥善保管管理信息，因为持有者可以修改任务状态、查看回复者的私人联系方式，或下架赠予帖子。",
+      "Save the management address and randomly generated password when you publish. For a task, your browser uses the password locally. ScaleTag receives a separate credential derived from it to verify management requests. If you lose the task password, ScaleTag cannot reset it or recover encrypted contacts, even from a backup.",
+      "发布时请保存管理网址和随机生成的密码。你的浏览器在本地使用任务管理密码。ScaleTag 接收的是由该密码派生的独立凭据，用于验证管理请求。任务管理密码丢失后，ScaleTag 无法重置密码，也无法从备份中恢复加密的联系方式。",
+    )}</p>
+    <p>${t(
+      "For a giveaway, your browser sends the password to ScaleTag for verification. ScaleTag stores a salted Argon2id verifier for both types of management credentials. Older private management links can still provide access while the post is available. Keep your management details private. They can be used to change a task’s status and view private reply contacts, or to take down a giveaway.",
+      "管理闲置赠予时，浏览器会把密码发送给 ScaleTag 验证。两种管理凭据均以带盐值的 Argon2id 验证值保存。只要帖子仍可访问，旧版私人管理链接仍可用于管理。请妥善保管管理信息，以免他人修改任务状态、查看回复者的私人联系方式或下架赠予帖子。",
     )}</p>
 
     <h2>${t("No account or device fingerprinting", "无需账户，不使用设备指纹。")}</h2>
