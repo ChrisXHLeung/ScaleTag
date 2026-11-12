@@ -8,6 +8,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
 import { PollStore } from '../src/store.js';
+import { createTaskCredentials } from '../public/task-crypto.js';
 
 test('browser language, manual preference, storage fallback and offline switching', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'scaletag-locale-'));
@@ -56,18 +57,19 @@ test('browser language, manual preference, storage fallback and offline switchin
   assert.equal(await page.locator('#language-select').inputValue(), 'zh');
   await page.goto(`${origin}/privacy`);
   await page.getByText('无需账户，不使用设备指纹。', {exact: true}).waitFor();
-  const task = await store.create({type:'task', title:'My task 我的任务', description:'Keep my words 原样', reward:'Coffee 咖啡', signature:'Neighbour', options:[], images:[], location:{latitude:43.65,longitude:-79.38}, mapVisible:true});
+  const { authKey, contactPublicKey, encryptedPrivateKey } = await createTaskCredentials();
+  const task = await store.create({type:'task', title:'My task 我的任务', description:'Keep my words 原样', reward:'Coffee 咖啡', signature:'Neighbour', options:[], images:[], location:{latitude:43.65,longitude:-79.38}, mapVisible:true, authKey, contactPublicKey, encryptedPrivateKey});
   await page.goto(`${origin}/task/${task.id}`);
   await page.getByRole('heading', {name: 'My task 我的任务', exact:true}).waitFor();
   await page.locator('#reply-message').fill('草稿 draft');
   page.once('dialog', dialog => dialog.dismiss());
   await page.locator('#language-select').selectOption('en');
   assert.equal(await page.locator('#reply-message').inputValue(), '草稿 draft');
-  await page.goto(`${origin}/task/${task.id}/manage?created=1#key=${task.manageKey}`);
+  await page.goto(`${origin}/task/${task.id}/manage?created=1#key=${authKey}`);
   await page.getByRole('heading', {name: 'My task 我的任务', exact:true}).waitFor();
   await page.locator('#language-select').selectOption('en');
   await page.getByText('Private reply contacts', {exact:true}).waitFor();
-  assert.equal(new URL(page.url()).hash, `#key=${task.manageKey}`);
+  assert.equal(new URL(page.url()).hash, `#key=${authKey}`);
   assert.equal(new URL(page.url()).searchParams.get('created'), '1');
   assert.equal(new URL(page.url()).searchParams.has('key'), false);
   assert.equal(await page.locator('.poll-description').textContent(), 'Keep my words 原样');
