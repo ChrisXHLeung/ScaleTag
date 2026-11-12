@@ -27,7 +27,8 @@ COPY package.json ./
 COPY src ./src
 COPY public ./public
 COPY deploy/healthcheck.js ./healthcheck.js
-COPY --chmod=0555 deploy/docker-entrypoint.sh /usr/local/bin/scaletag-entrypoint
+COPY deploy/docker-entrypoint.sh /usr/local/bin/scaletag-entrypoint
+RUN chmod 0555 /usr/local/bin/scaletag-entrypoint
 USER node
 VOLUME ["/data"]
 EXPOSE 3000

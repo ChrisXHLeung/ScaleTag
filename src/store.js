@@ -1,6 +1,7 @@
 import { mkdir, readdir, unlink, chmod, statfs } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { verify } from "@node-rs/argon2";
 import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
 import {
@@ -15,18 +16,30 @@ import {
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const ID_PATTERN = /^[a-f0-9]{24}$/;
+const ARGON2_VERIFIER = /^\$argon2id\$v=19\$m=19456,t=2,p=1\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/;
+let activePasswordOperations = 0;
+async function passwordOperation(fn) {
+  if (activePasswordOperations >= 2)
+    throw new AppError(429, "Management is busy. Please try again.");
+  activePasswordOperations++;
+  try {
+    return await fn();
+  } finally {
+    activePasswordOperations--;
+  }
+}
+
 export const voterHash = (value) =>
   createHash("sha256").update(value).digest("hex");
 
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
   (p.type ?? "poll") === "task" ? (p.taskState ?? "open") : undefined;
-// Only tasks with a stored management-key hash have someone who can read
-// private reply contacts. Legacy tasks never had a key issued.
+// Tasks created before management credentials were introduced have no verifier.
 export const hasManageKey = (p) =>
   ["task", "sale"].includes(p.type) &&
   typeof p.manageKeyHash === "string" &&
-  MANAGE_KEY_PATTERN.test(p.manageKeyHash);
+  (MANAGE_KEY_PATTERN.test(p.manageKeyHash) || ARGON2_VERIFIER.test(p.manageKeyHash));
 // Public reply view: name and message only. Phone and email are never
 // included, for new replies or for replies stored before contacts became
 // private (including legacy tasks, whose contacts nobody can view any more).
@@ -454,38 +467,40 @@ export class PollStore {
     });
   }
 
-  // Returns the live task document only when `key` matches its stored hash.
-  // Legacy tasks (no hash), polls and malformed keys are all rejected.
-  async authorizedTask(id, key, type = "task") {
-    const db = await this.live(id),
-      p = db.data;
-    if (p.type !== type) throw new AppError(404, "Post not found.");
-    if (
-      typeof key !== "string" ||
-      !MANAGE_KEY_PATTERN.test(key) ||
-      typeof p.manageKeyHash !== "string" ||
-      !MANAGE_KEY_PATTERN.test(p.manageKeyHash) ||
-      !timingSafeEqual(
-        Buffer.from(voterHash(key), "hex"),
-        Buffer.from(p.manageKeyHash, "hex"),
-      )
-    )
+  async withManagedPost(id, key, type, fn) {
+    if (typeof key !== "string" || !MANAGE_KEY_PATTERN.test(key))
       throw new AppError(403, INVALID_MANAGE_LINK);
-    return db;
+    const snapshot = (await this.read(id)).data;
+    if (snapshot?.type !== type || snapshot.deleteAt <= this.clock() ||
+        (type === "sale" && (snapshot.giveawayVersion !== 1 ||
+         snapshot.saleState === "closed" || snapshot.endsAt <= this.clock())))
+      throw new AppError(404, "Post not found.");
+    const verifier = snapshot.manageKeyHash;
+    if (!hasManageKey(snapshot)) throw new AppError(403, INVALID_MANAGE_LINK);
+    // Verify outside the SQLite writer transaction; recheck the live record
+    // under the write lock before returning contacts or changing state.
+    const valid = ARGON2_VERIFIER.test(verifier)
+      ? await passwordOperation(() => verify(verifier, key))
+      : timingSafeEqual(Buffer.from(voterHash(key), "hex"), Buffer.from(verifier, "hex"));
+    if (!valid) throw new AppError(403, INVALID_MANAGE_LINK);
+    return this.exclusive(id, async () => {
+      const db = await this.live(id);
+      if (db.data.type !== type || db.data.manageKeyHash !== verifier)
+        throw new AppError(403, INVALID_MANAGE_LINK);
+      return fn(db);
+    });
   }
 
   // Authenticated view: the only response that includes reply phone/email.
   async manageTask(id, key) {
-    return this.exclusive(id, async () => {
-      const p = (await this.authorizedTask(id, key)).data;
+    return this.withManagedPost(id, key, "task", ({ data: p }) => {
       return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
     });
   }
 
   async setTaskState(id, key, state) {
-    return this.exclusive(id, async () => {
-      const db = await this.authorizedTask(id, key),
-        p = db.data;
+    return this.withManagedPost(id, key, "task", async (db) => {
+      const p = db.data;
       if (!TASK_STATES.includes(state))
         throw new AppError(400, "Choose a valid task status.");
       const current = taskStateOf(p);
@@ -505,15 +520,13 @@ export class PollStore {
   }
 
   async manageSale(id, key) {
-    return this.exclusive(id, async () => {
-      const p = (await this.authorizedTask(id, key, "sale")).data;
+    return this.withManagedPost(id, key, "sale", ({ data: p }) => {
       return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
     });
   }
 
   async closeSale(id, key) {
-    return this.exclusive(id, async () => {
-      const db = await this.authorizedTask(id, key, "sale");
+    return this.withManagedPost(id, key, "sale", async (db) => {
       db.data.saleState = "closed";
       await this.write(db);
       return this.public(db.data);
