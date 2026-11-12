@@ -17,6 +17,12 @@ import {
   bindManagementCopy,
 } from "/common.js";
 import { mountSocial } from "/social.js";
+import {
+  createTaskCredentials,
+  deriveTaskAuthKey,
+  unwrapTaskPrivateKey,
+  decryptReplyContacts,
+} from "/task-crypto.js";
 
 export function createTask() {
   document.title = t("Create a task — ScaleTag", "发布任务 — ScaleTag");
@@ -57,6 +63,8 @@ export function createTask() {
       const images = await photos.readImages();
       if (!position || Date.now() - locatedAt > 300000) await getLocation();
       const value = (id) => main.querySelector(id).value.trim();
+      const { password, authKey, contactPublicKey, encryptedPrivateKey } =
+        await createTaskCredentials();
       const task = await api("/api/tasks", {
         title: value("#task-title"),
         description: value("#task-description"),
@@ -66,9 +74,17 @@ export function createTask() {
         location: position,
         mapVisible: main.querySelector("#task-map-consent").checked,
         retentionAccepted: main.querySelector("#task-retention").checked,
+        authKey,
+        contactPublicKey,
+        encryptedPrivateKey,
       });
       history.replaceState(null, "", localizedPath(`/task/${task.id}/manage?created=1`));
-      await taskPage(task.id, { manage: true, password: task.manageKey, published: task });
+      await taskPage(task.id, {
+        manage: true,
+        password,
+        authKey,
+        published: { ...task, encryptedPrivateKey, replies: task.replies ?? [] },
+      });
     } catch (e) {
       error.textContent = e.message;
       error.hidden = false;
@@ -107,15 +123,27 @@ export function privateRepliesHtml(replies = []) {
     .join("");
 }
 
-export async function taskPage(id, { manage = false, password, published } = {}) {
+async function decryptManagedTask(id, password, task) {
+  if (!password || !task?.encryptedPrivateKey) return task.replies ?? [];
+  await unwrapTaskPrivateKey(password, task.contactPublicKey, task.encryptedPrivateKey);
+  return decryptReplyContacts(password, { ...task, replies: task.replies ?? [] }, id);
+}
+
+export async function taskPage(id, { manage = false, password, authKey, published } = {}) {
   const legacyKey = manage && !password ? manageKeyFromHash() : undefined;
   const key = password ?? legacyKey;
   if (manage && !key) return managementPasswordForm(
     (password) => taskPage(id, { manage: true, password }),
   );
+  const requestAuthKey = manage
+    ? (authKey ?? (password ? await deriveTaskAuthKey(password) : legacyKey))
+    : undefined;
   let task = published ?? (manage
-    ? await api(`/api/tasks/${id}/manage`, { key })
+    ? await api(`/api/tasks/${id}/manage`, { authKey: requestAuthKey })
     : await api(`/api/tasks/${id}`));
+  let privateReplies = manage
+    ? await decryptManagedTask(id, password, task)
+    : [];
   document.title = `${manage ? t("Manage: ", "管理：") : ""}${task.title} — ScaleTag`;
   const created = new URLSearchParams(location.search).has("created");
   const manageUrl = new URL(localizedPath(`/task/${id}/manage`), location.origin).href;
@@ -167,8 +195,7 @@ export async function taskPage(id, { manage = false, password, published } = {})
   let social;
   // Contacts come only from the authenticated manage response; the status
   // response and public social data never include them.
-  let privateReplies = task.replies ?? [],
-    loadingContacts = false;
+  let loadingContacts = false;
   function renderPrivateReplies() {
     const list = main.querySelector("#private-reply-list");
     if (!list) return; // The task may have left the website meanwhile.
@@ -180,8 +207,8 @@ export async function taskPage(id, { manage = false, password, published } = {})
     if (!manage || loadingContacts) return;
     loadingContacts = true;
     try {
-      const data = await api(`/api/tasks/${id}/manage`, { key });
-      privateReplies = data.replies ?? [];
+      const data = await api(`/api/tasks/${id}/manage`, { authKey: requestAuthKey });
+      privateReplies = await decryptManagedTask(id, password, data);
       const error = main.querySelector("#private-replies-error");
       if (error) error.hidden = true;
       renderPrivateReplies();
@@ -199,7 +226,7 @@ export async function taskPage(id, { manage = false, password, published } = {})
     renderPrivateReplies();
     main.querySelector("#refresh-private-replies").onclick =
       refreshPrivateReplies;
-    if (!legacyKey) bindManagementCopy(manageUrl, key);
+    if (!legacyKey) bindManagementCopy(manageUrl, password);
     else main.querySelector("#copy-manage-link").onclick = async () => {
       try {
         await navigator.clipboard.writeText(privateLink);
@@ -228,7 +255,7 @@ export async function taskPage(id, { manage = false, password, published } = {})
           .querySelectorAll("[data-task-state]")
           .forEach((b) => (b.disabled = true));
         try {
-          task = await api(`/api/tasks/${id}/state`, { key, state });
+          task = await api(`/api/tasks/${id}/state`, { authKey: requestAuthKey, state });
           toast(t(`Task marked ${stateLabel(task.taskState)}.`, `任务已标记为${stateLabel(task.taskState)}。`));
           social?.refresh();
         } catch (e) {

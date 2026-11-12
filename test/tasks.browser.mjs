@@ -10,6 +10,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { createApp } from "../src/app.js";
 import { PollStore, DAY } from "../src/store.js";
+import { createTaskCredentials } from "../public/task-crypto.js";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "scaletag-tasks-"));
@@ -64,6 +65,11 @@ async function fixture(t) {
     browser,
     store,
     input,
+    async createTask() {
+      const { password, authKey, contactPublicKey, encryptedPrivateKey } = await createTaskCredentials();
+      const task = await store.create({ ...input, authKey, contactPublicKey, encryptedPrivateKey });
+      return { ...task, manageKey: password };
+    },
     errors,
     advance(ms) {
       now += ms;
@@ -152,7 +158,7 @@ test("anonymous task publication, persistent likes and private email reply work 
 
 test("phone-only and dual-contact replies are escaped; polls have likes without reply fields", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   await f.page.goto(f.origin + `/task/${task.id}`);
   await f.page.waitForFunction(
     () => !document.querySelector("#send-reply")?.disabled,
@@ -177,7 +183,9 @@ test("phone-only and dual-contact replies are escaped; polls have likes without 
     () => document.querySelectorAll(".reply-card").length === 2,
   );
   assert.equal(await f.page.locator(".reply-contacts").count(), 0);
-  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.goto(f.origin + `/task/${task.id}/manage`);
+  await f.page.getByLabel("Management password").fill(task.manageKey);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
   await f.page.waitForFunction(
     () => document.querySelectorAll("#private-reply-list .reply-card").length === 2,
   );
@@ -200,7 +208,7 @@ test("phone-only and dual-contact replies are escaped; polls have likes without 
 
 test("task and poll discovery filters work in list and real MapLibre; mobile form fits", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   await f.store.create({
     ...f.input,
     type: "poll",
@@ -268,7 +276,7 @@ test("task and poll discovery filters work in list and real MapLibre; mobile for
 
 test("offline social writes are disabled, contacts are not cached, and task expiry removes replies", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   await f.page.goto(f.origin + `/task/${task.id}`);
   await f.page.evaluate(() => navigator.serviceWorker.ready);
   await f.page.waitForFunction(
@@ -313,7 +321,7 @@ test("offline social writes are disabled, contacts are not cached, and task expi
 
 test("private management link changes progress; final states stop replies for every visitor", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   const requests = [];
   f.page.on("request", (r) => requests.push(r.url()));
   // An incomplete or wrong link never shows management controls.
@@ -325,12 +333,14 @@ test("private management link changes progress; final states stop replies for ev
   await f.page.getByText("management link is invalid", { exact: false }).waitFor();
   assert.equal(await f.page.locator("[data-task-state]").count(), 0);
   await f.page.goto("about:blank");
-  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.goto(f.origin + `/task/${task.id}/manage`);
+  await f.page.getByLabel("Management password").fill(task.manageKey);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
   await f.page.getByRole("heading", { name: "Manage this task" }).waitFor();
   assert.equal(await f.page.locator("#task-state").textContent(), "Open");
   assert.ok(
     (await f.page.locator("#manage-link").inputValue()).endsWith(
-      `/task/${task.id}/manage#key=${task.manageKey}`,
+      `/task/${task.id}/manage`,
     ),
   );
   await f.page.locator('[data-task-state="in_progress"]').click();
@@ -367,7 +377,7 @@ test("private management link changes progress; final states stop replies for ev
 
 test("public link copy fallback on the management page never exposes the private key", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   // Simulate a browser that denies clipboard access.
   await f.page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
@@ -375,7 +385,9 @@ test("public link copy fallback on the management page never exposes the private
       value: { writeText: () => Promise.reject(new Error("denied")) },
     });
   });
-  await f.page.goto(f.origin + `/task/${task.id}/manage#key=${task.manageKey}`);
+  await f.page.goto(f.origin + `/task/${task.id}/manage`);
+  await f.page.getByLabel("Management password").fill(task.manageKey);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
   await f.page.getByRole("heading", { name: "Manage this task" }).waitFor();
   assert.equal(await f.page.locator("#public-link-fallback").isHidden(), true);
   await f.page.locator("#copy-task-link").click();
@@ -402,7 +414,7 @@ test("public link copy fallback on the management page never exposes the private
 
 test("legacy tasks without management keys show explanation and prevent replies", async (t) => {
   const f = await fixture(t),
-    task = await f.store.create(f.input);
+    task = await f.createTask();
   const path = join(f.directory, `${task.id}.json`),
     disk = JSON.parse(await readFile(path, "utf8"));
   delete disk.manageKeyHash;

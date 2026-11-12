@@ -12,6 +12,8 @@ import {
   MANAGE_KEY_PATTERN,
   LEGACY_TASK_NO_REPLIES,
   REPLY_CONTACT_REQUIRED,
+  encryptedContactInput,
+  taskCredentialsInput,
 } from "./validation.js";
 
 export const DAY = 24 * 60 * 60 * 1000;
@@ -54,6 +56,7 @@ const publicReply = (r) => ({
 // Private reply view, returned only after management-key verification.
 const privateReply = (r) => ({
   ...publicReply(r),
+  ...(r.encryptedContact ? { encryptedContact: r.encryptedContact } : {}),
   ...(r.phone ? { phone: r.phone } : {}),
   ...(r.email ? { email: r.email } : {}),
 });
@@ -115,6 +118,7 @@ export class PollStore {
       saleState: p.saleState,
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
+      ...(p.contactPublicKey ? { contactPublicKey: p.contactPublicKey } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
       title: p.title,
@@ -195,9 +199,10 @@ export class PollStore {
 
   async create(input) {
     const managed = input.type === "task" || input.type === "sale";
-    const manageKey = managed ? randomBytes(32).toString("hex") : undefined;
+    const manageKey = input.type === "sale" ? randomBytes(32).toString("hex") : undefined;
+    const secret = input.type === "task" ? input.authKey : manageKey;
     const manageKeyHash = managed
-      ? await passwordOperation(() => hash(manageKey, { ...ARGON2_OPTIONS, salt: randomBytes(16) }))
+      ? await passwordOperation(() => hash(secret, { ...ARGON2_OPTIONS, salt: randomBytes(16) }))
       : undefined;
     return this.exclusive("create", async () => {
       if (this.storedCount() >= this.maxPolls)
@@ -207,9 +212,10 @@ export class PollStore {
         );
       const now = this.clock();
       const id = randomBytes(12).toString("hex");
+      const { authKey, ...postInput } = input;
       const p = {
         version: 1,
-        ...input,
+        ...postInput,
         id,
         createdAt: now,
         endsAt: now + (input.type === "sale" ? 3 : input.type === "task" ? 30 : 7) * DAY,
@@ -226,10 +232,14 @@ export class PollStore {
         replies: [],
         replyAuthors: {},
       };
-      // Only the verifier is persisted; creation returns the password once.
+      // Only the verifier is persisted; creation returns the password once for sales.
       if (managed) {
         if (p.type === "sale") p.saleState = "open";
-        else p.taskState = "open";
+        else {
+          p.taskState = "open";
+          p.contactPublicKey = input.contactPublicKey;
+          p.encryptedPrivateKey = input.encryptedPrivateKey;
+        }
         p.manageKeyHash = manageKeyHash;
       }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
@@ -257,6 +267,8 @@ export class PollStore {
       replyAuthors,
       manageKeyHash,
       manageKey,
+      authKey,
+      encryptedPrivateKey,
       taskState,
       ...result
     } = p;
@@ -392,7 +404,7 @@ export class PollStore {
       ),
       // Unauthenticated: never includes phone or email.
       replies: task ? (p.replies ?? []).map(publicReply) : [],
-      ...(task ? { acceptsPrivateContacts: hasManageKey(p) } : {}),
+      ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
       ...(p.type === "sale" ? { saleState: p.saleState ?? "open" } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       deleteAt: p.type === "sale" ? p.endsAt : p.deleteAt,
@@ -438,7 +450,9 @@ export class PollStore {
         );
       if (!hasManageKey(p))
         throw new AppError(409, LEGACY_TASK_NO_REPLIES);
-      const hasContact = Boolean(input.phone || input.email);
+      if (p.type === "task" && (!p.contactPublicKey || !p.encryptedPrivateKey))
+        throw new AppError(409, LEGACY_TASK_NO_REPLIES);
+      const hasContact = p.type === "task" ? Boolean(input.encryptedContact) : Boolean(input.phone || input.email);
       if (!hasContact)
         throw new AppError(400, REPLY_CONTACT_REQUIRED);
       p.replies ??= [];
@@ -460,8 +474,10 @@ export class PollStore {
         name: input.name ?? "Anonymous",
         message: input.message,
         ...(p.type === "sale" ? { amount: input.amount } : {}),
-        ...(input.phone ? { phone: input.phone } : {}),
-        ...(input.email ? { email: input.email } : {}),
+        ...(p.type === "task" ? { encryptedContact: input.encryptedContact } : {
+          ...(input.phone ? { phone: input.phone } : {}),
+          ...(input.email ? { email: input.email } : {}),
+        }),
         createdAt: now,
       });
       p.replyAuthors[hash] = now;
@@ -497,7 +513,11 @@ export class PollStore {
   // Authenticated view: the only response that includes reply phone/email.
   async manageTask(id, key) {
     return this.withManagedPost(id, key, "task", ({ data: p }) => {
-      return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
+      return {
+        ...this.public(p),
+        encryptedPrivateKey: p.encryptedPrivateKey,
+        replies: (p.replies ?? []).map(privateReply),
+      };
     });
   }
 

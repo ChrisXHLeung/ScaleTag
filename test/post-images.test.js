@@ -9,6 +9,7 @@ import { once } from 'node:events';
 import { PollStore, DAY } from '../src/store.js';
 import { SQLiteStore } from '../src/sqlite-store.js';
 import { createApp } from '../src/app.js';
+import { createTaskCredentials } from '../public/task-crypto.js';
 
 for (const Store of [PollStore, SQLiteStore]) for (const kind of ['poll', 'task']) {
   test(`${Store.name}: ${kind} uploads, bounds, privacy and photo expiry`, async t => {
@@ -22,6 +23,7 @@ for (const Store of [PollStore, SQLiteStore]) for (const kind of ['poll', 'task'
     assert.ok(original.length>614400 && original.length<=1048576);
     const photo = `data:image/png;base64,${original.toString('base64')}`;
     const input = {title:'Photo post',description:'A public description',signature:'Neighbour',options:['Yes','No'],reward:'Coffee',images:[photo,photo,photo],location:{latitude:43.651234,longitude:-79.381234},mapVisible:true,retentionAccepted:true};
+    if (kind === 'task') Object.assign(input, await createTaskCredentials().then(({authKey, contactPublicKey, encryptedPrivateKey}) => ({authKey, contactPublicKey, encryptedPrivateKey})));
     const endpoint = `/api/${kind}s`;
     const published = await request(endpoint,input); assert.equal(published.status,201, await published.clone().text());
     const post = await published.json(); assert.equal(post.images.length,3); assert.equal(post.deleteAt-now,30*DAY);

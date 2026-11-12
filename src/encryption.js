@@ -26,3 +26,11 @@ export function decryptDocument(envelope, key, context) {
   decipher.setAuthTag(tag);
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(data.ciphertext, 'base64')), decipher.final()]).toString('utf8'));
 }
+
+export {
+  createTaskCredentials,
+  deriveTaskAuthKey,
+  encryptReplyContact,
+  decryptReplyContacts,
+  unwrapTaskPrivateKey,
+} from '../public/task-crypto.js';

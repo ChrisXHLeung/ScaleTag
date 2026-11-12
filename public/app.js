@@ -566,7 +566,7 @@ function privacy() {
     <h2>${t("What other people can see", "其他人能看到什么")}</h2>
     <ul>
       <li>${t("Polls: Anyone can see the question, options and results. Voting ends after seven days. Results stay visible until day 30.", "投票：任何人都能看到问题、选项和结果。投票在七天后结束，结果保留至发布后第 30 天。")}</li>
-      <li>${t("Tasks: The task, reward, reply names and reply messages are public. A reply’s phone number and email are private. They are available to anyone with valid management access and to administrators with server access, and may be in private backups. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。回复者的电话和邮箱是私密的，可由有权管理任务的人和有服务器访问权限的管理员查看，也可能保存在私有备份中。标为已完成或已关闭的任务停止接收回复。")}</li>
+      <li>${t("Tasks: The task, reward, reply names and reply messages are public. New replies encrypt phone numbers and email addresses in the browser; the task management password is needed to decrypt them. Encrypted copies may remain in private backups. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。新回复的电话和邮箱在浏览器中加密，需要任务管理密码才能解密；私有备份中可能保留加密副本。标为已完成或已关闭的任务停止接收回复。")}</li>
       <li>${t("Giveaways: The pickup location you write is public. Visitors can like the post. Giveaways are visible for up to 72 hours, or until the publisher takes them down. ScaleTag does not collect contact details for giveaways.", "闲置赠予：你填写的领取地点会公开。访客可以点赞。帖子公开最多 72 小时，发布者也可以提前下架。ScaleTag 不会收集赠予参与者的联系方式。")}</li>
     </ul>
     <p>${t("Names are self-reported. Keep private contact details out of public text, pickup directions and photos.", "名字由用户自行填写，未经身份验证。请勿在公开文字、领取说明或照片中留下私人联系方式。")}</p>

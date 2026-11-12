@@ -14,6 +14,7 @@ import { once } from "node:events";
 import { PollStore, DAY, voterHash } from "../src/store.js";
 import { createApp } from "../src/app.js";
 import { pollInput, distanceKm } from "../src/validation.js";
+import { createTaskCredentials, encryptReplyContact, decryptReplyContacts } from "../public/task-crypto.js";
 
 const origin = "https://scaletag.test";
 const input = (overrides = {}) => ({
@@ -580,9 +581,12 @@ const taskBody = (extra = {}) => ({
   ...extra,
 });
 async function createTask(f, extra) {
-  const r = await f.request("/api/tasks", taskBody(extra));
-  assert.equal(r.status, 201);
-  return r.json();
+  const creds = await createTaskCredentials();
+  const { authKey, contactPublicKey, encryptedPrivateKey, password } = creds;
+  const r = await f.request("/api/tasks", taskBody({ ...extra, authKey, contactPublicKey, encryptedPrivateKey }));
+  assert.equal(r.status, 201, await r.clone().text());
+  const task = await r.json();
+  return { ...task, manageKey: authKey, password };
 }
 async function socialSession(f, id) {
   const r = await f.request(`/api/posts/${id}/social`);
@@ -593,13 +597,15 @@ async function socialSession(f, id) {
     data: await r.json(),
   };
 }
-const replyBody = (extra = {}) => ({
-  name: "Neighbour",
-  message: "I can help on Saturday.",
-  email: "helper@example.com",
-  privacyAccepted: true,
-  ...extra,
-});
+async function replyBody(task, extra = {}) {
+  const { name = "Neighbour", message = "I can help on Saturday.", email = "helper@example.com", phone = "", privacyAccepted, ...rest } = extra;
+  const validPhone = !phone || (/^[+0-9(). #x-]+$/i.test(phone) && phone.replace(/\D/g, "").length >= 5 && phone.replace(/\D/g, "").length <= 20);
+  const validEmail = !email || /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+  const encryptedContact = (phone || email) && validPhone && validEmail
+    ? await encryptReplyContact(task.contactPublicKey, {phone, email}, task.id)
+    : {};
+  return { name, message, encryptedContact, privacyAccepted: Object.hasOwn(extra, "privacyAccepted") ? privacyAccepted : true, ...rest };
+}
 const CONTACT_STRINGS = [
   "helper@example.com",
   "both@example.com",
@@ -735,7 +741,7 @@ test("task replies require privacy consent; phone-only, email-only and both work
   ]) {
     const r = await f.request(
       `/api/posts/${task.id}/replies`,
-      replyBody(extra),
+      await replyBody(task, extra),
       session.cookie,
     );
     assert.equal(r.status, 400, JSON.stringify(extra));
@@ -748,7 +754,7 @@ test("task replies require privacy consent; phone-only, email-only and both work
   ]) {
     const r = await f.request(
       `/api/posts/${task.id}/replies`,
-      replyBody(extra),
+      await replyBody(task, extra),
       session.cookie,
     );
     assert.equal(r.status, 201);
@@ -792,7 +798,7 @@ test("task replies require privacy consent; phone-only, email-only and both work
   // Only the authenticated management POST returns contacts.
   const managed = await (await manageRequest(f, task.id, { key: task.manageKey })).json();
   assert.deepEqual(
-    managed.replies.map((r) => [r.message, r.phone, r.email]),
+    (await decryptReplyContacts(task.password, managed, task.id)).map((r) => [r.message, r.phone, r.email]),
     [
       ["I can help on Saturday.", "+1 (416) 555-0123", undefined],
       ["I can help on Saturday.", undefined, "helper@example.com"],
@@ -801,7 +807,7 @@ test("task replies require privacy consent; phone-only, email-only and both work
   );
   // Contacts remain in the private store (and therefore in private backups).
   const disk = JSON.parse(await readFile(join(f.directory, `${task.id}.json`), "utf8"));
-  assert.equal(disk.replies[2].email, "both@example.com");
+  assert.ok(!JSON.stringify(disk).includes("both@example.com"));
   const poll = await f.create(),
     pollSession = await socialSession(f, poll.id);
   assert.equal(pollSession.data.acceptsPrivateContacts, undefined);
@@ -809,7 +815,7 @@ test("task replies require privacy consent; phone-only, email-only and both work
     (
       await f.request(
         `/api/posts/${poll.id}/replies`,
-        replyBody(),
+        await replyBody(task),
         pollSession.cookie,
       )
     ).status,
@@ -823,7 +829,7 @@ test("reply contacts are returned only after management-key verification, with p
     other = await createTask(f),
     session = await socialSession(f, task.id);
   assert.equal(
-    (await f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie)).status,
+    (await f.request(`/api/posts/${task.id}/replies`, await replyBody(task), session.cookie)).status,
     201,
   );
   for (const body of [
@@ -854,7 +860,7 @@ test("reply contacts are returned only after management-key verification, with p
   assert.equal(ok.headers.get("cache-control"), "no-store, private, max-age=0");
   assert.equal(ok.headers.get("pragma"), "no-cache");
   const data = await ok.json();
-  assert.equal(data.replies[0].email, "helper@example.com");
+  assert.equal((await decryptReplyContacts(task.password, data, task.id))[0].email, "helper@example.com");
   assert.equal(data.manageKey, undefined);
   assert.equal(data.manageKeyHash, undefined);
   assert.equal(data.replyAuthors, undefined);
@@ -922,8 +928,8 @@ test("reply bursts serialize and full post expiry removes likes, replies, contac
     task = await createTask(f),
     session = await socialSession(f, task.id);
   const burst = await Promise.all(
-    Array.from({ length: 10 }, () =>
-      f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie),
+    Array.from({ length: 10 }, async () =>
+      f.request(`/api/posts/${task.id}/replies`, await replyBody(task), session.cookie),
     ),
   );
   assert.equal(burst.filter((r) => r.status === 201).length, 1);
@@ -947,7 +953,7 @@ test("reply bursts serialize and full post expiry removes likes, replies, contac
     (
       await f.request(
         `/api/posts/${task.id}/replies`,
-        replyBody(),
+        await replyBody(task),
         session.cookie,
       )
     ).status,
@@ -1025,7 +1031,6 @@ test("task creation returns a private management key once; only its hash is stor
   const task = await createTask(f, {
     taskState: "completed",
     manageKeyHash: "0".repeat(64),
-    manageKey: "f".repeat(64),
   });
   assert.match(task.manageKey, /^[a-f0-9]{64}$/);
   assert.notEqual(task.manageKey, "f".repeat(64));
@@ -1123,8 +1128,8 @@ test("progress states: in progress accepts replies; completed and closed are fin
   const f = await fixture(t);
   const task = await createTask(f);
   const session = await socialSession(f, task.id);
-  const reply = () =>
-    f.request(`/api/posts/${task.id}/replies`, replyBody(), session.cookie);
+  const reply = async () =>
+    f.request(`/api/posts/${task.id}/replies`, await replyBody(task), session.cookie);
   let r = await setState(f, task.id, { key: task.manageKey, state: "in_progress" });
   assert.equal(r.status, 200);
   let data = await r.json();
@@ -1172,7 +1177,7 @@ test("progress states: in progress accepts replies; completed and closed are fin
     (
       await f.request(
         `/api/posts/${closed.id}/replies`,
-        replyBody(),
+        await replyBody(task),
         closedSession.cookie,
       )
     ).status,
@@ -1251,15 +1256,19 @@ test("legacy tasks without progress fields stay open, reject new replies and can
   assert.ok(!JSON.stringify(session.data).includes("legacy@example.com"));
   assert.deepEqual(session.data.replies.map((r) => r.message), ["Earlier reply."]);
   for (const extra of [{}, { email: "", phone: "+1 416 555 0123" }, { email: "", phone: "" }]) {
-    const rejected = await f.request(`/api/posts/${task.id}/replies`, replyBody(extra), session.cookie);
-    assert.equal(rejected.status, 409);
-    const { error } = await rejected.json();
-    assert.match(error, /no private management link/);
-    assert.match(error, /cannot retrieve contact details/);
+    const rejected = await f.request(`/api/posts/${task.id}/replies`, await replyBody(task, extra), session.cookie);
+    if (extra.email === "" && extra.phone === "") {
+      assert.equal(rejected.status, 400);
+    } else {
+      assert.equal(rejected.status, 409);
+      const { error } = await rejected.json();
+      assert.match(error, /no private management link/);
+      assert.match(error, /cannot retrieve contact details/);
+    }
   }
   // Contact details smuggled into public fields are rejected by input validation first.
   assert.equal(
-    (await f.request(`/api/posts/${task.id}/replies`, replyBody({ email: "", message: "Mail me: x@example.com" }), session.cookie)).status,
+    (await f.request(`/api/posts/${task.id}/replies`, await replyBody(task, { email: "", message: "Mail me: x@example.com" }), session.cookie)).status,
     400,
   );
   // The originally issued key no longer matches anything stored, so the

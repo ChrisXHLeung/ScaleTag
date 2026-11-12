@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import assert from "node:assert/strict";
+import { createTaskCredentials, encryptReplyContact, decryptReplyContacts } from "../public/task-crypto.js";
 
 const reservation = createServer().listen(0, "127.0.0.1");
 await once(reservation, "listening");
@@ -96,7 +97,9 @@ try {
       .toString("hex"),
     "89504e470d0a1a0a",
   );
+  const taskCredentials = await createTaskCredentials();
   const taskResponse = await request("/api/tasks", {
+    authKey: taskCredentials.authKey, contactPublicKey: taskCredentials.contactPublicKey, encryptedPrivateKey: taskCredentials.encryptedPrivateKey,
     title: "Isolated container task",
     description: "A temporary task in the disposable test volume.",
     reward: "A coffee",
@@ -118,7 +121,7 @@ try {
         `/api/posts/${task.id}/replies`,
         {
           message: "I can help.",
-          phone: "+1 416 555 0123",
+          encryptedContact: await encryptReplyContact(taskCredentials.contactPublicKey, { phone: "+1 416 555 0123" }, task.id),
           privacyAccepted: true,
         },
         socialCookie,
@@ -166,9 +169,9 @@ try {
   assert.equal(restoredSocial.replies[0].phone, undefined);
   assert.equal(restoredSocial.replies[0].email, undefined);
   const managedTask = await (
-    await request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })
+    await request(`/api/tasks/${task.id}/manage`, { key: taskCredentials.authKey })
   ).json();
-  assert.equal(managedTask.replies[0].phone, "+1 416 555 0123");
+  assert.equal((await decryptReplyContacts(taskCredentials.password, managedTask, task.id))[0].phone, "+1 416 555 0123");
   assert.equal((await request(`/api/tasks/${task.id}`)).status, 200);
   assert.equal(restored.totalVotes, 1);
   assert.equal(restored.options[0].votes, 1);

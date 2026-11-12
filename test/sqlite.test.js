@@ -8,6 +8,7 @@ import { once } from "node:events";
 import { SQLiteStore } from "../src/sqlite-store.js";
 import { DAY } from "../src/store.js";
 import { createApp } from "../src/app.js";
+import { createTaskCredentials, encryptReplyContact, decryptReplyContacts } from "../public/task-crypto.js";
 
 const input = {
   title: "Shared data", options: ["A", "B"], description: "", signature: "",
@@ -31,11 +32,14 @@ test("SQLite shares fresh discovery, counters, contacts and deduplication betwee
   await assert.rejects(a.vote(poll.id, "v0", 1), { status: 409 });
   await Promise.all([a.like(poll.id, "same"), b.like(poll.id, "same")]);
   assert.equal((await a.getSocial(poll.id, "same")).totalLikes, 1);
-  const task = await b.create({ ...input, type: "task", options: [], reward: "Coffee" });
-  await a.reply(task.id, "helper", { message: "Available", email: "helper@example.com" });
+  const creds = await createTaskCredentials();
+  const task = await b.create({ ...input, type: "task", options: [], reward: "Coffee", authKey: creds.authKey, contactPublicKey: creds.contactPublicKey, encryptedPrivateKey: creds.encryptedPrivateKey });
+  const encryptedContact = await encryptReplyContact(creds.contactPublicKey, { email: "helper@example.com" }, task.id);
+  await a.reply(task.id, "helper", { message: "Available", encryptedContact });
   assert.equal((await b.getSocial(task.id)).replies[0].email, undefined);
-  assert.equal((await b.manageTask(task.id, task.manageKey)).replies[0].email, "helper@example.com");
-  await assert.rejects(b.reply(task.id, "helper", { message: "Again", email: "helper@example.com" }), { status: 429 });
+  const managed = await b.manageTask(task.id, creds.authKey);
+  assert.equal((await decryptReplyContacts(creds.password, managed, task.id))[0].email, "helper@example.com");
+  await assert.rejects(b.reply(task.id, "helper", { message: "Again", encryptedContact }), { status: 429 });
   assert.equal(a.list({ type: "task" }).polls[0].replyCount, 1);
 });
 
@@ -146,15 +150,17 @@ test("readiness reflects storage access and includes instance/revision for the d
 
 test("SQLite shares task progress states between connections without exposing management hashes", async t => {
   const { a, b } = await fixture(t);
-  const task = await a.create({ ...input, type: "task", options: [], reward: "Coffee" });
-  assert.match(task.manageKey, /^[a-f0-9]{64}$/);
+  const creds = await createTaskCredentials();
+  const task = await a.create({ ...input, type: "task", options: [], reward: "Coffee", authKey: creds.authKey, contactPublicKey: creds.contactPublicKey, encryptedPrivateKey: creds.encryptedPrivateKey });
+  const encryptedContact = await encryptReplyContact(creds.contactPublicKey, { email: "helper@example.com" }, task.id);
+  assert.match(creds.authKey, /^[a-f0-9]{64}$/);
   await assert.rejects(b.setTaskState(task.id, "0".repeat(64), "closed"), { status: 403 });
-  assert.equal((await b.setTaskState(task.id, task.manageKey, "in_progress")).taskState, "in_progress");
+  assert.equal((await b.setTaskState(task.id, creds.authKey, "in_progress")).taskState, "in_progress");
   assert.equal((await a.get(task.id)).taskState, "in_progress");
-  await a.reply(task.id, "helper", { message: "Available", email: "helper@example.com" });
-  await a.setTaskState(task.id, task.manageKey, "completed");
-  await assert.rejects(b.reply(task.id, "late", { message: "Late", email: "late@example.com" }), { status: 409 });
-  await assert.rejects(b.setTaskState(task.id, task.manageKey, "open"), { status: 409 });
+  await a.reply(task.id, "helper", { message: "Available", encryptedContact });
+  await a.setTaskState(task.id, creds.authKey, "completed");
+  await assert.rejects(b.reply(task.id, "late", { message: "Late", encryptedContact }), { status: 409 });
+  await assert.rejects(b.setTaskState(task.id, creds.authKey, "open"), { status: 409 });
   const listed = b.list({ type: "task", status: "closed" });
   assert.equal(listed.polls[0].taskState, "completed");
   assert.equal(b.list({ type: "task", status: "open" }).polls.length, 0);

@@ -13,7 +13,8 @@ export const MANAGE_KEY_PATTERN = /^[a-f0-9]{64}$/;
 
 // The key travels only in a POST body; never in the URL or logs.
 export function manageKeyInput(body) {
-  const key = body && typeof body === "object" ? body.key : undefined;
+  const key =
+    body && typeof body === "object" ? (body.key ?? body.authKey) : undefined;
   if (typeof key !== "string" || !MANAGE_KEY_PATTERN.test(key))
     throw new AppError(403, "This management link is invalid for this task.");
   return key;
@@ -122,9 +123,67 @@ export function pollInput(body) {
   return { ...common, options };
 }
 
+export function encryptedPrivateKeyInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError(400, "A valid encrypted task private key is required.");
+  }
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 4 ||
+    !keys.every((k) =>
+      ["version", "salt", "iv", "ciphertext"].includes(k),
+    ) ||
+    value.version !== 1 ||
+    !isBase64Bytes(value.salt, 16, 16) ||
+    !isBase64Bytes(value.iv, 12, 12) ||
+    !isBase64Bytes(value.ciphertext, 17, 1024)
+  ) {
+    throw new AppError(400, "Invalid encrypted task private key payload.");
+  }
+  return {
+    version: 1,
+    salt: value.salt,
+    iv: value.iv,
+    ciphertext: value.ciphertext,
+  };
+}
+
+export function taskCredentialsInput(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new AppError(400, "Please complete the task form.");
+  }
+  if (
+    "password" in body ||
+    "manageKey" in body ||
+    "privateKey" in body ||
+    "phone" in body ||
+    "email" in body
+  ) {
+    throw new AppError(
+      400,
+      "Plaintext task credentials or contact details are not accepted.",
+    );
+  }
+  if (
+    typeof body.authKey !== "string" ||
+    !MANAGE_KEY_PATTERN.test(body.authKey)
+  ) {
+    throw new AppError(400, "A valid task authentication key is required.");
+  }
+  if (!isBase64Bytes(body.contactPublicKey, 65, 128)) {
+    throw new AppError(400, "A valid task contact public key is required.");
+  }
+  return {
+    authKey: body.authKey,
+    contactPublicKey: body.contactPublicKey,
+    encryptedPrivateKey: encryptedPrivateKeyInput(body.encryptedPrivateKey),
+  };
+}
+
 export function taskInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the task form.");
+  const credentials = taskCredentialsInput(body);
   // Share publication validation; task content has no voting options.
   const common = baseInput({
     ...body,
@@ -136,6 +195,7 @@ export function taskInput(body) {
     options: [],
     description: text(body.description, "Description", 4000),
     reward: text(body.reward, "Reward", 160),
+    ...credentials,
   };
 }
 
@@ -158,26 +218,63 @@ export const LEGACY_TASK_CONTACTS = LEGACY_TASK_NO_REPLIES;
 export const REPLY_CONTACT_REQUIRED =
   "Provide a phone number or email address, or both. Only the task creator can see them.";
 
+function isBase64Bytes(value, minBytes, maxBytes) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(value)
+  ) {
+    return false;
+  }
+  const bytes = Buffer.from(value, "base64");
+  return (
+    bytes.length >= minBytes &&
+    bytes.length <= maxBytes &&
+    bytes.toString("base64") === value
+  );
+}
+
+export function encryptedContactInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError(400, REPLY_CONTACT_REQUIRED);
+  }
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 4 ||
+    !keys.every((k) =>
+      ["version", "ephemeralPublicKey", "iv", "ciphertext"].includes(k),
+    ) ||
+    value.version !== 1 ||
+    !isBase64Bytes(value.ephemeralPublicKey, 65, 128) ||
+    !isBase64Bytes(value.iv, 12, 12) ||
+    !isBase64Bytes(value.ciphertext, 17, 1024)
+  ) {
+    throw new AppError(400, "Invalid encrypted contact payload.");
+  }
+  return {
+    version: 1,
+    ephemeralPublicKey: value.ephemeralPublicKey,
+    iv: value.iv,
+    ciphertext: value.ciphertext,
+  };
+}
+
 // Validates reply fields. New replies require a task with a private management link;
 // legacy tasks without one cannot accept replies because contacts cannot be retrieved.
 export function replyInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete your reply.");
+  if ("phone" in body || "email" in body)
+    throw new AppError(
+      400,
+      "Plaintext contact details are not accepted. Submit encryptedContact instead.",
+    );
   const message = text(body.message, "Reply", 2000);
   const name = text(body.name || "Anonymous", "Name", 60);
-  const phone = text(body.phone ?? "", "Phone", 40, false);
-  const email = text(body.email ?? "", "Email", 254, false);
   if (looksLikeContact(message) || looksLikeContact(name))
     throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
-  if (
-    phone &&
-    (!/^[+0-9(). #x-]+$/i.test(phone) ||
-      phone.replace(/\D/g, "").length < 5 ||
-      phone.replace(/\D/g, "").length > 20)
-  )
-    throw new AppError(400, "Enter a valid phone number.");
-  if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
-    throw new AppError(400, "Enter a valid email address.");
+  const encryptedContact = encryptedContactInput(body.encryptedContact);
   // A new acknowledgement field: older clients that showed the previous
   // "contact details are public" notice must reload to see the current terms.
   if (body.privacyAccepted !== true)
@@ -185,7 +282,7 @@ export function replyInput(body) {
       400,
       "Please confirm that your name and message will be public and that contact details stay private to the task creator. Reload the page if you do not see this notice.",
     );
-  return { message, name, phone, email };
+  return { message, name, encryptedContact };
 }
 
 export function distanceKm(a, b) {
@@ -208,7 +305,21 @@ export function saleInput(body) {
     pickupLocation: text(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1 };
 }
 export function offerInput(body) {
-  const reply = replyInput(body);
+  if (!body || typeof body !== "object")
+    throw new AppError(400, "Please complete your reply.");
+  const message = text(body.message, "Reply", 2000);
+  const name = text(body.name || "Anonymous", "Name", 60);
+  const phone = text(body.phone ?? "", "Phone", 40, false);
+  const email = text(body.email ?? "", "Email", 254, false);
+  if (looksLikeContact(message) || looksLikeContact(name))
+    throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
+  if (phone && (!/^[+0-9(). #x-]+$/i.test(phone) || phone.replace(/\D/g, "").length < 5 || phone.replace(/\D/g, "").length > 20))
+    throw new AppError(400, "Enter a valid phone number.");
+  if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
+    throw new AppError(400, "Enter a valid email address.");
+  if (body.privacyAccepted !== true)
+    throw new AppError(400, "Please confirm the privacy notice.");
+  const reply = { message, name, phone, email };
   if (body.nonBindingAccepted !== true)
     throw new AppError(400, "Confirm that your offer is non-binding communication only. ScaleTag does not handle payments, transactions, reservations or completed sales.");
   const amount = text(body.amount, "Offer", 160);

@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
+import { createTaskCredentials, encryptReplyContact, decryptReplyContacts } from "../public/task-crypto.js";
 
 const root = await mkdtemp(join(tmpdir(), "scaletag-ha-test-"));
 const project = `scaletag-ha-test-${process.pid}`;
@@ -102,12 +103,13 @@ try {
   await routed("app2", old);
   assert.equal((await (await request(`/api/polls/${p.id}`)).json()).totalVotes, 1);
   assert.equal((await request(`/api/polls/${p.id}/votes`, { optionId: 1 }, voter)).status, 409);
-  const taskResponse = await request("/api/tasks", { ...input, description: "Help with the garden.", options: [], reward: "Coffee" });
+  const taskCredentials = await createTaskCredentials();
+  const taskResponse = await request("/api/tasks", { ...input, description: "Help with the garden.", options: [], reward: "Coffee", authKey: taskCredentials.authKey, contactPublicKey: taskCredentials.contactPublicKey, encryptedPrivateKey: taskCredentials.encryptedPrivateKey });
   assert.equal(taskResponse.status, 201);
   const task = await taskResponse.json();
   const social = await request(`/api/posts/${task.id}/social`);
   const helper = social.headers.get("set-cookie").split(";")[0];
-  const reply = { message: "I can help", email: "helper@example.com", privacyAccepted: true };
+  const reply = { message: "I can help", encryptedContact: await encryptReplyContact(taskCredentials.contactPublicKey, { email: "helper@example.com" }, task.id), privacyAccepted: true };
   assert.equal((await request(`/api/posts/${task.id}/replies`, reply, helper)).status, 201);
   await compose("start", "app1");
   await routed("app1", old);
@@ -115,8 +117,8 @@ try {
   const publicSocial = await (await request(`/api/posts/${task.id}/social`)).json();
   assert.equal(publicSocial.replies[0].phone, undefined);
   assert.equal(publicSocial.replies[0].email, undefined);
-  const managedTask = await (await request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })).json();
-  assert.equal(managedTask.replies[0].email, reply.email);
+  const managedTask = await (await request(`/api/tasks/${task.id}/manage`, { key: taskCredentials.authKey })).json();
+  assert.equal((await decryptReplyContacts(taskCredentials.password, managedTask, task.id))[0].email, "helper@example.com");
   assert.equal((await request(`/api/posts/${task.id}/replies`, reply, helper)).status, 429);
   console.log("PASS: failover/failback preserve posts, votes, deduplication and replies.");
 
