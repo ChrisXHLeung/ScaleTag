@@ -1,7 +1,7 @@
 import { mkdir, readdir, unlink, chmod, statfs } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { verify } from "@node-rs/argon2";
+import { Algorithm, hash, verify } from "@node-rs/argon2";
 import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
 import {
@@ -16,6 +16,7 @@ import {
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const ID_PATTERN = /^[a-f0-9]{24}$/;
+const ARGON2_OPTIONS = { algorithm: Algorithm.Argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const ARGON2_VERIFIER = /^\$argon2id\$v=19\$m=19456,t=2,p=1\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/;
 let activePasswordOperations = 0;
 async function passwordOperation(fn) {
@@ -193,6 +194,11 @@ export class PollStore {
   }
 
   async create(input) {
+    const managed = input.type === "task" || input.type === "sale";
+    const manageKey = managed ? randomBytes(32).toString("hex") : undefined;
+    const manageKeyHash = managed
+      ? await passwordOperation(() => hash(manageKey, { ...ARGON2_OPTIONS, salt: randomBytes(16) }))
+      : undefined;
     return this.exclusive("create", async () => {
       if (this.storedCount() >= this.maxPolls)
         throw new AppError(
@@ -220,14 +226,11 @@ export class PollStore {
         replies: [],
         replyAuthors: {},
       };
-      // Tasks get a private management key. Only its SHA-256 hash is stored;
-      // the key itself is returned once, in this creation response.
-      let manageKey;
-      if (["task", "sale"].includes(p.type)) {
-        manageKey = randomBytes(32).toString("hex");
+      // Only the verifier is persisted; creation returns the password once.
+      if (managed) {
         if (p.type === "sale") p.saleState = "open";
         else p.taskState = "open";
-        p.manageKeyHash = voterHash(manageKey);
+        p.manageKeyHash = manageKeyHash;
       }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
       await this.write(db);

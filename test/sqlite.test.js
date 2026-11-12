@@ -159,7 +159,7 @@ test("SQLite shares task progress states between connections without exposing ma
   assert.equal(listed.polls[0].taskState, "completed");
   assert.equal(b.list({ type: "task", status: "open" }).polls.length, 0);
   const hash = a.read(task.id).data.manageKeyHash;
-  assert.match(hash, /^[a-f0-9]{64}$/);
+  assert.match(hash, /^\$argon2id\$v=19\$/);
   assert.ok(!JSON.stringify([listed, b.map(), await b.get(task.id), await b.getSocial(task.id)]).includes(hash));
   assert.equal(a.read(task.id).data.deleteAt, task.deleteAt);
 });

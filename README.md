@@ -12,7 +12,7 @@ The production site runs on Oracle Cloud Infrastructure (OCI) with the lightweig
 
 - Use the homepage for the introduction, and **`/create`** to create a poll with a title, plain-text description, up to three external HTTPS image URLs, 2–12 options, and an unverified signature.
 - Publish a task at **`/create/task`** with a required title, description and free-text reward offer, plus an optional unverified name. Tasks remain available for 30 days.
-- Track task progress as **Open**, **In progress**, **Completed** or **Closed** using a private management link shown once after publishing. Completed and Closed are final and stop new replies.
+- Track task progress as **Open**, **In progress**, **Completed** or **Closed** using a management URL and a password issued once at publication. Completed and Closed are final and stop new replies.
 - Like polls and tasks anonymously. Task reply names and messages are public; the required phone number or email address (both are allowed) is private and shown only on the task's secret management page. Respondents explicitly acknowledge both rules.
 - Require browser geolocation to publish. Store the coordinates with the poll without exposing exact coordinates in public API responses; publish only rounded map positions after explicit consent.
 - Start immediately; accept a single choice for exactly **168 hours**.
@@ -40,7 +40,7 @@ The combined listing is named **PostList**. Old `/VoteList` links and installed-
 
 ## Free giveaways
 
-The former sale feature now accepts free giveaways at `/create/sale`. A post requires a public pickup location and GPS/map consent, and may include photos. Visitors may like it without supplying contact details. A private management link lets the publisher take it down; new giveaways become inaccessible after 72 hours. Older sale listings are removed from active storage by periodic cleanup, and the old offer endpoint no longer accepts submissions. New giveaways are removed from active storage 30 days after publication. Backups follow the existing 90-day archive retention policy.
+The former sale feature now accepts free giveaways at `/create/sale`. A post requires a public pickup location and GPS/map consent, and may include photos. Visitors may like it without supplying contact details. The management URL and password let the publisher take it down; new giveaways become inaccessible after 72 hours. Older sale listings are removed from active storage by periodic cleanup, and the old offer endpoint no longer accepts submissions. New giveaways are removed from active storage 30 days after publication. Backups follow the existing 90-day archive retention policy.
 
 ## Tasks, likes and replies
 
@@ -51,7 +51,7 @@ Select **Poll** or **Task** in the publishing form. Tasks use the same required 
 | Reply field | Who can see it |
 | --- | --- |
 | Name (optional, unverified) and message | **Public**: everyone, via the task page and `GET /api/posts/<id>/social`. Reply counts stay public in PostList and summaries. |
-| Phone and/or email | **Private**: only someone holding the task's management link, via the authenticated `POST /api/tasks/<id>/manage`; plus administrators with server access and the encrypted private backups (90-day policy). |
+| Phone and/or email | **Private**: only someone with private management access, via the authenticated `POST /api/tasks/<id>/manage`; plus administrators with server access and the encrypted private backups (90-day policy). |
 
 - On tasks with a management key, a reply requires a message and **at least one of phone or email**. The form separates the *public* name/message from the *private* contact fields and requires a `privacyAccepted` acknowledgement stating exactly this. Older clients that still send the former `contactAccepted` field are rejected with a message asking them to reload.
 - Respondents are told never to put contact information in their name or message. The server rejects names/messages that look like they contain an email address or phone number (`+` international numbers, or 3-3-4 digit groups). This is a safety net, not a guarantee; dates, times and prices are not matched.
@@ -63,9 +63,9 @@ Each post has a separate random `ss_<id>` cookie, `HttpOnly`, `Secure` over HTTP
 
 Resource bounds: 50,000 likes per post by default, 200 replies per task, one reply per browser per task per minute, and 20 valid reply attempts per minute globally without IP identifiers. Poll/task creation shares the existing creation limit. These are low-cost resource guards, not identity verification or strong spam protection. Old poll JSON remains compatible; social fields initialize on first use. Daily backups include task JSON, replies and private deduplication hashes, with the same root-only permissions and retention.
 
-### Task progress and private management links
+### Task progress and private management
 
-Every new task starts **Open**. Publishing returns a 256-bit random management key exactly once; the browser is redirected to `/task/<id>/manage?created=1#key=<key>`, which asks the poster to save that private link. Anyone holding it can change the task's status and read reply phone numbers and email addresses; there is no account, recovery or reissue.
+Every new task starts **Open**. Publishing a task or giveaway issues a 256-bit random management password once. The management page has a button that copies its URL and the password in a single message. Open that URL later and enter the password to change task status, view task reply contacts or take down a giveaway. Existing private fragment links continue to work.
 
 | State         | Public badge | New replies | Can change to                     |
 | ------------- | ------------ | ----------- | --------------------------------- |
@@ -74,7 +74,7 @@ Every new task starts **Open**. Publishing returns a 256-bit random management k
 | `completed`   | Completed    | Rejected (`409`) | — final                      |
 | `closed`      | Closed       | Rejected (`409`) | — final                      |
 
-- **Secret handling.** Only the key's SHA-256 hash (`manageKeyHash`) is stored and compared in constant time. The key and hash are never returned by task, list, map, social or management responses, and SQLite discovery strips the hash before building summaries. The key lives in the URL fragment, which browsers do not send in page requests or `Referer` headers; it reaches the server only in the JSON body of a same-origin `POST`, so it is not in URLs or request logs. Keys in query strings are ignored. Private archives contain the hash under the 90-day policy. The link can still remain in browser history or be exposed by screenshots or sharing.
+- **Secret handling.** New records store only a salted Argon2id verifier in `manageKeyHash`. Existing SHA-256 verifiers remain valid for the matching older credentials. SQLite discovery and public responses exclude verifiers. The password is kept out of new management URLs and is sent only in the body of a same-origin JSON POST. Private archives contain the verifier under the 90-day policy. Passwords cannot be recovered or reissued.
 - **Authorization.** Missing, malformed or mismatched keys (including another task's key) return `403` and change nothing. The usual origin and JSON content-type checks apply. Polls have no states or keys.
 - **Replies.** Completed and Closed are final; existing replies stay visible, new replies are rejected by the server and the reply form is replaced by a notice. Likes stay available.
 - **Retention.** Changing status updates only `taskState` and `stateChangedAt`. `createdAt`, `endsAt` and the 30-day `deleteAt` are never changed, so a task and its management link stop working exactly 30 days after publication (`404`).

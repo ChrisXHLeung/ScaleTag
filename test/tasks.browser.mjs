@@ -83,9 +83,27 @@ test("anonymous task publication, persistent likes and private email reply work 
   await f.page.locator("#task-map-consent").check();
   await f.page.locator("#task-retention").check();
   await f.page.getByRole("button", { name: "Publish my task" }).click();
-  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1#key=[a-f0-9]{64}$/);
+  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1$/);
   const id = new URL(f.page.url()).pathname.split("/")[2];
   await f.page.getByRole("heading", { name: f.input.title }).waitFor();
+  await f.page.evaluate(() => {
+    navigator.clipboard.writeText = async (text) => { window.copiedManagement = text; };
+  });
+  await f.page.getByRole("button", { name: "Copy URL and password" }).click();
+  const message = await f.page.evaluate(() => window.copiedManagement);
+  const [, url, password] = /^Management URL: (.+)\nManagement password: ([a-f0-9]{64})$/.exec(message);
+  assert.equal(url, f.origin + `/task/${id}/manage`);
+  assert.equal(new URL(f.page.url()).hash, "");
+  const manager = await f.context.newPage();
+  await manager.goto(url);
+  await manager.getByLabel("Management password").fill("0".repeat(64));
+  await manager.getByRole("button", { name: "Unlock" }).click();
+  await manager.getByRole("alert").filter({ hasText: "invalid" }).waitFor();
+  assert.equal(await manager.locator("[data-task-state]").count(), 0);
+  await manager.getByLabel("Management password").fill(password);
+  await manager.getByRole("button", { name: "Unlock" }).click();
+  await manager.getByRole("heading", { name: "Manage this task" }).waitFor();
+  await manager.close();
   await f.page.getByRole("heading", { name: f.input.reward }).waitFor();
   const like = f.page.locator("#like-post");
   await like.waitFor();
@@ -96,6 +114,8 @@ test("anonymous task publication, persistent likes and private email reply work 
   await f.page.locator('#like-post[aria-pressed="true"]').waitFor();
   assert.equal(await f.page.locator("#like-count").textContent(), "1");
   await f.page.reload();
+  await f.page.getByLabel("Management password").fill(password);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
   await f.page.locator('#like-post[aria-pressed="true"]').waitFor();
   await f.page.locator("#reply-message").fill("I can help on Saturday.");
   await f.page.locator("#contact-consent").check();
@@ -298,7 +318,7 @@ test("private management link changes progress; final states stop replies for ev
   f.page.on("request", (r) => requests.push(r.url()));
   // An incomplete or wrong link never shows management controls.
   await f.page.goto(f.origin + `/task/${task.id}/manage`);
-  await f.page.getByText("management link is incomplete", { exact: false }).waitFor();
+  await f.page.getByLabel("Management password").waitFor();
   // Hash-only changes do not reload a page; reset between navigations.
   await f.page.goto("about:blank");
   await f.page.goto(f.origin + `/task/${task.id}/manage#key=${"0".repeat(64)}`);
@@ -484,7 +504,7 @@ test("poll and task real photo uploads, >600 KiB compression, legacy external po
   await f.page.locator("#task-map-consent").check();
   await f.page.locator("#task-retention").check();
   await f.page.getByRole("button", { name: "Publish my task" }).click();
-  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1#key=[a-f0-9]{64}$/);
+  await f.page.waitForURL(/\/task\/[a-f0-9]{24}\/manage\?created=1$/);
   const taskId = new URL(f.page.url()).pathname.split("/")[2];
   assert.equal(await f.page.locator(".sale-photos img").count(), 1);
   const storedTask = await f.store.get(taskId);

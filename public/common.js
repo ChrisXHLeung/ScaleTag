@@ -282,3 +282,63 @@ export {
   bindPhotoInput,
   uploadedPhotosHtml,
 };
+
+export function managementPasswordForm(unlock) {
+  main.innerHTML = `<section class="empty-page"><form id="manage-password-form" class="form-card">
+    <h1>${t("Manage this post", "管理此帖子")}</h1>
+    <label for="manage-password">${t("Management password", "管理密码")}</label>
+    <input id="manage-password" type="password" autocomplete="off" maxlength="64" required>
+    <button class="button" type="submit">${t("Unlock", "解锁")}</button>
+    <p class="form-error" role="alert" hidden></p>
+  </form></section>`;
+  const form = main.querySelector("#manage-password-form");
+  const input = form.querySelector("input");
+  const submit = form.querySelector("button");
+  const error = form.querySelector(".form-error");
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    submit.disabled = true;
+    error.hidden = true;
+    try {
+      await unlock(input.value.trim());
+      input.value = "";
+    } catch (e) {
+      error.textContent = e.status === 403
+        ? t("The management password is invalid.", "管理密码不正确。")
+        : e.message;
+      error.hidden = false;
+      input.select();
+    } finally {
+      submit.disabled = false;
+    }
+  };
+}
+
+export function managementDetails(url) {
+  return `<p>${t("Save the management URL and password. The password cannot be recovered if lost.", "请保存管理网址和密码。密码丢失后无法找回。")}</p>
+    <label for="manage-link">${t("Management URL", "管理网址")}</label>
+    <input id="manage-link" readonly value="${escape(url)}">
+    <button id="copy-manage-link" type="button" class="button secondary small">${t("Copy URL and password", "复制网址和密码")}</button>
+    <div id="manage-copy-fallback" hidden>
+      <label for="manage-copy-text">${t("Management details to copy", "可复制的管理信息")}</label>
+      <textarea id="manage-copy-text" readonly rows="3"></textarea>
+    </div>`;
+}
+
+export function bindManagementCopy(url, key) {
+  main.querySelector("#copy-manage-link").onclick = async () => {
+    const message = t(`Management URL: ${url}\nManagement password: ${key}`, `管理网址：${url}\n管理密码：${key}`);
+    try {
+      await navigator.clipboard.writeText(message);
+      toast(t("Management details copied.", "管理信息已复制。"));
+    } catch {
+      const input = main.querySelector("#manage-copy-text");
+      main.querySelector("#manage-copy-fallback").hidden = false;
+      input.value = message;
+      input.focus();
+      input.select();
+      toast(t("Copy the selected management details.", "请复制选中的管理信息。"));
+    }
+  };
+}

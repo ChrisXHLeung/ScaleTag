@@ -1035,7 +1035,7 @@ test("task creation returns a private management key once; only its hash is stor
   const disk = JSON.parse(
     await readFile(join(f.directory, `${task.id}.json`), "utf8"),
   );
-  assert.equal(disk.manageKeyHash, voterHash(task.manageKey));
+  assert.match(disk.manageKeyHash, /^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
   assert.equal(disk.taskState, "open");
   assert.ok(!JSON.stringify(disk).includes(task.manageKey));
   assert.ok(!("manageKey" in disk));

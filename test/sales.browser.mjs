@@ -73,7 +73,16 @@ async function fixture(t) {
 
 test("publish a giveaway, like it and take it down", async t => {
   const f=await fixture(t);
-  await f.page.goto(f.origin+'/create/sale');
+  await f.page.setViewportSize({ width: 320, height: 900 });
+  await f.page.goto(f.origin);
+  const entry = f.page.getByRole("link", { name: "Give away", exact: true });
+  assert.equal(await entry.getAttribute("href"), "/create/sale");
+  assert.equal(await entry.evaluate((link) => {
+    const range = document.createRange();
+    range.selectNodeContents(link.firstChild);
+    return range.getClientRects().length;
+  }), 1);
+  await entry.click();
   for (const width of [1440,768,320]) {
     await f.page.setViewportSize({width,height:900});
     assert.ok(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -88,6 +97,18 @@ test("publish a giveaway, like it and take it down", async t => {
   await f.page.locator('#publish-sale').click();
   await f.page.getByRole('heading',{name:'Manage giveaway'}).waitFor();
   const url=new URL(f.page.url()), id=url.pathname.split('/')[2];
+  assert.equal(url.hash, "");
+  await f.page.evaluate(() => {
+    navigator.clipboard.writeText = async (text) => { window.copiedManagement = text; };
+  });
+  await f.page.getByRole("button", { name: "Copy URL and password" }).click();
+  const message = await f.page.evaluate(() => window.copiedManagement);
+  const [, manageUrl, password] = /^Management URL: (.+)\nManagement password: ([a-f0-9]{64})$/.exec(message);
+  assert.equal(manageUrl, f.origin + `/sale/${id}/manage`);
+  await f.page.goto(manageUrl);
+  await f.page.getByLabel("Management password").fill(password);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
+  await f.page.getByRole("heading", { name: "Manage giveaway" }).waitFor();
   const visitor=await f.context.newPage();
   await visitor.goto(f.origin+'/sale/'+id);
   await visitor.getByText('Outside the library').waitFor();
