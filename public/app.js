@@ -573,8 +573,8 @@ function privacy() {
 
     <h2>${t("Private contact details in task replies", "任务回复中的私人联系方式")}</h2>
     <p>${t(
-      "When you enter a phone number or email address in the private fields of a task reply, your browser encrypts it with the task’s public key before sending it to ScaleTag. The task publisher’s browser uses the management password to decrypt it. ScaleTag stores encrypted contact details, and private backups may retain encrypted copies. Contacts saved before browser encryption was introduced may have been stored without this protection.",
-      "在任务回复的私人栏位填写电话或邮箱时，你的浏览器会先用该任务的公钥加密，再发送给 ScaleTag。任务发布者的浏览器使用管理密码解密。ScaleTag 保存的是加密后的联系方式，私有备份中也可能保留加密副本。启用浏览器加密前保存的联系方式可能没有这层保护。",
+      "When you enter a phone number or email address in the private fields of a task reply, your browser encrypts it with the task’s public key before sending it to ScaleTag. The task publisher’s browser uses the management password to decrypt it. ScaleTag stores encrypted contact details, and private backups may retain encrypted copies.",
+      "在任务回复的私人栏位填写电话或邮箱时，你的浏览器会先用该任务的公钥加密，再发送给 ScaleTag。任务发布者的浏览器使用管理密码解密。ScaleTag 保存的是加密后的联系方式，私有备份中也可能保留加密副本。",
     )}</p>
     <p>${t(
       "The task publisher can save or share the contact details after viewing them.",

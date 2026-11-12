@@ -47,8 +47,6 @@ Reply authors can send a phone number or email address without knowing the publi
 
 Access to stored records or storage encryption keys alone leaves the new contacts encrypted. The task publisher can save or share contacts after viewing them.
 
-Tasks created before this feature that lack contact encryption keys cannot accept new replies. Legacy reply contacts may have been stored without browser encryption.
-
 ## Argon2id management passwords
 
 For tasks, the browser derives a 256-bit authentication credential from the decoded password bytes using HKDF-SHA-256, the fixed salt `scaletag:task:hkdf-salt:v1` and the separate label `scaletag:task:auth-key:v1`. It sends the credential as 64 hexadecimal characters at publication and when requesting management data or changing task status. The credential grants access to the management API. Decrypting the new contact ciphertext requires the private key protected by the task password.
