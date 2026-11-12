@@ -99,6 +99,30 @@ All API responses use `no-store`. No task, reply, contact, like/vote request or 
 npm run test:tasks
 ```
 
+## Argon2id management passwords
+
+ScaleTag issues a separate password for each new task and giveaway. At publication the server generates 32 cryptographically random bytes (256 bits) and encodes them as 64 hexadecimal characters. The password is returned once in the uncached creation response. The management page can copy the URL and password together as text. The password stays out of the URL and is sent for verification in the body of a same-origin JSON POST over HTTPS in production.
+
+### Hashing parameters
+
+ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/packages/argon2) to produce an [Argon2id v1.3](https://www.rfc-editor.org/rfc/rfc9106) verifier. The production SQLite post document stores the verifier in `manageKeyHash` as a PHC string containing the algorithm, version, parameters, salt and derived hash.
+
+| Setting | Value |
+| --- | --- |
+| Variant and version | Argon2id, `v=19` (0x13) |
+| Memory | `m=19456` KiB (19 MiB) per operation |
+| Time cost | `t=2` passes |
+| Parallelism | `p=1` lane |
+| Salt | 16 random bytes generated separately for each verifier |
+| Derived hash | 32 bytes |
+
+### Verification and compatibility
+
+The server checks the submitted password's format, then verifies it before opening the SQLite write transaction. It rechecks the current post and its verifier inside the transaction before returning private information or changing state. Each application process permits two concurrent Argon2 operations. Excess work receives HTTP 429. Public responses omit the verifier, and ScaleTag cannot recover a lost password.
+
+Older management links continue to use their original SHA-256 verifiers. The two application instances gained support for reading both formats before new posts began issuing Argon2id credentials. Argon2id protects the management password. SQLCipher separately encrypts the SQLite database pages at rest.
+
+
 ## Map view
 
 PostList opens in **List** view. Choosing **Map** loads [MapLibre GL JS](https://maplibre.org/) 6.16.0 from ScaleTag and the Positron basemap from [OpenFreeMap](https://openfreemap.org/). There is no map API key, registration, separate map server or additional paid service. OpenFreeMap currently offers free public map hosting, including commercial use, without map-view quotas; it provides no SLA. Keep the OpenMapTiles/OpenStreetMap attribution visible. Map availability depends on the provider and the visitor's network/browser; List remains available independently.
