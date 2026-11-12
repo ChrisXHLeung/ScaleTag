@@ -84,7 +84,12 @@ export class SQLiteStore extends PollStore {
   remove(id) { this.db.prepare("DELETE FROM posts WHERE id=?").run(id); }
 
   count() {
-    return this.db.prepare("SELECT count(*) AS count FROM posts WHERE delete_at>? AND (coalesce(json_extract(document,'$.type'),'poll') <> 'sale' OR (json_extract(document,'$.giveawayVersion') = 1 AND coalesce(json_extract(document,'$.saleState'),'open') <> 'closed' AND ends_at>?))").get(this.clock(), this.clock()).count;
+    return this.db.prepare(`SELECT count(*) AS count FROM posts
+      WHERE delete_at>? AND json_extract(document,'$.frozenAt') IS NULL
+      AND (coalesce(json_extract(document,'$.type'),'poll') <> 'sale'
+        OR (json_extract(document,'$.giveawayVersion') = 1
+          AND coalesce(json_extract(document,'$.saleState'),'open') <> 'closed' AND ends_at>?))`)
+      .get(this.clock(), this.clock()).count;
   }
 
   storedCount() {
@@ -93,7 +98,7 @@ export class SQLiteStore extends PollStore {
 
   refreshIndex() {
     this.index = new Map(this.db.prepare(`SELECT json_set(
-      json_remove(document,'$.voters','$.likers','$.replies','$.replyAuthors','$.manageKeyHash','$.images'),
+      json_remove(document,'$.voters','$.likers','$.replies','$.replyAuthors','$.manageKeyHash','$.images','$.reportHashes'),
       '$.replyCount',coalesce(json_array_length(document,'$.replies'),0)) AS document
       FROM posts WHERE delete_at>?`)
       .all(this.clock()).map(({ document }) => {

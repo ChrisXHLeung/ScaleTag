@@ -1285,3 +1285,93 @@ test("legacy tasks without progress fields stay open, reject new replies and can
   ).json();
   assert.deepEqual(list.polls.map((p) => p.id), [task.id]);
 });
+
+test("six distinct browser cookies freeze polls, tasks and giveaways through every access path", async (t) => {
+  const f = await fixture(t);
+  const poll = await f.create({ mapVisible: true });
+  const voteCookie = await f.session(poll.id);
+  assert.equal((await f.request(`/api/polls/${poll.id}/votes`, { optionId: 1 }, voteCookie)).status, 200);
+  const task = await createTask(f, { mapVisible: true });
+  const giveaway = await f.store.create({
+    type: "sale", giveawayVersion: 1, title: "Free chair", options: [],
+    location: { latitude: 43, longitude: -79 }, mapVisible: true,
+  });
+  const unrelated = await f.create({ title: "Unrelated", mapVisible: true });
+  const unrelatedSession = await socialSession(f, unrelated.id);
+  for (const [post, apiType, page] of [
+    [poll, "polls", "vote"], [task, "tasks", "task"], [giveaway, "sales", "sale"],
+  ]) {
+    const detail = `/api/${apiType}/${post.id}`;
+    const social = `/api/posts/${post.id}`;
+    const path = `${social}/reports`;
+    const report = (cookie, headers) => f.request(path, {}, cookie, headers);
+    assert.equal((await report()).status, 403, "report requires a browser cookie");
+    assert.equal((await report(unrelatedSession.cookie)).status, 403, "cookie is scoped to one post");
+    const sessions = await Promise.all(Array.from({ length: 6 }, () => socialSession(f, post.id)));
+    const first = sessions[0];
+    assert.equal(first.data.hasReported, false);
+    assert.match(first.header, /; HttpOnly/);
+    assert.match(first.header, /; Secure/);
+    assert.match(first.header, /; SameSite=Strict/);
+    assert.equal((await report(first.cookie, { origin: "https://other.example" })).status, 403);
+    const duplicates = await Promise.all(Array.from({ length: 8 }, () => report(first.cookie)));
+    for (const r of duplicates) {
+      assert.equal(r.status, 200);
+      assert.deepEqual(await r.json(), { hasReported: true, frozen: false });
+    }
+    const afterReport = await (await f.request(`${social}/social`, undefined, first.cookie)).json();
+    assert.equal(afterReport.hasReported, true);
+    assert.equal(afterReport.hasLiked, false);
+    for (const session of sessions.slice(1, 5)) {
+      const r = await report(session.cookie);
+      assert.equal(r.status, 200);
+      assert.deepEqual(await r.json(), { hasReported: true, frozen: false });
+    }
+    assert.equal((await f.request(detail)).status, 200, "five reports leave the post accessible");
+    assert.equal((await f.request(`/${page}/${post.id}`)).status, 200);
+    for (const [listing, body] of [["/api/posts", undefined], ["/api/map/search", {}]]) {
+      const { polls } = await (await f.request(listing, body)).json();
+      assert.ok(polls.some(({ id }) => id === post.id), listing);
+    }
+    const before = await (await f.request(detail)).text();
+    assert.doesNotMatch(before, /reportHashes|frozenAt/);
+    const sixth = await report(sessions[5].cookie);
+    assert.equal(sixth.status, 200);
+    assert.deepEqual(await sixth.json(), { hasReported: true, frozen: true });
+    const blocked = [
+      [detail], [`${detail}/qr.png`], [`/${page}/${post.id}`], [`${social}/social`],
+      [`${social}/likes`, {}, first.cookie], [path, {}, first.cookie],
+    ];
+    if (page === "vote") {
+      blocked.push([`${detail}/votes`, { optionId: 1 }, voteCookie]);
+    } else {
+      blocked.push(
+        [`/${page}/${post.id}/manage`], [`${detail}/manage`, { key: post.manageKey }],
+        [`${detail}/state`, { key: post.manageKey, state: "closed" }],
+      );
+    }
+    if (page === "task") blocked.push([`${social}/replies`, await replyBody(task), first.cookie]);
+    for (const [endpoint, body, cookie] of blocked) {
+      const response = await f.request(endpoint, body, cookie);
+      assert.equal(response.status, 404, endpoint);
+      assert.equal(response.headers.get("set-cookie"), null, endpoint);
+    }
+  }
+  for (const [path, body] of [["/api/posts", undefined], ["/api/polls", undefined], ["/api/posts/search", {}], ["/api/polls/search", {}], ["/api/map/search", {}]]) {
+    const { polls } = await (await f.request(path, body)).json();
+    assert.deepEqual(polls.map(({ id }) => id), [unrelated.id], path);
+  }
+  assert.equal(f.store.count(), 1);
+  assert.equal(f.store.storedCount(), 4);
+  const reopened = new PollStore(f.directory, { clock: f.now });
+  await reopened.init();
+  assert.deepEqual(reopened.list().polls.map(({ id }) => id), [unrelated.id]);
+  await assert.rejects(reopened.get(task.id), { status: 404 });
+  f.advance(7 * DAY);
+  await reopened.sweep();
+  assert.deepEqual((await reopened.read(poll.id)).data.voters, {});
+  await assert.rejects(reopened.get(poll.id), { status: 404 });
+  f.advance(23 * DAY);
+  await reopened.sweep();
+  assert.equal(reopened.storedCount(), 0);
+});

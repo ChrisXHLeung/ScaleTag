@@ -65,7 +65,7 @@ function createPoll() {
     <label for="signature">${t("Your signature", "署名")} <span class="required">*</span></label><input id="signature" name="signature" maxlength="60" placeholder="${t("A name, a nickname, or a little mystery", "姓名、昵称或其他署名")}" required><p class="field-hint">${t("Pick any name. No account or identity verification.", "可以使用姓名或昵称，无需注册或验证身份。")}</p>
     <div class="location-box"><div><strong>${icons.pin} ${t("Give your poll a place", "添加投票位置")}</strong><p id="location-status" aria-live="polite">${t("Your location helps people discover nearby polls.", "添加位置后，附近的人更容易找到这个投票。")}</p></div><button class="button secondary small" type="button" id="locate">${t("Enable location", "启用定位")}</button></div><p class="field-hint">${t("We store the poll’s coordinates, not your movement. Exact coordinates are not shown publicly. The map shows a rounded area on a 0.01° grid (about 1 km north–south, narrower east–west).", "我们存储投票的坐标，不记录你的移动轨迹，也不公开精确坐标。地图按 0.01° 网格显示大致区域（南北约 1 公里，东西更窄）。")}</p>
     <label class="checkbox-row"><input type="checkbox" id="map-consent" required><span>${t("I agree to show my poll’s approximate area publicly on the map. This does not guarantee anonymity.", "我同意在地图上公开显示投票的大致区域。这不能保证匿名。")}</span></label>${notice()}<label class="checkbox-row"><input type="checkbox" id="retention" required><span>${t("I understand that my poll leaves the website after 30 days and that private daily backups are retained for up to 90 days after each backup is created.", "我了解投票会在发布 30 天后从网站移除，私有每日备份从创建之日起最多保留 90 天。")}</span></label>
-    <p id="form-error" class="form-error" role="alert" hidden></p><button class="button publish-button" type="submit" id="publish">${t("Publish my poll", "发布投票")} ${icons.arrow}</button><p class="publish-note">${t("Starts immediately · Closes in 7 days · Removed in 30 days", "立即开始 · 7 天后截止 · 30 天后移除")}</p>
+    <p id="form-error" class="form-error" role="alert" hidden></p><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button class="button publish-button" type="submit" id="publish">${t("Publish my poll", "发布投票")} ${icons.arrow}</button><p class="publish-note">${t("Starts immediately · Closes in 7 days · Removed in 30 days", "立即开始 · 7 天后截止 · 30 天后移除")}</p>
   </form></section>`;
   let location;
   let locatedAt = 0;
@@ -579,8 +579,8 @@ function privacy() {
 
     <h2>${t("No account or device fingerprinting", "无需账户，不使用设备指纹。")}</h2>
     <p>${t(
-      "Voting and liking use separate random cookies for each post. We save hashes to limit repeat votes and likes from the same browser. Vote hashes are removed after voting closes. A cookie cannot verify who you are, and clearing it or changing browsers can allow another vote or like. ScaleTag does not keep web request access logs. Cloudflare processes network requests, and host security logs may contain connection information.",
-      "投票和点赞各自为每个帖子使用独立的随机 Cookie。系统保存其哈希值，以限制同一浏览器重复投票或点赞。投票关闭后会删除投票去重哈希。Cookie 无法验证身份，清除 Cookie 或换浏览器后可以再次投票或点赞。ScaleTag 不保留网站请求访问日志。Cloudflare 会处理网络请求，主机安全日志也可能包含连接信息。",
+      "Poll votes use a random cookie for each poll. Likes, replies and reports share a separate random cookie for each post. We save hashes to limit repeat votes, likes and reports from the same browser. Vote hashes are removed after voting closes. A cookie cannot verify who you are. Clearing cookies or changing browsers can allow another vote, like or report. ScaleTag does not keep web request access logs. Cloudflare processes network requests, and host security logs may contain connection information.",
+      "每个投票使用随机 Cookie 记录投票。点赞、回复和举报共用另一个按帖子生成的随机 Cookie。系统保存哈希值，以限制同一浏览器重复投票、点赞或举报。投票关闭后会删除投票去重哈希。Cookie 无法验证身份。清除 Cookie 或换浏览器后，可以再次投票、点赞或举报。ScaleTag 不保留网站请求访问日志。Cloudflare 会处理网络请求，主机安全日志也可能包含连接信息。",
     )}</p>
 
     <h2>${t("Location, maps and photos", "位置、地图与照片")}</h2>
@@ -595,12 +595,12 @@ function privacy() {
 
     <h2>${t("Deletion, backups and offline use", "删除、备份与离线使用")}</h2>
     <p>${t(
-      "Active records are removed 30 days after publication. A giveaway can stop being public sooner. Production stores records in encrypted SQLite and keeps encrypted daily backups for up to 90 days from the date each backup was made. A post’s last backup copy may therefore remain for about 120 days from publication. Cleanup can be delayed by outages. We cannot remove screenshots or copies other people have saved.",
-      "帖子发布 30 天后会从当前存储中删除。闲置赠予可更早停止公开。线上数据保存在加密的 SQLite 数据库中，每日加密备份从生成之日起最多保留 90 天，因此帖子的最后一份备份可能保留到发布后约 120 天。服务中断可能延迟清理。我们无法收回他人保存的截图或副本。",
+      "Active records are removed 30 days after publication. A giveaway can stop being public sooner. Six reports from different browser cookies permanently freeze a post and make it unavailable. Production stores records in encrypted SQLite and keeps encrypted daily backups for up to 90 days from the date each backup was made. A post’s last backup copy may therefore remain for about 120 days from publication. Cleanup can be delayed by outages. We cannot remove screenshots or copies other people have saved.",
+      "帖子发布 30 天后会从当前存储中删除。闲置赠予可更早停止公开。同一帖子收到来自六个不同浏览器 Cookie 的举报后，会被永久冻结，无法访问。线上数据保存在加密的 SQLite 数据库中，每日加密备份从生成之日起最多保留 90 天，因此帖子的最后一份备份可能保留到发布后约 120 天。服务中断可能延迟清理。我们无法收回他人保存的截图或副本。",
     )}</p>
     <p>${t(
-      "If you install ScaleTag, the app may cache interface files and a generic offline page. It does not cache private management data or queue votes, likes, replies or posts while offline. Your browser can remember your language choice.",
-      "安装 ScaleTag 后，浏览器可能缓存界面文件和通用离线页。私人管理数据不会进入离线缓存，离线时提交的投票、点赞、回复或帖子也不会排队发送。浏览器可以记住你的语言选择。",
+      "If you install ScaleTag, the app may cache interface files and a generic offline page. It does not cache private management data or queue votes, likes, replies, reports or posts while offline. Your browser can remember your language choice.",
+      "安装 ScaleTag 后，浏览器可能缓存界面文件和通用离线页。私人管理数据不会进入离线缓存，离线时提交的投票、点赞、回复、举报或帖子也不会排队发送。浏览器可以记住你的语言选择。",
     )}</p>
     <a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">${t("Read the architecture and source on GitHub ↗", "在 GitHub 查看架构与源代码 ↗")}</a>
   </article>`;

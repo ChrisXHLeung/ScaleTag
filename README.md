@@ -62,7 +62,8 @@ Older management links continue to use their original SHA-256 verifiers. The two
 
 ## Data and retention
 
-- The app uses separate random cookies for voting and likes on each post. A cookie identifies a browser for that post, not a person. Server-side deduplication uses hashes. Vote hashes are cleared after voting ends. The application has no account or fingerprinting system and does not keep HTTP access logs. Infrastructure providers and host security logs can still process connection information.
+- Poll votes use a per-poll random cookie. Likes, replies and reports share a separate per-post random cookie. Server-side deduplication uses hashes. Vote hashes are cleared after voting ends. The application has no account or fingerprinting system and does not keep HTTP access logs. Infrastructure providers and host security logs can still process connection information.
+- Each browser cookie can report a post once. A sixth distinct report permanently freezes the post, including its detail page and management access, and removes it from the list and map. The record follows the regular retention schedule.
 - Uploaded photos are re-encoded and their metadata is stripped. Anything visible in a photo remains visible to viewers. External HTTPS images load on request from their hosts. The optional map uses OpenFreeMap, which receives requests from the viewer’s browser.
 - The installable app caches selected interface assets and a generic offline page. It does not cache private management data or queue offline submissions.
 - The service removes posts from active storage at day 30, with cleanup running on startup and approximately every 30 seconds during normal operation. Backups may contain earlier copies. Each backup is retained for up to 90 days after the backup was made, so the last archived copy of a post may remain for about 120 days after publication. Recovery preserves original expiry dates.

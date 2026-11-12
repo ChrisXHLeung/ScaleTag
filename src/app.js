@@ -327,6 +327,13 @@ export function createApp(
   app.post("/api/posts/:id/likes", async (req, res) =>
     res.json(await store.like(req.params.id, socialToken(req))),
   );
+  app.post("/api/posts/:id/reports", async (req, res) => {
+    const id = req.params.id;
+    const token = tokenFor(req, id, "ss");
+    if (!token)
+      throw new AppError(403, "Please allow this post’s anonymous cookie and reload before reporting.");
+    res.json(await store.report(id, token));
+  });
   let replyWindow = store.clock(),
     replyRequests = 0;
   app.post(["/api/posts/:id/replies", "/api/posts/:id/offers"], async (req, res) => {

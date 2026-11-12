@@ -103,6 +103,8 @@ const serverErrors = {
   'This poll does not exist or has been removed from the website.': '此投票不存在或已从网站移除。',
   'Please allow this poll’s anonymous cookie and reload the page before voting.': '请允许此投票的匿名 Cookie，重新加载页面后再投票。',
   'Please allow this post’s anonymous cookie and reload before liking or replying.': '请允许此帖子的匿名 Cookie，重新加载后再点赞或回复。',
+  'Please allow this post’s anonymous cookie and reload before reporting.': '请允许此帖子的匿名 Cookie，重新加载后再举报。',
+  'This post has been permanently frozen after reports.': '此帖子因收到举报已被永久冻结。',
   'Please select exactly one option.': '请选择一个选项。',
   'Please select a valid option.': '请选择有效选项。',
   'Too many replies. Please try again in a minute.': '回复过多，请一分钟后重试。',

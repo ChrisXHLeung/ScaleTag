@@ -34,6 +34,12 @@ async function passwordOperation(fn) {
 
 export const voterHash = (value) =>
   createHash("sha256").update(value).digest("hex");
+const reportHash = (token) => voterHash(`report:${token}`);
+const REPORT_FREEZE_THRESHOLD = 6;
+const FROZEN_POST = "This post has been permanently frozen after reports.";
+const isDiscoverable = (p, now) =>
+  p.frozenAt == null && p.deleteAt > now &&
+  (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now));
 
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
@@ -118,6 +124,7 @@ export class PollStore {
       saleState: p.saleState,
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
+      frozenAt: p.frozenAt,
       ...(p.contactPublicKey ? { contactPublicKey: p.contactPublicKey } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
@@ -194,6 +201,7 @@ export class PollStore {
         "This poll does not exist or has been removed from the website.",
       );
     }
+    if (db.data.frozenAt != null) throw new AppError(404, FROZEN_POST);
     return db;
   }
 
@@ -248,7 +256,10 @@ export class PollStore {
     });
   }
 
-  count() { const now = this.clock(); return [...this.index.values()].filter(p => p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now))).length; }
+  count() {
+    const now = this.clock();
+    return [...this.index.values()].filter((p) => isDiscoverable(p, now)).length;
+  }
 
   storedCount() {
     return this.index.size;
@@ -265,6 +276,8 @@ export class PollStore {
       likers,
       replies,
       replyAuthors,
+      reportHashes,
+      frozenAt,
       manageKeyHash,
       manageKey,
       authKey,
@@ -333,7 +346,7 @@ export class PollStore {
       }
     }
     const now = this.clock();
-    let rows = [...this.index.values()].filter((p) => p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now)));
+    let rows = [...this.index.values()].filter((p) => isDiscoverable(p, now));
     if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
       rows = rows.filter((p) => postStatus(p, now) === status);
@@ -362,7 +375,7 @@ export class PollStore {
   map({ location, status = "all", type = "all" } = {}) {
     const now = this.clock();
     const rows = [...this.index.values()]
-      .filter((p) => p.mapVisible && p.deleteAt > now && (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now)))
+      .filter((p) => p.mapVisible && isDiscoverable(p, now))
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
       .filter((p) => status === "all" || postStatus(p, now) === status)
       .filter((p) => !location || distanceKm(location, p.location) <= 100)
@@ -402,6 +415,7 @@ export class PollStore {
       hasLiked: Boolean(
         token && Object.hasOwn(p.likers ?? {}, voterHash(token)),
       ),
+      hasReported: Boolean(token && p.reportHashes?.includes(reportHash(token))),
       // Unauthenticated: never includes phone or email.
       replies: task ? (p.replies ?? []).map(publicReply) : [],
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
@@ -432,6 +446,21 @@ export class PollStore {
         await this.write(db);
       }
       return this.social(p, token);
+    });
+  }
+
+  async report(id, token) {
+    return this.exclusive(id, async () => {
+      const db = await this.live(id);
+      const p = db.data;
+      const hash = reportHash(token);
+      p.reportHashes ??= [];
+      if (p.reportHashes.includes(hash)) return { hasReported: true, frozen: false };
+      p.reportHashes.push(hash);
+      const frozen = p.reportHashes.length >= REPORT_FREEZE_THRESHOLD;
+      if (frozen) p.frozenAt = this.clock();
+      await this.write(db);
+      return { hasReported: true, frozen };
     });
   }
 
@@ -494,6 +523,7 @@ export class PollStore {
         (type === "sale" && (snapshot.giveawayVersion !== 1 ||
          snapshot.saleState === "closed" || snapshot.endsAt <= this.clock())))
       throw new AppError(404, "Post not found.");
+    if (snapshot.frozenAt != null) throw new AppError(404, FROZEN_POST);
     const verifier = snapshot.manageKeyHash;
     if (!hasManageKey(snapshot)) throw new AppError(403, INVALID_MANAGE_LINK);
     // Verify outside the SQLite writer transaction; recheck the live record
@@ -562,8 +592,8 @@ export class PollStore {
         await this.exclusive(id, () => this.remove(id));
       else if (info.endsAt <= this.clock() && info.needsPrune)
         await this.exclusive(id, async () => {
-          const db = await this.live(id);
-          if (Object.keys(db.data.voters).length) {
+          const db = await this.read(id);
+          if (Object.keys(db.data?.voters ?? {}).length) {
             db.data.voters = {}; // Deduplication identifiers are no longer needed after voting ends.
             await this.write(db);
           }

@@ -169,3 +169,34 @@ test("SQLite shares task progress states between connections without exposing ma
   assert.ok(!JSON.stringify([listed, b.map(), await b.get(task.id), await b.getSocial(task.id)]).includes(hash));
   assert.equal(a.read(task.id).data.deleteAt, task.deleteAt);
 });
+
+test("concurrent reports across SQLite processes freeze once without counting a duplicate browser", async t => {
+  const { a, b, dir } = await fixture(t);
+  const post = await a.create(input);
+  const code = `
+    import { SQLiteStore } from './src/sqlite-store.js';
+    const [directory, id, browser] = process.argv.slice(1);
+    const store = new SQLiteStore(directory);
+    await store.init();
+    await store.report(id, 'shared');
+    await store.report(id, browser);
+    store.close();
+  `;
+  const children = ["first", "second", "third", "fourth"].map(browser => spawn(process.execPath,
+    ["--input-type=module", "-e", code, dir, post.id, browser], { stdio: ["ignore", "ignore", "pipe"] }));
+  await Promise.all(children.map(async child => {
+    let errors = "";
+    child.stderr.on("data", data => errors += data);
+    const [status] = await once(child, "exit");
+    assert.equal(status, 0, errors);
+  }));
+  assert.equal((await a.get(post.id)).id, post.id, "shared browser and four other cookies count as five");
+  const results = await Promise.allSettled([a.report(post.id, "sixth"), b.report(post.id, "seventh")]);
+  assert.equal(results.filter(result => result.status === "fulfilled" && result.value.frozen).length, 1);
+  assert.equal(results.filter(result => result.status === "rejected" && result.reason.status === 404).length, 1);
+  await assert.rejects(b.get(post.id), { status: 404 });
+  assert.equal(b.count(), 0);
+  assert.equal(b.storedCount(), 1);
+  assert.deepEqual(b.list().polls, []);
+  assert.deepEqual(b.map().polls, []);
+});
