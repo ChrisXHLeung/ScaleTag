@@ -2,12 +2,109 @@ name: Build and Publish Image
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install dependencies without lifecycle scripts and rebuild SQLite addon
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild better-sqlite3-multiple-ciphers
+
+      - name: Run Node unit, security, and privacy tests
+        run: npm test
+
+      - name: Run Python unit tests
+        run: python3 -m unittest discover -s test -p '*_test.py' -v
+
+      - name: Install Playwright Chromium
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Run browser tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:locale
+          node --test test/reports.browser.mjs
+          npm run test:tasks
+          npm run test:sales
+          npm run test:pwa
+          npm run test:map
+          node --test test/task-contact-privacy.browser.mjs
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      PUBLIC_ORIGIN: https://scaletag.test
+      SCALETAG_IMAGE: scaletag:container-test
+      SYSTEM_UPDATE_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Validate Compose config and build test image
+        run: |
+          docker compose config --quiet
+          docker compose build --pull
+
+      - name: Run container smoke tests
+        run: npm run test:container
+
+  ha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build HA test image
+        run: docker build --pull --tag scaletag:ha-test .
+
+      - name: Run HA integration tests
+        run: npm run test:ha
+
   publish:
+    needs: [test, container, ha]
     if: >-
+      success() &&
       github.repository == 'ChrisXHLeung/ScaleTag' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

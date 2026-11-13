@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
+import sharp from 'sharp';
 import { PollStore, DAY } from '../src/store.js';
 import { SQLiteStore } from '../src/sqlite-store.js';
 import { createApp } from '../src/app.js';
@@ -21,7 +22,8 @@ for (const Store of [PollStore, SQLiteStore]) test(`${Store.name}: free giveaway
  await store.sweep(); assert.equal((await store.read(legacy.id)).data, null, 'legacy sale is removed'); assert.ok((await store.read(poll.id)).data, 'poll remains');
  assert.equal((await store.list({type:'sale'})).polls.length,0);
  assert.equal((await store.map({type:'sale'})).polls.length,0);
- const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j6WQAAAAASUVORK5CYII=';
+ const png=await sharp({create:{width:20,height:20,channels:3,background:'#123456'}}).png().toBuffer();
+ const image=`data:image/png;base64,${png.toString('base64')}`;
  const input={title:'Chair',description:'Good condition',pickupLocation:'North library entrance',images:[image],location:{latitude:43,longitude:-79},mapVisible:true,retentionAccepted:true};
  assert.equal((await req('/api/sales',{...input,pickupLocation:''})).status,400);
  const created=await req('/api/sales',input); assert.equal(created.status,201); const post=await created.json();
