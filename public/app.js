@@ -573,8 +573,8 @@ function privacy() {
 
     <h2>${t("Public text filtering", "公开文本过滤")}</h2>
     <p>${t(
-      "Before a post or reply is published, ScaleTag checks public text fields (such as titles, descriptions, poll options, pickup locations, names and reply messages) against bundled English, Chinese, French and Quebec French wordlists from LDNOOBW. Any submission that matches a listed term is rejected without being saved.",
-      "在帖子或回复发布前，ScaleTag 会对照内置的 LDNOOBW 英语、中文、法语及魁北克法语词表，检查公开文本字段（例如标题、描述、投票选项、领取地点、署名和公开回复内容）。命中词表的提交会被拒绝，且不会被保存。",
+      "Before a post or reply is published, ScaleTag checks public text fields (such as titles, descriptions, poll options, pickup locations, names and reply messages) against bundled English, Chinese, French and Quebec French wordlists from LDNOOBW, with some entries omitted to reduce false positives. Any submission that matches an included term is rejected without being saved.",
+      "在帖子或回复发布前，ScaleTag 会对照内置的 LDNOOBW 英语、中文、法语及魁北克法语词表（其中省略了部分词条以减少误判），检查公开文本字段（例如标题、描述、投票选项、领取地点、署名和公开回复内容）。命中保留词条的提交会被拒绝，且不会被保存。",
     )}</p>
     <p>${t(
       "This check uses static word matching only, so it can miss altered spellings or other languages and can occasionally misidentify ordinary words. Private encrypted contact details in task replies and uploaded or linked images are not screened.",
