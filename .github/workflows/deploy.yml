@@ -1,7 +1,7 @@
-name: Deploy HA demo
+name: Deploy HA
 on:
   workflow_run:
-    workflows: [Test]
+    workflows: [Build and Publish Image]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -14,15 +14,18 @@ jobs:
   deploy:
     if: >-
       github.repository == 'ChrisXHLeung/ScaleTag' &&
-      ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.head_branch == 'main' &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')) ||
        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, ocihost]
     env:
       DEPLOY_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - name: Confirm dedicated runner
-        run: test "$RUNNER_NAME" = eons
+      - name: Confirm non-legacy runner
+        run: test "${RUNNER_NAME:-}" != "eons"
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.DEPLOY_REVISION }}
@@ -31,15 +34,25 @@ jobs:
         run: |
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$DEPLOY_REVISION"
           test -f /etc/scaletag-ha/enabled
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild better-sqlite3-multiple-ciphers
-      - run: npm run check
-      - run: npm test
+      - name: Resolve published SHA image reference
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${DOCKERHUB_REPOSITORY:-${DOCKERHUB_USERNAME:+${DOCKERHUB_USERNAME}/scaletag}}"
+          repo="${repo,,}"
+          if [[ ! "$repo" =~ ^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::Invalid or missing Docker Hub repository; set vars.DOCKERHUB_REPOSITORY or secrets.DOCKERHUB_USERNAME."
+            exit 1
+          fi
+          echo "DEPLOY_IMAGE=${repo}:${DEPLOY_REVISION}" >> "$GITHUB_ENV"
       - name: Install database key without logging its value
         env:
           SCALETAG_ENCRYPTION_KEY: ${{ secrets.SCALETAG_ENCRYPTION_KEY }}
         run: |
           test -n "$SCALETAG_ENCRYPTION_KEY"
           printf '%s' "$SCALETAG_ENCRYPTION_KEY" | sudo /usr/local/sbin/scaletag-install-encryption-key
-      - name: Update app2, fail over, update app1 and verify automatic failback
+      - name: Pull SHA image and deploy
         run: bash deploy/deploy.sh

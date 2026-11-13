@@ -1,3 +1,5 @@
+import { containsBlockedTerm } from "./word-filter.js";
+
 export class AppError extends Error {
   constructor(status, message) {
     super(message);
@@ -41,6 +43,20 @@ function text(value, name, max, required = true) {
   return value.trim();
 }
 
+export const BLOCKED_PUBLIC_TEXT_SUFFIX =
+  "contains words or phrases that are not allowed in public text. Please edit it and try again.";
+
+export function assertAllowedPublicText(value, name) {
+  if (value && containsBlockedTerm(value)) {
+    throw new AppError(400, `${name} ${BLOCKED_PUBLIC_TEXT_SUFFIX}`);
+  }
+  return value;
+}
+
+function publicText(value, name, max, required = true) {
+  return assertAllowedPublicText(text(value, name, max, required), name);
+}
+
 export function coordinates(value) {
   if (
     !value ||
@@ -62,9 +78,9 @@ export function coordinates(value) {
 function baseInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the poll form.");
-  const title = text(body.title, "Title", 140);
-  const description = text(body.description ?? "", "Description", 4000, false);
-  const signature = text(body.signature, "Signature", 60);
+  const title = publicText(body.title, "Title", 140);
+  const description = publicText(body.description ?? "", "Description", 4000, false);
+  const signature = publicText(body.signature, "Signature", 60);
   if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 3) {
     throw new AppError(400, "Upload at most 3 images.");
   }
@@ -114,7 +130,7 @@ export function pollInput(body) {
   ) {
     throw new AppError(400, "Provide between 2 and 12 options.");
   }
-  const options = body.options.map((v) => text(v, "Option", 120));
+  const options = body.options.map((v) => publicText(v, "Option", 120));
   if (
     new Set(options.map((v) => v.toLocaleLowerCase())).size !== options.length
   ) {
@@ -193,8 +209,8 @@ export function taskInput(body) {
     ...common,
     type: "task",
     options: [],
-    description: text(body.description, "Description", 4000),
-    reward: text(body.reward, "Reward", 160),
+    description: publicText(body.description, "Description", 4000),
+    reward: publicText(body.reward, "Reward", 160),
     ...credentials,
   };
 }
@@ -274,6 +290,8 @@ export function replyInput(body) {
   const name = text(body.name || "Anonymous", "Name", 60);
   if (looksLikeContact(message) || looksLikeContact(name))
     throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
+  assertAllowedPublicText(message, "Reply");
+  assertAllowedPublicText(name, "Name");
   const encryptedContact = encryptedContactInput(body.encryptedContact);
   // A new acknowledgement field: older clients that showed the previous
   // "contact details are public" notice must reload to see the current terms.
@@ -301,8 +319,8 @@ export function distanceKm(a, b) {
 export function saleInput(body) {
   const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
   return { ...common, type: "sale", options: [],
-    description: text(body.description, "Description", 4000),
-    pickupLocation: text(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1 };
+    description: publicText(body.description, "Description", 4000),
+    pickupLocation: publicText(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1 };
 }
 export function offerInput(body) {
   if (!body || typeof body !== "object")
@@ -313,6 +331,8 @@ export function offerInput(body) {
   const email = text(body.email ?? "", "Email", 254, false);
   if (looksLikeContact(message) || looksLikeContact(name))
     throw new AppError(400, CONTACT_IN_PUBLIC_TEXT);
+  assertAllowedPublicText(message, "Reply");
+  assertAllowedPublicText(name, "Name");
   if (phone && (!/^[+0-9(). #x-]+$/i.test(phone) || phone.replace(/\D/g, "").length < 5 || phone.replace(/\D/g, "").length > 20))
     throw new AppError(400, "Enter a valid phone number.");
   if (email && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))

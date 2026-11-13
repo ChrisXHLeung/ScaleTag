@@ -42,9 +42,21 @@ route() {
   echo "Ingress did not route to $slot at expected revision" >&2
   return 1
 }
-image="scaletag:$revision"
-docker image inspect "$image" >/dev/null 2>&1 || \
-  docker build --pull --build-arg SYSTEM_UPDATE_REVISION="$revision" --tag "$image" "$release"
+if [[ -n "${SCALETAG_IMAGE_REPOSITORY:-}" ]]; then
+  repo=${SCALETAG_IMAGE_REPOSITORY,,}
+  [[ "$repo" =~ ^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$ ]] || {
+    echo 'Invalid SCALETAG_IMAGE_REPOSITORY' >&2
+    exit 1
+  }
+  image="${repo}:${revision}"
+  docker pull "$image"
+else
+  image="scaletag:$revision"
+  docker image inspect "$image" >/dev/null 2>&1 || {
+    echo "Missing local image $image; server-side docker build is disabled. Set SCALETAG_IMAGE_REPOSITORY to pull the published SHA image." >&2
+    exit 1
+  }
+fi
 # Check source readability as the real runtime UID before touching either slot.
 docker run --rm --user "${SCALETAG_UID:-1000}:${SCALETAG_GID:-1000}" \
   --read-only --network none --cap-drop ALL --security-opt no-new-privileges:true \

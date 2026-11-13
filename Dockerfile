@@ -26,6 +26,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY public ./public
+COPY data/ldnoobw ./data/ldnoobw
 COPY deploy/healthcheck.js ./healthcheck.js
 COPY deploy/docker-entrypoint.sh /usr/local/bin/scaletag-entrypoint
 RUN chmod 0555 /usr/local/bin/scaletag-entrypoint

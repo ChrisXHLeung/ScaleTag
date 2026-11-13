@@ -1,61 +1,75 @@
-name: Test
+name: Build and Publish Image
 on:
-  pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  test:
-    # Never run pull-request code on the production/self-hosted runner.
+  publish:
+    if: >-
+      github.repository == 'ChrisXHLeung/ScaleTag' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm rebuild better-sqlite3-multiple-ciphers
-      - run: npm run check
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:pwa
-      - run: npm run test:map
-      - run: npm run test:tasks
-      - run: npm run test:sales
-      - run: python3 -m unittest discover -s test -p '*_test.py' -v
 
-  container:
-    needs: test
-    runs-on: ubuntu-latest
-    env:
-      PUBLIC_ORIGIN: https://scaletag.test
-      SCALETAG_IMAGE: scaletag:container-test
-      SYSTEM_UPDATE_REVISION: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - run: docker compose config --quiet
-      - run: docker compose build --pull
-      - run: npm run test:container
+      - name: Validate Docker Hub publish configuration
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DOCKERHUB_USERNAME" || {
+            echo "::error::Missing required GitHub Actions secret DOCKERHUB_USERNAME."
+            exit 1
+          }
+          test -n "$DOCKERHUB_TOKEN" || {
+            echo "::error::Missing required GitHub Actions secret DOCKERHUB_TOKEN."
+            exit 1
+          }
+          repo="${DOCKERHUB_REPOSITORY:-${DOCKERHUB_USERNAME}/scaletag}"
+          repo="${repo,,}"
+          if [[ ! "$repo" =~ ^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::Invalid Docker Hub repository format; set repository variable DOCKERHUB_REPOSITORY to <namespace>/<repository>."
+            exit 1
+          fi
 
-  ha:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - run: docker build --pull --tag scaletag:ha-test .
-      - name: Test shared SQLite, Nginx failover, failback and rolling deployment
-        run: npm run test:ha
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build, push, and verify release image by commit SHA
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+          DOCKER_PLATFORMS: ${{ vars.DOCKER_PLATFORMS }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${DOCKERHUB_REPOSITORY:-${DOCKERHUB_USERNAME}/scaletag}"
+          repo="${repo,,}"
+          platforms="${DOCKER_PLATFORMS:-linux/amd64,linux/arm64}"
+          docker buildx build \
+            --platform "$platforms" \
+            --pull \
+            --push \
+            --provenance=false \
+            --build-arg "SYSTEM_UPDATE_REVISION=$COMMIT_SHA" \
+            --tag "${repo}:${COMMIT_SHA}" \
+            .
+          docker buildx imagetools inspect "${repo}:${COMMIT_SHA}"

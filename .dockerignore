@@ -7,6 +7,9 @@
 !src/**
 !public/
 !public/**
+!data/
+!data/ldnoobw/
+!data/ldnoobw/**
 !deploy/
 !deploy/docker-entrypoint.sh
 !deploy/healthcheck.js

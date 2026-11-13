@@ -1,5 +1,12 @@
 node_modules/
-data/
+data/*
+!data/ldnoobw/
+data/ldnoobw/*
+!data/ldnoobw/LICENSE
+!data/ldnoobw/en
+!data/ldnoobw/fr
+!data/ldnoobw/fr-CA-u-sd-caqc
+!data/ldnoobw/zh
 .env
 .env.*
 !.env.example

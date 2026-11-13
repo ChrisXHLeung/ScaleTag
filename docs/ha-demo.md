@@ -147,6 +147,8 @@ cp -R "$source_dir"/src "$source_dir"/public "$source_dir"/deploy \
   "$source_dir"/Dockerfile "$source_dir"/.dockerignore \
   "$source_dir"/compose.yaml "$source_dir"/compose.ha.yaml \
   "$source_dir"/package.json "$source_dir"/package-lock.json "$release/"
+mkdir -p "$release/data"
+cp -R "$source_dir"/data/ldnoobw "$release/data/"
 # Public source must be readable inside the non-root image even with umask 077.
 # Match existing release ownership so the runner can clean up old code later.
 previous=$(readlink -f /ScaleTag/current)

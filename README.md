@@ -112,6 +112,14 @@ python3 -m unittest discover -s test -p '*_test.py' -v
 
 For container and failover checks, follow the [GitHub Actions workflow](.github/workflows/ci.yml). Tests use disposable data, so they can exercise expiry, private replies, Argon2id verification and recovery without touching production records.
 
+## Public text filtering and attribution
+
+ScaleTag blocks terms from the bundled `data/ldnoobw` lists (`en`, `zh`, `fr`, `fr-CA-u-sd-caqc`) server-side across all user-created public text (poll titles, descriptions, signatures, and options; task titles, descriptions, rewards, and signatures; giveaway titles, descriptions, pickup locations, and signatures; and public reply names and messages). The upstream lists in `data/ldnoobw` are kept unmodified; at load time, single Han-character entries and letterless digit entries (such as `13.`) are generically omitted so normal Chinese phrases (such as `牛奶` or `安全性`), numbered items, and dates are not blocked, while multi-character Chinese entries and letter-bearing mixed terms remain active. Latin and digit edges enforce script-aware word boundaries to avoid matching substrings inside innocent words (such as `class`, `document`, `posting`, or `Peter`), while multi-character Chinese terms match within unspaced text.
+
+**Coverage limitations:** Filtering is strictly lexical against those four static snapshots; it does not catch obfuscations (leetspeak, inserted separators, homoglyphs), context-dependent abuse, images, or end-to-end encrypted private task contacts. Because single Han-character entries and letterless digit entries (`13.`) are omitted to prevent false positives on benign Chinese compounds and numbers, standalone single-character Chinese profanity and standalone `13.` are not automatically blocked unless covered by a retained multi-character entry; standalone cross-language homographs may still be blocked. See [public text filtering documentation](docs/word-filter.md) for full details and limitations.
+
+**Attribution:** The wordlists in [`data/ldnoobw/`](data/ldnoobw/) are unmodified upstream files from [List of Dirty, Naughty, Obscene, and Otherwise Bad Words (LDNOOBW)](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words), used under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](data/ldnoobw/LICENSE) (`https://creativecommons.org/licenses/by/4.0/`) and provided "AS-IS" without warranties.
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) (application code; wordlists in `data/ldnoobw/` are CC BY 4.0)

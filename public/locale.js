@@ -155,8 +155,23 @@ const serverErrors = {
   'The service is currently at capacity. Please try again later.': '服务已达容量上限，请稍后重试。',
   'Too many posts are being published. Please try again in a minute.': '发布请求过多，请一分钟后重试。',
 };
-export function translateError(message) {
-  if (language !== 'zh') return ({
+const FIELD_NAMES = {
+  'Pickup location': '领取地点',
+  'Asking price': '期望价格',
+  Offer: '出价',
+  Title: '标题',
+  Description: '描述',
+  Signature: '署名',
+  'Image URL': '图片链接',
+  Option: '选项',
+  Reward: '酬谢',
+  Reply: '回复',
+  Name: '姓名',
+  Phone: '电话',
+  Email: '邮箱',
+};
+export function translateError(message, targetLanguage = language) {
+  if (targetLanguage !== 'zh') return ({
     'Sale not found.': 'Sale listing not found.',
     'This management link is invalid for this sale.': 'This management link is invalid for this listing.',
     'Replies are available on tasks and sales only.': 'Replies are available on tasks and sale listings only.',
@@ -164,8 +179,11 @@ export function translateError(message) {
   if (serverErrors[message]) return serverErrors[message];
   const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer|Pickup location) (is required and )?must be at most (\d+) characters\.$/.exec(message);
   if (match) {
-    const names = {'Pickup location':'领取地点', 'Asking price':'期望价格',Offer:'出价',Title:'标题', Description:'描述', Signature:'署名', 'Image URL':'图片链接', Option:'选项', Reward:'酬谢', Reply:'回复', Name:'姓名', Phone:'电话', Email:'邮箱'};
-    return `${names[match[1]]}${match[2] ? '为必填项，且' : ''}最多 ${match[3]} 个字符。`;
+    return `${FIELD_NAMES[match[1]]}${match[2] ? '为必填项，且' : ''}最多 ${match[3]} 个字符。`;
+  }
+  const blocked = /^(Title|Description|Signature|Option|Reward|Reply|Name|Pickup location) contains words or phrases that are not allowed in public text\. Please edit it and try again\.$/.exec(message);
+  if (blocked) {
+    return `${FIELD_NAMES[blocked[1]]}包含公开内容不允许使用的词语，请修改后重试。`;
   }
   const finalReply = /^This task is (completed|closed) and no longer accepts replies\.$/.exec(message);
   if (finalReply) return `此任务已${finalReply[1] === 'completed' ? '完成' : '关闭'}，不再接受回复。`;
