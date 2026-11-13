@@ -571,6 +571,16 @@ function privacy() {
     </ul>
     <p>${t("Names are self-reported. Keep private contact details out of public text, pickup directions and photos.", "名字由用户自行填写，未经身份验证。请勿在公开文字、领取说明或照片中留下私人联系方式。")}</p>
 
+    <h2>${t("Public text filtering", "公开文本过滤")}</h2>
+    <p>${t(
+      "Before a post or reply is published, ScaleTag checks public text fields (such as titles, descriptions, poll options, pickup locations, names and reply messages) against bundled English, Chinese, French and Quebec French wordlists from LDNOOBW. Any submission that matches a listed term is rejected without being saved.",
+      "在帖子或回复发布前，ScaleTag 会对照内置的 LDNOOBW 英语、中文、法语及魁北克法语词表，检查公开文本字段（例如标题、描述、投票选项、领取地点、署名和公开回复内容）。命中词表的提交会被拒绝，且不会被保存。",
+    )}</p>
+    <p>${t(
+      "This check uses static word matching only, so it can miss altered spellings or other languages and can occasionally misidentify ordinary words. Private encrypted contact details in task replies and uploaded or linked images are not screened.",
+      "此检查仅基于静态词表进行匹配，因此可能会漏掉改写后的词语或其他语言的表述，也可能偶尔误判正常用词。任务回复中经过加密的私人联系方式，以及上传或链接的图片均不会被检查。",
+    )}</p>
+
     <h2>${t("Private contact details in task replies", "任务回复中的私人联系方式")}</h2>
     <p>${t(
       "When you enter a phone number or email address in the private fields of a task reply, your browser encrypts it with the task’s public key before sending it to ScaleTag. The task publisher’s browser uses the management password to decrypt it. ScaleTag stores encrypted contact details, and private backups may retain encrypted copies.",
