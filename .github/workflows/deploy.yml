@@ -30,10 +30,14 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_REVISION }}
           persist-credentials: false
-      - name: Reject stale deployments and require HA bootstrap
+      - name: Reject stale deployments
+        shell: bash
         run: |
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$DEPLOY_REVISION"
-          test -f /etc/scaletag-ha/enabled
+          set -euo pipefail
+          [[ "$DEPLOY_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$main_sha" = "$DEPLOY_REVISION"
       - name: Resolve published SHA image reference
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -48,11 +52,14 @@ jobs:
             exit 1
           fi
           echo "DEPLOY_IMAGE=${repo}:${DEPLOY_REVISION}" >> "$GITHUB_ENV"
-      - name: Install database key without logging its value
-        env:
-          SCALETAG_ENCRYPTION_KEY: ${{ secrets.SCALETAG_ENCRYPTION_KEY }}
-        run: |
-          test -n "$SCALETAG_ENCRYPTION_KEY"
-          printf '%s' "$SCALETAG_ENCRYPTION_KEY" | sudo /usr/local/sbin/scaletag-install-encryption-key
       - name: Pull SHA image and deploy
-        run: bash deploy/deploy.sh
+        env:
+          SUDO_PASS: ${{ secrets.SUDO_PASS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUDO_PASS:-}" ]]; then
+            echo "::error::Missing required GitHub Actions secret SUDO_PASS."
+            exit 1
+          fi
+          printf '%s\n' "$SUDO_PASS" | sudo -H -k -S -p '' /usr/bin/env bash "$GITHUB_WORKSPACE/deploy/deploy.sh" "$DEPLOY_REVISION" "$DEPLOY_IMAGE"
