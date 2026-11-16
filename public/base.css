@@ -1705,7 +1705,7 @@ progress::-moz-progress-bar {
   margin-bottom: 64px;
 }
 
-@media (max-width: 440px) {
+@media (max-width: 380px) {
   .header-inner {
     flex-wrap: wrap;
     padding-top: 14px;

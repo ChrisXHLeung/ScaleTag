@@ -96,6 +96,17 @@
 }
 
 @media (max-width: 440px) {
+  .header-inner {
+    flex-wrap: wrap;
+    padding-block: 14px 12px;
+    gap: 10px;
+  }
+
+  .header-inner nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .secrex-copy {
     grid-template-columns: 1fr;
   }
