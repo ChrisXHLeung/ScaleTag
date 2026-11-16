@@ -1,113 +1,137 @@
-.secrex-panel {
-  width: min(100% - 2rem, 42rem);
-  margin: clamp(2.5rem, 8vw, 5.5rem) auto 5rem;
+.secrex-card {
+  min-width: 0;
 }
 
-.secrex-panel h1 {
-  font-size: clamp(2.25rem, 9vw, 4rem);
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  margin-bottom: 0.7rem;
+.secrex-guide {
+  background: var(--paper, #fff);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
 }
 
-.secrex-intro,
-.secrex-note {
+.secrex-guide h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.secrex-guide p {
+  font-size: 13px;
   color: var(--muted);
-  line-height: 1.55;
+  line-height: 1.65;
+  margin: 0 0 10px;
+}
+
+.secrex-guide p:last-child {
+  margin-bottom: 0;
+}
+
+.secrex-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
 }
 
 .secrex-fields {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1.7rem;
+  gap: 10px;
+  margin-top: 12px;
+  min-width: 0;
 }
 
-.secrex-panel [hidden] {
+.secrex-card [hidden] {
   display: none;
 }
 
 .secrex-fields label {
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
 }
 
-.secrex-fields input,
-.secrex-fields textarea,
-#secrex-result {
+.secrex-fields input[type="password"],
+.secrex-fields input[type="text"],
+.secrex-fields textarea {
   width: 100%;
   min-width: 0;
-  padding: 0.8rem;
-  border: 1px solid #8493ae;
-  border-radius: 0.55rem;
-  background: var(--white);
+  padding: 12px 14px;
+  border: 1px solid #b9c6ce;
+  border-radius: 5px;
+  background: var(--white, #fff);
   color: var(--ink);
-  caret-color: var(--blue);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .secrex-fields textarea {
   resize: vertical;
-  min-height: 8rem;
-}
-
-.secrex-fields button {
-  justify-self: start;
-  min-height: 44px;
-  padding: 0.55rem 1rem;
-  border: 1px solid var(--blue);
-  border-radius: 0.55rem;
-  background: var(--blue);
-  color: #fff;
-  font-weight: 650;
-}
-
-.secrex-fields button:hover:not(:disabled) {
-  background: var(--ink);
+  min-height: 130px;
 }
 
 .secrex-copy {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.6rem;
+  gap: 8px;
+  align-items: center;
 }
 
 #secrex-qr {
   display: block;
-  width: min(12rem, 100%);
+  width: min(192px, 100%);
   height: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  margin: 8px 0;
 }
 
 #secrex-result {
   margin: 0;
-  min-height: 7rem;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid #b9c6ce;
+  border-radius: 5px;
+  background: var(--white, #fff);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+.secrex-note,
+.secrex-share-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 .secrex-status {
   min-height: 1.5rem;
-  margin-top: 1rem;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--ink);
 }
 
 .secrex-new {
-  justify-self: start;
-  color: var(--blue);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  display: inline-block;
+  margin-top: 10px;
 }
 
 @media (max-width: 440px) {
-  .header-inner {
-    flex-wrap: wrap;
-    padding-block: 14px 12px;
-    gap: 10px;
-  }
-
-  .header-inner nav {
-    width: 100%;
-    justify-content: space-between;
-  }
-
   .secrex-copy {
     grid-template-columns: 1fr;
+  }
+
+  .secrex-copy button {
+    width: 100%;
   }
 }

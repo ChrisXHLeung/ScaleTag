@@ -75,7 +75,7 @@ export function createApp(
       res.type("png").send(image);
     });
     app.use("/api/secrex", createSecrexRouter(secrex));
-    app.get(["/secrex", "/secrex/:secretId"], (_req, res) => {
+    app.get(["/create/secrex", "/secrex", "/secrex/:secretId"], (_req, res) => {
       res.set("Content-Security-Policy",
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
       res.sendFile("secrex.html", { root: publicDir });
