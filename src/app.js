@@ -15,6 +15,7 @@ import {
   taskStateInput,
 } from "./validation.js";
 import { ID_PATTERN } from "./store.js";
+import { canonical, createSecrexRouter } from "./secrex.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
 import { saleImages } from "./sale-images.js";
@@ -25,7 +26,7 @@ const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
 export function createApp(
   store,
   { origin = "http://127.0.0.1:3000", createLimit = 20,
-    instance = "single", revision = "development", ready = () => true } = {},
+    instance = "single", revision = "development", ready = () => true, secrex } = {},
 ) {
   const url = new URL(origin);
   if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin)
@@ -65,6 +66,22 @@ export function createApp(
   // Only image publication accepts a larger body; every other route retains 24 KiB.
   app.post(["/api/polls", "/api/tasks", "/api/sales"], express.json({ limit: 4300000, strict: true }));
   app.use(express.json({ limit: "24kb", strict: true }));
+  if (secrex) {
+    app.get("/api/secrex/:secretId/qr.png", async (req, res) => {
+      const { secretId: id } = req.params;
+      if (!canonical(id, 16))
+        throw new AppError(404, "Secret not found.");
+      const image = await QRCode.toBuffer(`${origin}/secrex/${id}`, { width: 384, margin: 4 });
+      res.type("png").send(image);
+    });
+    app.use("/api/secrex", createSecrexRouter(secrex));
+    app.get(["/secrex", "/secrex/:secretId"], (_req, res) => {
+      res.set("Content-Security-Policy",
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+      res.sendFile("secrex.html", { root: publicDir });
+    });
+  }
+
   let windowStart = store.clock();
   let creations = 0;
   app.get("/healthz", (req, res) =>

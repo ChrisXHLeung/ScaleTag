@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c253b" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Create and open one-time browser-encrypted secrets on ScaleTag."
+    />
+    <title>Secrex — ScaleTag</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/base.css" />
+    <link rel="stylesheet" href="/secrex.css" />
+    <script src="/secrex.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand"
+          ><span class="brand-mark" aria-hidden="true">↗</span>ScaleTag<span
+            class="version"
+            >BETA</span
+          ></a
+        >
+        <nav aria-label="Main navigation">
+          <a href="/create" data-nav="create">Create a post</a
+          ><a href="/secrex" data-nav="secrex" class="active">Secrex</a
+          ><a href="/PostList" data-nav="list"
+            >PostList <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+      </div>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="loading-state" role="status">Loading Secrex…</div>
+    </main>
+    <footer class="site-footer">
+      <div>
+        <a href="/" class="footer-brand"
+          >ScaleTag<span aria-hidden="true">↗</span></a
+        >
+        <p>A question. A place. Seven days.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/secrex">Secrex</a>
+        <a href="/privacy">Privacy &amp; retention</a>
+        <a
+          href="https://github.com/ChrisXHLeung/ScaleTag"
+          target="_blank"
+          rel="noopener noreferrer"
+          >GitHub ↗</a
+        ><span>Made for small conversations.</span>
+      </div>
+    </footer>
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+    <noscript>
+      <p class="notice">
+        Secrex requires JavaScript and WebCrypto to encrypt and decrypt secrets
+        locally in your browser.
+      </p>
+    </noscript>
+  </body>
+</html>

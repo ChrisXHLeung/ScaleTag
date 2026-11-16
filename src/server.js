@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { PollStore } from "./store.js";
 import { createApp } from "./app.js";
+import { SecrexStore } from "./secrex-store.js";
 
 process.umask(0o077);
 function positive(name, fallback) {
@@ -19,13 +20,17 @@ const Store = process.env.STORAGE_BACKEND === "sqlite"
   ? (await import("./sqlite-store.js")).SQLiteStore : PollStore;
 if (process.env.STORAGE_BACKEND && !["json", "sqlite"].includes(process.env.STORAGE_BACKEND))
   throw Error("STORAGE_BACKEND must be json or sqlite");
-const store = new Store(resolve(process.env.DATA_DIR ?? "./data"), {
+const directory = resolve(process.env.DATA_DIR ?? "./data");
+const store = new Store(directory, {
   maxPolls: positive("MAX_POLLS", 10000),
   maxVotes: positive("MAX_VOTES_PER_POLL", 50000),
 });
 await store.init();
+const secrex = new SecrexStore(directory);
+await secrex.init();
 const app = createApp(store, {
   origin,
+  secrex,
   createLimit: positive("CREATE_LIMIT_PER_MINUTE", 20),
   instance: process.env.INSTANCE_ID ?? "single",
   revision: process.env.APP_REVISION ?? "development",
@@ -37,6 +42,7 @@ const cleanup = setInterval(async () => {
   if (sweeping) return;
   sweeping = true;
   try {
+    await secrex.sweep();
     await store.sweep();
   } catch (e) {
     console.error("Retention cleanup failed:", e.code ?? e.name);
@@ -55,6 +61,10 @@ for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => {
     draining = true;
     clearInterval(cleanup);
-    server.close(() => { store.close?.(); process.exit(0); });
+    server.close(() => {
+      secrex.close();
+      store.close?.();
+      process.exit(0);
+    });
     setTimeout(() => process.exit(1), 10000).unref();
   });

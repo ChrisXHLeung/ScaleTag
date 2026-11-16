@@ -50,6 +50,7 @@ jobs:
           npm run test:locale
           node --test test/reports.browser.mjs
           npm run test:tasks
+          npm run test:secrex
           npm run test:sales
           npm run test:pwa
           npm run test:map
