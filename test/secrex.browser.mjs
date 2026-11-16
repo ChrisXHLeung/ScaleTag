@@ -44,8 +44,8 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
     await setTimeout(40);
   }
   browser = await chromium.launch();
-  async function page() {
-    const tab = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  async function page(options = {}) {
+    const tab = await browser.newPage({ viewport: { width: 390, height: 844 }, ...options });
     tab.on("console", message => browserLogs.push(message.text()));
     tab.on("pageerror", error => browserLogs.push(error.message));
     tab.on("request", request => {
@@ -63,11 +63,15 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
     });
     return tab;
   }
-  const sender = await page();
+  const sender = await page({ locale: "zh-CN" });
   const receiver = await page();
   const other = await page();
   const plaintext = "secrex-test-marker-" + randomBytes(16).toString("hex");
-  await sender.goto(origin + "/secrex");
+  await sender.setViewportSize({ width: 320, height: 844 });
+  await sender.goto(origin + "/create");
+  assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await sender.locator(".post-kind-switch").getByRole("link", { name: /Secrex/ }).click();
+  await sender.waitForURL("**/secrex");
   await sender.getByLabel("Secret text", { exact: true }).fill(plaintext);
   await sender.getByRole("button", { name: "Create secret" }).click();
   const link = sender.getByLabel("Share link", { exact: true });

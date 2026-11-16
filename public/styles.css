@@ -173,6 +173,7 @@
 
 .post-kind-switch {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 5px;
   margin-bottom: 28px;
