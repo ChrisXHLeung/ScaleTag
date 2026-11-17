@@ -349,7 +349,9 @@
 .home-hero h1 { margin: 26px 0 22px; font-size: clamp(42px, 5vw, 70px); line-height: .99; letter-spacing: -.055em; font-weight: 800; }
 .home-hero h1 span, .home-story h2 span { color: var(--home-red); }
 .home-lede { max-width: 440px; font-size: 16px; line-height: 1.65; }
-.home-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0 22px; }
+.home-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 440px; margin: 28px 0 22px; }
+.home-actions .button { width: 100%; justify-content: space-between; white-space: nowrap; }
+@media (max-width: 520px) { .home-actions { grid-template-columns: 1fr; } }
 .home-primary { background: var(--home-red); border-color: var(--home-red); }
 .home-primary:hover:not(:disabled) { background: #a81325; }
 .home-secondary { background: var(--home-paper); }
@@ -490,7 +492,6 @@
 #sale-images, #task-images, input#poll-images { width: 100%; max-width: 100%; padding: 12px; white-space: normal; }
 .sale-offer-amount, .private-offer > strong { display: block; margin-top: 12px; overflow-wrap: anywhere; }
 #sale-progress { font-size: .9rem; color: var(--muted); }
-.home-actions { flex-wrap: wrap; }
 @media (max-width: 420px) { .post-kind-switch { display: flex; flex-wrap: wrap; } .post-kind-switch a { flex: 1; text-align: center; } }
 
 @media (max-width: 600px) { .location-box { flex-wrap: wrap; gap: 12px; } .location-box > div { flex: 1 1 180px; } #sale-locate, #task-locate, #locate { width: 100%; } }

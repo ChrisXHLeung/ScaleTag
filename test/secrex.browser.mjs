@@ -67,8 +67,22 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
   const receiver = await page();
   const other = await page();
   const plaintext = "secrex-test-marker-" + randomBytes(16).toString("hex");
-  await sender.setViewportSize({ width: 320, height: 844 });
+  await sender.setViewportSize({ width: 1440, height: 900 });
   await sender.goto(origin + "/");
+  assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  const gridBoxes = await sender.locator(".home-actions .button").evaluateAll((buttons) =>
+    buttons.map((b) => {
+      const r = b.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), overflows: b.scrollWidth > b.clientWidth };
+    }),
+  );
+  assert.equal(gridBoxes.length, 4);
+  assert.equal(gridBoxes[0].y, gridBoxes[1].y);
+  assert.equal(gridBoxes[2].y, gridBoxes[3].y);
+  assert.equal(gridBoxes[0].x, gridBoxes[2].x);
+  assert.equal(gridBoxes[1].x, gridBoxes[3].x);
+  assert.ok(gridBoxes.every((b) => !b.overflows));
+  await sender.setViewportSize({ width: 320, height: 844 });
   assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.equal(await sender.locator(".home-actions").getByRole("link", { name: /Secrex/ }).getAttribute("href"), "/secrex");
   assert.equal(await sender.locator(".home-story-links").getByRole("link", { name: /Secrex/ }).getAttribute("href"), "/secrex");
