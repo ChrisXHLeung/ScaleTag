@@ -161,13 +161,13 @@ button {
   transform: rotate(-8deg);
 }
 .version {
-  font-size: 9px;
-  letter-spacing: 1.1px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   align-self: flex-start;
   margin-top: 7px;
   background: #fff0f3;
   border: 1px solid #f0c6ce;
-  padding: 3px 5px;
+  padding: 3px 6px;
   border-radius: 4px;
   color: #a42338;
 }
@@ -175,7 +175,7 @@ button {
   display: flex;
   align-items: center;
   gap: 30px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .header-inner nav a {
@@ -210,9 +210,9 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 650;
-  letter-spacing: 1.8px;
+  letter-spacing: 0.03em;
   line-height: 1.5;
 }
 .live-dot {
@@ -232,7 +232,7 @@ main {
   letter-spacing: -2.4px;
 }
 .hero-copy > p {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.8;
   color: var(--muted);
   margin-bottom: 28px;
@@ -248,7 +248,7 @@ main {
   gap: 15px;
   min-height: 48px;
   padding: 12px 22px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   transition:
     background 0.15s,
@@ -267,13 +267,13 @@ main {
   background: var(--pale);
 }
 .button.small {
-  font-size: 12px;
+  font-size: 13px;
   padding: 8px 13px;
   min-height: 39px;
   white-space: nowrap;
 }
 .text-link {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   border-bottom: 1px solid #a9bde3;
   padding-bottom: 4px;
@@ -450,12 +450,12 @@ main {
 }
 .principles strong {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 .principles small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 5px;
   color: var(--muted);
 }
@@ -475,7 +475,7 @@ main {
   margin: 20px 0;
 }
 .section-intro > p {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.9;
   color: var(--muted);
 }
@@ -485,16 +485,16 @@ main {
   padding: 2px 0 2px 18px;
 }
 .tiny-label {
-  font-size: 9px;
-  letter-spacing: 1.2px;
-  color: var(--muted);
-  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  font-weight: 700;
 }
 .intro-note p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 8px;
-  line-height: 1.8;
+  line-height: 1.75;
 }
 .rules {
   margin-top: 40px;
@@ -503,7 +503,7 @@ main {
   display: flex;
   gap: 10px;
   align-items: center;
-  font-size: 11px;
+  font-size: 13.5px;
   color: var(--muted);
   margin-bottom: 14px;
 }
@@ -531,17 +531,17 @@ main {
 }
 .pill {
   background: var(--pale);
-  font-size: 8px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 1px;
-  padding: 6px 8px;
+  letter-spacing: 0.02em;
+  padding: 5px 11px;
   border-radius: 5px;
   white-space: nowrap;
 }
 .form-card > label:not(.checkbox-row) {
   display: block;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   margin-top: 24px;
   margin-bottom: 10px;
 }
@@ -550,7 +550,7 @@ main {
 }
 .optional {
   color: #53647f;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 400;
   margin-left: 5px;
 }
@@ -563,7 +563,7 @@ textarea {
   border: 1px solid #d3deef;
   border-radius: 7px;
   padding: 12px 14px;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--ink);
   transition: border-color 0.15s;
@@ -581,7 +581,7 @@ textarea:focus {
   border-color: #315fbc;
 }
 .field-hint {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
   line-height: 1.7;
   margin-top: 7px;
@@ -596,7 +596,7 @@ textarea:focus {
 }
 .image-fields summary {
   list-style: none;
-  font-size: 11px;
+  font-size: 13px;
   color: #1746a2;
   cursor: pointer;
   display: flex;
@@ -617,8 +617,8 @@ textarea:focus {
   min-width: 0;
 }
 .options-fieldset legend {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
 }
 .options-fieldset > .field-hint {
   margin: 0 0 12px;
@@ -631,9 +631,9 @@ textarea:focus {
 }
 .option-number {
   font-family: monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: #53647f;
-  width: 20px;
+  width: 22px;
   flex-shrink: 0;
 }
 .option-input input {
@@ -655,7 +655,7 @@ textarea:focus {
   border: 0;
   background: none;
   padding: 12px 0 0 30px;
-  font-size: 11px;
+  font-size: 13px;
   color: #1746a2;
 }
 .add-option svg {
@@ -677,14 +677,14 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: 14px;
 }
 .location-box strong svg {
   width: 16px;
   height: 16px;
 }
 .location-box p {
-  font-size: 10px;
+  font-size: 13px;
   margin-top: 5px;
   color: var(--muted);
   line-height: 1.5;
@@ -710,11 +710,11 @@ textarea:focus {
   margin-top: 1px;
 }
 .retention-note strong {
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 650;
 }
 .retention-note p {
-  font-size: 10px;
+  font-size: 13px;
   margin-top: 4px;
   line-height: 1.6;
 }
@@ -723,7 +723,7 @@ textarea:focus {
   align-items: start;
   gap: 9px;
   margin-top: 15px;
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--muted);
 }
@@ -743,7 +743,7 @@ input[type="radio"] {
   justify-content: space-between;
 }
 .publish-note {
-  font-size: 9px;
+  font-size: 13px;
   text-align: center;
   color: var(--muted);
   margin-top: 11px;
@@ -754,7 +754,7 @@ input[type="radio"] {
   color: var(--red);
   padding: 12px 14px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 14px;
   margin: 16px 0;
   line-height: 1.6;
 }
@@ -780,7 +780,7 @@ input[type="radio"] {
 }
 .site-footer p {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
   margin-top: 7px;
 }
 .footer-links {
@@ -788,13 +788,13 @@ input[type="radio"] {
   gap: 22px;
   align-items: center;
   flex-wrap: wrap;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
 }
 .footer-links > span {
   flex-basis: 100%;
   text-align: right;
-  font-size: 9px;
+  font-size: 13px;
 }
 .loading-state {
   padding: 80px 0;
@@ -833,7 +833,7 @@ input[type="radio"] {
   color: #c7283d;
 }
 .list-heading p {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--muted);
 }
 .list-toolbar {
@@ -853,7 +853,7 @@ input[type="radio"] {
   background: none;
   border-radius: 6px;
   padding: 9px 17px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .filter-tabs button.selected {
   background: var(--blue);
@@ -865,7 +865,7 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .near-button svg {
   width: 17px;
@@ -900,12 +900,12 @@ input[type="radio"] {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
   margin: 20px 0;
 }
 .location-privacy {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   margin-bottom: 17px;
 }
@@ -936,7 +936,7 @@ input[type="radio"] {
   gap: 10px;
 }
 .card-top > span:last-child {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
 }
 .status-badge {
@@ -945,9 +945,9 @@ input[type="radio"] {
   gap: 5px;
   background: #eaf1ff;
   border-radius: 20px;
-  padding: 5px 9px;
-  font-size: 9px;
-  letter-spacing: 0.2px;
+  padding: 5px 10px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
   color: #1746a2;
   white-space: nowrap;
 }
@@ -973,7 +973,7 @@ input[type="radio"] {
   overflow-wrap: anywhere;
 }
 .card-signature {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -986,7 +986,7 @@ input[type="radio"] {
   grid-template-columns: 1fr auto;
   gap: 6px;
   margin-bottom: 12px;
-  font-size: 10px;
+  font-size: 13px;
 }
 .mini-results span {
   white-space: nowrap;
@@ -997,7 +997,7 @@ input[type="radio"] {
   font-weight: 500;
 }
 .mini-results small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
 progress {
@@ -1032,7 +1032,7 @@ progress::-moz-progress-bar {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
 }
 .card-bottom svg {
@@ -1069,13 +1069,13 @@ progress::-moz-progress-bar {
   letter-spacing: -1px;
 }
 .list-empty p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
   max-width: 420px;
   margin: 15px auto 22px;
 }
 .list-retention {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
   text-align: center;
   margin-top: 32px;
@@ -1088,7 +1088,7 @@ progress::-moz-progress-bar {
 }
 .back-link {
   display: inline-block;
-  font-size: 11px;
+  font-size: 14px;
   color: var(--muted);
   margin-bottom: 28px;
 }
@@ -1096,7 +1096,7 @@ progress::-moz-progress-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
   margin-bottom: 17px;
 }
@@ -1107,7 +1107,7 @@ progress::-moz-progress-bar {
   overflow-wrap: anywhere;
 }
 .byline {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   margin-top: 19px;
   overflow-wrap: anywhere;
@@ -1118,7 +1118,7 @@ progress::-moz-progress-bar {
 }
 .unverified {
   display: block;
-  font-size: 9px;
+  font-size: 12px;
   margin-top: 5px;
   color: #53647f;
 }
@@ -1178,7 +1178,7 @@ progress::-moz-progress-bar {
   padding: 14px;
   margin-bottom: 10px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .vote-option:has(input:checked) {
@@ -1194,7 +1194,7 @@ progress::-moz-progress-bar {
   margin: 0;
 }
 .vote-message {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   margin: 17px 0;
   line-height: 1.7;
@@ -1207,7 +1207,7 @@ progress::-moz-progress-bar {
   margin-top: 35px;
 }
 .results-heading > span {
-  font-size: 11px;
+  font-size: 13px;
   white-space: nowrap;
   color: var(--muted);
 }
@@ -1220,7 +1220,7 @@ progress::-moz-progress-bar {
   justify-content: space-between;
   gap: 15px;
   margin-bottom: 9px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .result-row > div > span {
   overflow-wrap: anywhere;
@@ -1229,7 +1229,7 @@ progress::-moz-progress-bar {
   white-space: nowrap;
 }
 .result-row small {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--muted);
   margin-left: 8px;
@@ -1246,7 +1246,7 @@ progress::-moz-progress-bar {
 }
 .share-card .eyebrow {
   justify-content: center;
-  font-size: 9px;
+  font-size: 13px;
 }
 .share-card h2 {
   font-size: 24px;
@@ -1266,14 +1266,14 @@ progress::-moz-progress-bar {
   height: auto;
 }
 .share-card > p {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   margin: 14px 0 20px;
 }
 .share-card > .button {
   width: 100%;
   margin-top: 9px;
-  font-size: 12px;
+  font-size: 14px;
   gap: 9px;
 }
 .timeline-card {
@@ -1291,18 +1291,18 @@ progress::-moz-progress-bar {
   color: var(--muted);
 }
 .timeline-card span {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--muted);
 }
 .timeline-card strong {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink);
   margin-top: 6px;
 }
 .timeline-card p {
-  font-size: 9px;
+  font-size: 13px;
   color: var(--muted);
 }
 .poll-sidebar .retention-note {
@@ -1313,7 +1313,7 @@ progress::-moz-progress-bar {
   border: 1px solid #b4c9ee;
   border-radius: 8px;
   padding: 13px 15px;
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 24px;
 }
 .empty-page {
@@ -1326,7 +1326,7 @@ progress::-moz-progress-bar {
   margin: 24px 0;
 }
 .empty-page p {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
   margin: 15px 0;
 }
@@ -1428,13 +1428,13 @@ progress::-moz-progress-bar {
     font-size: 25px;
   }
   .version {
-    font-size: 7px;
+    font-size: 10px;
     margin-top: 6px;
-    padding: 2px 4px;
+    padding: 2px 5px;
   }
   .header-inner nav {
     gap: 15px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .header-inner nav a:last-child {
     padding: 9px 11px;
@@ -1452,7 +1452,7 @@ progress::-moz-progress-bar {
     letter-spacing: -2.5px;
   }
   .hero-copy > p {
-    font-size: 13px;
+    font-size: 14px;
   }
   .hero .text-link {
     margin-left: 19px;
@@ -1492,10 +1492,10 @@ progress::-moz-progress-bar {
     gap: 16px;
   }
   .principles strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .principles small {
-    font-size: 11px;
+    font-size: 13px;
   }
   .create-section {
     padding: 40px 0 50px;
@@ -1534,7 +1534,7 @@ progress::-moz-progress-bar {
     white-space: normal;
     flex-shrink: 0;
     max-width: 105px;
-    font-size: 11px;
+    font-size: 13px;
   }
   .site-footer {
     margin-inline: 22px;
@@ -1560,7 +1560,7 @@ progress::-moz-progress-bar {
     font-size: 43px;
   }
   .list-heading p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .list-heading > .button {
     margin-top: 22px;
@@ -1590,7 +1590,7 @@ progress::-moz-progress-bar {
   .card-signature,
   .card-bottom,
   .mini-results > div {
-    font-size: 11px;
+    font-size: 13px;
   }
   .list-empty {
     padding: 45px 20px;
@@ -1599,7 +1599,7 @@ progress::-moz-progress-bar {
     font-size: 25px;
   }
   .list-caption {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.6;
   }
   .poll-layout {
@@ -1653,7 +1653,7 @@ progress::-moz-progress-bar {
     margin-top: 3px;
   }
   .result-row > div {
-    font-size: 12px;
+    font-size: 14px;
   }
   .empty-page {
     padding: 70px 0;
@@ -1732,7 +1732,7 @@ progress::-moz-progress-bar {
   color: #922537;
   padding: 12px 22px;
   text-align: center;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .install-dialog {
@@ -1756,11 +1756,11 @@ progress::-moz-progress-bar {
 .install-dialog p,
 .install-dialog dd {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.75;
 }
 .install-dialog dt {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
   margin-top: 20px;
 }
@@ -1800,11 +1800,11 @@ progress::-moz-progress-bar {
   box-shadow: 0 10px 40px #172b4d20;
 }
 .update-banner strong {
-  font-size: 13px;
+  font-size: 14px;
 }
 .update-banner p {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 5px;
 }
 .update-banner .button {
@@ -1814,7 +1814,7 @@ progress::-moz-progress-bar {
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   padding: 10px 4px;
 }
 .empty-page #retry-connection {
@@ -1865,7 +1865,7 @@ progress::-moz-progress-bar {
 }
 .home-install p {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 13px;
 }
 .install-page {
@@ -1886,7 +1886,7 @@ progress::-moz-progress-bar {
 .install-page-heading > p,
 .install-page-note {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
 }
 .device-picker {
@@ -1903,7 +1903,7 @@ progress::-moz-progress-bar {
   background: transparent;
   border-radius: 6px;
   padding: 12px 8px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .device-picker button.selected {
   background: var(--blue);
@@ -1931,7 +1931,7 @@ progress::-moz-progress-bar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
   background: #eef3ff;
   color: var(--blue);
@@ -1952,7 +1952,7 @@ progress::-moz-progress-bar {
 .install-steps li p,
 .install-browser-hint {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
 }
 .install-browser-hint {
@@ -1966,7 +1966,7 @@ progress::-moz-progress-bar {
 }
 .install-page-note {
   margin: 26px 0 20px;
-  font-size: 11px;
+  font-size: 13px;
 }
 @media (max-width: 600px) {
   .home-install {
@@ -1982,11 +1982,11 @@ progress::-moz-progress-bar {
     font-size: 23px;
   }
   .home-install .eyebrow {
-    font-size: 8px;
-    letter-spacing: 1px;
+    font-size: 12px;
+    letter-spacing: 0.03em;
   }
   .home-install p {
-    font-size: 11px;
+    font-size: 13px;
   }
   .install-page-heading h1 {
     font-size: 39px;
@@ -2027,17 +2027,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .section-intro > p, .list-heading p { font-size: 15px; line-height: 1.65; }
 .form-card, .ballot-card, .poll-list-card { border-radius: var(--radius); box-shadow: none; }
 .form-card { background: #f8f8f3; padding: 32px; }
-.form-card > label:not(.checkbox-row), .options-fieldset legend, #reply-form label:not(.checkbox-row) { font-size: 14px; font-weight: 700; }
-input[type="text"], input:not([type]), textarea { font-size: 16px; border-color: #b9c6ce; border-radius: 5px; }
-.field-hint, .checkbox-row, .location-box p, .retention-note p { font-size: 12px; }
-.optional, .rules p, .back-link { font-size: 12px; }
+.form-card > label:not(.checkbox-row), .options-fieldset legend, #reply-form label:not(.checkbox-row) { font-size: 15px; font-weight: 700; }
+input[type="text"], input:not([type]), textarea { font-size: 15px; border-color: #b9c6ce; border-radius: 5px; }
+@media (max-width: 760px) { input[type="text"], input:not([type]), textarea { font-size: 16px; } }
+.field-hint, .checkbox-row, .location-box p, .retention-note p { font-size: 13px; }
+.optional, .rules p, .back-link { font-size: 13.5px; }
 .location-box { background: #fff; border: 1px solid var(--line); border-radius: 5px; }
-.location-box strong, .retention-note strong { font-size: 13px; }
+.location-box strong, .retention-note strong { font-size: 14px; }
 .retention-note { border-radius: 5px; }
 .publish-button { border-radius: 5px; box-shadow: none; }
 .poll-list-card:hover { border-color: var(--red); }
 .list-heading, .poll-layout, .privacy-page, .install-page { padding-top: 58px; }
-.status-badge { font-size: 11px; }
+.status-badge { font-size: 13px; }
 .poll-title { line-height: 1.1; }
 .poll-description, .privacy-page p { font-size: 15px; line-height: 1.75; }
 .share-card { background: #f2f4ee; border-color: var(--line); border-radius: var(--radius); }
@@ -2060,7 +2061,7 @@ input[type="text"], input:not([type]), textarea { font-size: 16px; border-color:
   align-items: center;
   gap: 8px;
   margin-left: 16px;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .language-control select {
@@ -2075,10 +2076,10 @@ input[type="text"], input:not([type]), textarea { font-size: 16px; border-color:
 .language-storage-note {
   margin: 0;
   padding: 0 24px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 @media (max-width: 700px) {
   .header-inner { flex-wrap: wrap; }
   .language-control { margin-left: auto; }
-  .language-control label { font-size: 11px; }
+  .language-control label { font-size: 13px; }
 }

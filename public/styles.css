@@ -133,7 +133,7 @@
   display: block;
   margin-top: 6px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 .maplibregl-popup-close-button {
   min-width: 30px;
@@ -167,7 +167,7 @@
     padding-right: 16px;
   }
   .maplibregl-ctrl-attrib {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 
@@ -237,7 +237,7 @@
 }
 .task-card-reward span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   margin-bottom: 7px;
 }
 .social-card h2 {
@@ -270,7 +270,7 @@
   flex-wrap: wrap;
 }
 .reply-byline span {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--muted);
 }
 .reply-message {
@@ -344,7 +344,7 @@
 .home-page { --home-ink: #0c253b; --home-red: #c9162c; --home-paper: #f8f8f3; color: var(--home-ink); }
 .home-hero { display: grid; grid-template-columns: 1fr 0.92fr; align-items: stretch; min-height: 510px; margin-top: 34px; background: var(--home-paper); }
 .home-hero-copy { padding: 62px 15px 55px 36px; align-self: center; position: relative; z-index: 1; }
-.home-kicker { font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; line-height: 1.4; }
+.home-kicker { font-size: 13px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; line-height: 1.4; }
 .home-kicker::before { content: ''; display: inline-block; width: 28px; height: 3px; margin: 0 12px 3px 0; background: var(--home-red); }
 .home-hero h1 { margin: 26px 0 22px; font-size: clamp(42px, 5vw, 70px); line-height: .99; letter-spacing: -.055em; font-weight: 800; }
 .home-hero h1 span, .home-story h2 span { color: var(--home-red); }
@@ -488,7 +488,7 @@
 .sale-photos img, .sale-photo-preview img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; background: #f2f4ee; border-radius: 6px; }
 .sale-photo-preview figure { margin: 0; min-width: 0; }
 .sale-photo-preview img { height: 140px; object-fit: cover; }
-.sale-photo-preview figcaption { font-size: .75rem; margin-top: 6px; overflow-wrap: anywhere; }
+.sale-photo-preview figcaption { font-size: .85rem; margin-top: 6px; overflow-wrap: anywhere; }
 #sale-images, #task-images, input#poll-images { width: 100%; max-width: 100%; padding: 12px; white-space: normal; }
 .sale-offer-amount, .private-offer > strong { display: block; margin-top: 12px; overflow-wrap: anywhere; }
 #sale-progress { font-size: .9rem; color: var(--muted); }
