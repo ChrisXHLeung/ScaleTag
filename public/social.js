@@ -41,7 +41,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       ? state.replies
           .map(
             (r) =>
-              `<article class="reply-card"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)} · ${t("Unverified", "未经验证")}</span></div><p class="reply-message">${escape(r.message)}</p></article>`,
+              `<article class="reply-card"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)}</span></div><p class="reply-message">${escape(r.message)}</p></article>`,
           )
           .join("")
       : `<p class="field-hint">${t("No replies yet. Start the conversation.", "还没有回复，来说两句吧。")}</p>`;
