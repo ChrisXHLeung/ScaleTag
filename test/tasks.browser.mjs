@@ -457,9 +457,8 @@ test("poll and task real photo uploads, >600 KiB compression, legacy external po
     { name: "1.png", mimeType: "image/png", buffer: smallPng },
     { name: "2.png", mimeType: "image/png", buffer: smallPng },
     { name: "3.png", mimeType: "image/png", buffer: smallPng },
-    { name: "4.png", mimeType: "image/png", buffer: smallPng },
   ]);
-  await f.page.locator("#poll-image-error", { hasText: "no more than 3" }).waitFor();
+  await f.page.locator("#poll-image-error", { hasText: "no more than 2" }).waitFor();
   await f.page.locator("#poll-images").setInputFiles([]);
   await f.page.locator("#language-select").selectOption("zh");
   await f.page.getByRole("heading", { name: "创建投票" }).waitFor();

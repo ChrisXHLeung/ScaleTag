@@ -152,7 +152,7 @@ function notice() {
 const DATA_IMAGE_PATTERN =
   /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 function photoFields(prefix, label = t("Photos (optional)", "照片（选填）")) {
-  return `<label for="${prefix}-images">${label}</label><input id="${prefix}-images" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-describedby="${prefix}-image-hint ${prefix}-image-error"><p class="field-hint" id="${prefix}-image-hint">${t("Up to 3 JPEG, PNG or WebP photos. Each original must be at most 1 MiB (1,048,576 bytes). Originals are uploaded to the server for validation. Photos over 600 KiB are compressed to at most 300 KiB; smaller photos keep as much quality as possible. Photos are public; check for faces, addresses and other private details.", "最多 3 张 JPEG、PNG 或 WebP 照片，每张原图不超过 1 MiB（1,048,576 字节）。原图上传后由服务器验证，超过 600 KiB 的照片会压至不超过 300 KiB；较小的照片尽量保留画质。照片会公开，请先检查是否露出人脸、地址或其他隐私。")}</p><p id="${prefix}-image-error" class="form-error" role="alert" hidden></p><div id="${prefix}-photo-preview" class="sale-photo-preview"></div>`;
+  return `<label for="${prefix}-images">${label}</label><input id="${prefix}-images" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-describedby="${prefix}-image-hint ${prefix}-image-error"><p class="field-hint" id="${prefix}-image-hint">${t("Up to 2 JPEG, PNG or WebP photos. Each original must be at most 1 MiB (1,048,576 bytes). Originals are uploaded to the server for validation. Photos over 600 KiB are compressed to at most 300 KiB; smaller photos keep as much quality as possible. Photos are public; check for faces, addresses and other private details.", "最多 2 张 JPEG、PNG 或 WebP 照片，每张原图不超过 1 MiB（1,048,576 字节）。原图上传后由服务器验证，超过 600 KiB 的照片会压至不超过 300 KiB；较小的照片尽量保留画质。照片会公开，请先检查是否露出人脸、地址或其他隐私。")}</p><p id="${prefix}-image-error" class="form-error" role="alert" hidden></p><div id="${prefix}-photo-preview" class="sale-photo-preview"></div>`;
 }
 function bindPhotoInput(root, prefix) {
   const filesInput = root.querySelector(`#${prefix}-images`);
@@ -160,9 +160,9 @@ function bindPhotoInput(root, prefix) {
   const preview = root.querySelector(`#${prefix}-photo-preview`);
   function validateFiles() {
     const files = [...(filesInput?.files ?? [])];
-    if (files.length > 3)
+    if (files.length > 2)
       throw new Error(
-        t("Choose no more than 3 photos.", "最多只能选择 3 张照片。"),
+        t("Choose no more than 2 photos.", "最多只能选择 2 张照片。"),
       );
     for (const file of files) {
       if (file.size > 1048576)

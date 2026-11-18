@@ -115,7 +115,7 @@ const serverErrors = {
   'Endpoint not found.': '接口不存在。',
   'Page not found.': '页面不存在。',
 
-  'Upload at most 3 images.': '最多只能上传 3 张照片。',
+  'Upload at most 2 images.': '最多只能上传 2 张照片。',
   'Each image must be a JPEG, PNG or WebP no larger than 1 MiB.': '每张原图须为 JPEG、PNG 或 WebP，且不超过 1 MiB。',
   'This image is invalid, too large to decode, or cannot be safely compressed. Use another JPEG, PNG or WebP.': '这张照片无法读取、尺寸过大或无法安全压缩，请换一张 JPEG、PNG 或 WebP 照片。',
   'This post is closed and no longer accepts replies.': '这条帖子已关闭，不再接受新回复或出价。',
@@ -134,7 +134,7 @@ const serverErrors = {
   'A valid GPS location is required. Allow location access and try again.': '需要有效的 GPS 位置。请允许定位后重试。',
   'Please complete the poll form.': '请填写完整的投票表单。',
   'Please complete the task form.': '请填写完整的任务表单。',
-  'You can add up to 3 external images.': '最多可添加 3 张外部图片。',
+  'You can add up to 2 external images.': '最多可添加 2 张外部图片。',
   'Enter a valid HTTPS image URL.': '请输入有效的 HTTPS 图片链接。',
   'Images require HTTPS URLs without login credentials.': '图片须使用不含登录凭据的 HTTPS 链接。',
   'Please acknowledge the data retention policy.': '请确认数据保留政策。',

@@ -93,7 +93,7 @@ test("poll, task, and sale generate 2480x3508 A4 posters, preserve pure QR, foll
     giveawayVersion: 1,
     signature: "Sam",
     options: [],
-    images: [img1, img2, img3],
+    images: [img1, img2],
     location: { latitude: 43.65, longitude: -79.38 },
     retentionAccepted: true,
   });

@@ -81,8 +81,8 @@ function baseInput(body) {
   const title = publicText(body.title, "Title", 140);
   const description = publicText(body.description ?? "", "Description", 4000, false);
   const signature = publicText(body.signature, "Signature", 60);
-  if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 3) {
-    throw new AppError(400, "Upload at most 3 images.");
+  if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 2) {
+    throw new AppError(400, "Upload at most 2 images.");
   }
   const images = (body.images ?? []).map((v) => {
     // Only creation routes accept bounded upload data. Full decoding and

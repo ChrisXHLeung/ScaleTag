@@ -168,7 +168,7 @@ function drawCoverImage(ctx, img, x, y, w, h, radius) {
   drawRoundedRect(ctx, x, y, w, h, radius);
   ctx.clip();
 
-  ctx.fillStyle = COLORS.pale;
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(x, y, w, h);
 
   const imgRatio = img.naturalWidth / Math.max(1, img.naturalHeight);
@@ -257,7 +257,7 @@ export async function renderPosterCanvas(post) {
   const qrPromise = loadImage(post.qrUrl);
   const validPhotos = (post.images ?? [])
     .filter((src) => DATA_IMAGE_PATTERN.test(src))
-    .slice(0, 3);
+    .slice(0, 2);
   const photoResults = await Promise.allSettled(validPhotos.map(loadImage));
   const photos = photoResults
     .filter((r) => r.status === "fulfilled")
@@ -322,9 +322,24 @@ export async function renderPosterCanvas(post) {
     y += 52;
   }
 
-  // Reserve space for thumbnails and category card
-  const thumbH = photos.length ? 380 : 0;
-  const thumbBlock = photos.length ? thumbH + 48 : 0;
+  // Remaining body space is shared dynamically between text/options and photos:
+  // - No photos: text/options occupy the full remaining body space.
+  // - With photos: photos occupy 1/2 of the remaining body space;
+  //   1 photo = 21:9 (cropped, never stretched), 2 photos = two 1:1 squares (cropped, never stretched).
+  const bodyAvailH = Math.max(400, maxBodyBottom - y);
+  const halfBodyH = Math.round(bodyAvailH / 2);
+  let photoW = 0;
+  let photoH = 0;
+  let photoGap = 32;
+  if (photos.length === 1) {
+    photoH = Math.min(halfBodyH, Math.round((CONTENT_WIDTH * 9) / 21));
+    photoW = Math.min(CONTENT_WIDTH, Math.round((photoH * 21) / 9));
+  } else if (photos.length >= 2) {
+    const side = Math.min(Math.floor((CONTENT_WIDTH - photoGap) / 2), halfBodyH);
+    photoW = side;
+    photoH = side;
+  }
+  const thumbBlock = photos.length ? photoH + 40 : 0;
 
   let highlightReserve = 0;
   if (post.type === "poll" && Array.isArray(post.options) && post.options.length) {
@@ -343,7 +358,7 @@ export async function renderPosterCanvas(post) {
       maxBodyBottom - y - thumbBlock - highlightReserve - 40,
     );
     const lineHeight = 64;
-    const maxDescLines = Math.max(2, Math.min(8, Math.floor(availForDesc / lineHeight)));
+    const maxDescLines = Math.max(2, Math.floor(availForDesc / lineHeight));
     ctx.fillStyle = COLORS.ink;
     ctx.font = `400 44px ${FONT_STACK}`;
     const descLines = wrapText(ctx, description, CONTENT_WIDTH, maxDescLines);
@@ -357,25 +372,23 @@ export async function renderPosterCanvas(post) {
     }
   }
 
-  // Horizontal photo thumbnails (up to 3)
+  // Photos (up to 2): 1 photo at 21:9, 2 photos as two 1:1 squares (cover-cropped, never stretched)
   if (photos.length) {
     y += 40;
-    const gap = 32;
-    const cols = photos.length;
-    const cellW = (CONTENT_WIDTH - gap * (cols - 1)) / cols;
-    const cellH = Math.min(thumbH, Math.max(240, maxBodyBottom - y - highlightReserve - 32));
+    const totalW = photos.length * photoW + (photos.length - 1) * photoGap;
+    const startX = MARGIN_X + Math.round((CONTENT_WIDTH - totalW) / 2);
     for (let i = 0; i < photos.length; i++) {
       drawCoverImage(
         ctx,
         photos[i],
-        MARGIN_X + i * (cellW + gap),
+        startX + i * (photoW + photoGap),
         y,
-        cellW,
-        cellH,
+        photoW,
+        photoH,
         24,
       );
     }
-    y += cellH + 16;
+    y += photoH;
   }
 
   // Type-specific highlight card

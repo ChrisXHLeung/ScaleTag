@@ -5,8 +5,8 @@ import { AppError } from './validation.js';
 // images, then re-encode without metadata. Images remain in the post document:
 // expiry, atomic writes, encrypted backups and HA have exactly one lifecycle.
 export async function saleImages(values = []) {
-  if (!Array.isArray(values) || values.length > 3)
-    throw new AppError(400, 'Upload at most 3 images.');
+  if (!Array.isArray(values) || values.length > 2)
+    throw new AppError(400, 'Upload at most 2 images.');
   const result = [];
   for (const value of values) {
     const match = typeof value === 'string' && /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);

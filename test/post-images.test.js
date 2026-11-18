@@ -22,11 +22,11 @@ for (const Store of [PollStore, SQLiteStore]) for (const kind of ['poll', 'task'
     const original = await sharp(randomBytes(500*500*3), {raw:{width:500,height:500,channels:3}}).withMetadata({exif:{IFD0:{Artist:'Private author'}}}).png().toBuffer();
     assert.ok(original.length>614400 && original.length<=1048576);
     const photo = `data:image/png;base64,${original.toString('base64')}`;
-    const input = {title:'Photo post',description:'A public description',signature:'Neighbour',options:['Yes','No'],reward:'Coffee',images:[photo,photo,photo],location:{latitude:43.651234,longitude:-79.381234},mapVisible:true,retentionAccepted:true};
+    const input = {title:'Photo post',description:'A public description',signature:'Neighbour',options:['Yes','No'],reward:'Coffee',images:[photo,photo],location:{latitude:43.651234,longitude:-79.381234},mapVisible:true,retentionAccepted:true};
     if (kind === 'task') Object.assign(input, await createTaskCredentials().then(({authKey, contactPublicKey, encryptedPrivateKey}) => ({authKey, contactPublicKey, encryptedPrivateKey})));
     const endpoint = `/api/${kind}s`;
     const published = await request(endpoint,input); assert.equal(published.status,201, await published.clone().text());
-    const post = await published.json(); assert.equal(post.images.length,3); assert.equal(post.deleteAt-now,30*DAY);
+    const post = await published.json(); assert.equal(post.images.length,2); assert.equal(post.deleteAt-now,30*DAY);
     for (const image of post.images) {
       assert.match(image,/^data:image\/jpeg;base64,/); const bytes=Buffer.from(image.split(',')[1],'base64');
       assert.ok(bytes.length<=307200); const metadata=await sharp(bytes).metadata(); assert.equal(metadata.exif,undefined); assert.equal(metadata.icc,undefined);
@@ -36,7 +36,7 @@ for (const Store of [PollStore, SQLiteStore]) for (const kind of ['poll', 'task'
     for (const [path,body] of [['/api/posts'],['/api/posts/search',{type:kind}],['/api/map/search',{type:kind}], [`/api/posts/${post.id}/social`]]) {
       const response=await request(path,body); assert.equal(response.status,200); const raw=await response.text(); assert.ok(!raw.includes('data:image/')); assert.ok(!raw.includes('Private author')); assert.ok(!raw.includes('manageKeyHash'));
     }
-    for (const images of [[photo,photo,photo,photo],['data:image/png;base64,YmFk'],['data:image/svg+xml;base64,PHN2Zy8+'],['data:image/png;base64,'+Buffer.alloc(1048577).toString('base64')]]) {
+    for (const images of [[photo,photo,photo],['data:image/png;base64,YmFk'],['data:image/svg+xml;base64,PHN2Zy8+'],['data:image/png;base64,'+Buffer.alloc(1048577).toString('base64')]]) {
       assert.equal((await request(endpoint,{...input,images})).status,400);
     }
     assert.equal((await request(endpoint,{...input,title:'x'.repeat(141)})).status,400);
