@@ -242,14 +242,12 @@ export async function renderPosterCanvas(post) {
   ctx.fillStyle = COLORS.paper;
   ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-  // Header band
+  // Header band (white background for print economy, thin top accent bar + bottom border)
   const headerH = 250;
-  ctx.fillStyle = COLORS.pale;
-  ctx.fillRect(0, 0, POSTER_WIDTH, headerH);
   ctx.fillStyle = COLORS.blue;
-  ctx.fillRect(0, 0, POSTER_WIDTH, 28);
+  ctx.fillRect(0, 0, POSTER_WIDTH, 24);
   ctx.strokeStyle = COLORS.line;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, headerH);
   ctx.lineTo(POSTER_WIDTH, headerH);
@@ -296,10 +294,10 @@ export async function renderPosterCanvas(post) {
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
-  // Footer reservation
+  // Footer reservation: scan card occupies ~1/4 of poster height (877px)
   const footerY = POSTER_HEIGHT - 140;
-  const minScanCardH = 600;
-  const maxBodyBottom = footerY - minScanCardH - 70;
+  const scanCardTargetH = Math.round(POSTER_HEIGHT / 4);
+  const maxBodyBottom = footerY - scanCardTargetH - 56;
 
   // Title
   let y = headerH + 84;
@@ -403,11 +401,11 @@ export async function renderPosterCanvas(post) {
     const boxH =
       116 + maxOptions * (rowH + rowGap) - rowGap + (hasMore ? 56 : 0) + 44;
 
-    ctx.fillStyle = COLORS.pale;
+    ctx.fillStyle = "#ffffff";
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.fill();
     ctx.strokeStyle = COLORS.line;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.stroke();
 
@@ -430,7 +428,7 @@ export async function renderPosterCanvas(post) {
       // Numbered circle badge
       const cx = MARGIN_X + boxPad + 52;
       const cy = oy + rowH / 2;
-      ctx.fillStyle = COLORS.pale;
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath();
       ctx.arc(cx, cy, 24, 0, Math.PI * 2);
       ctx.fill();
@@ -485,11 +483,11 @@ export async function renderPosterCanvas(post) {
     const valueLines = wrapText(ctx, valueText, CONTENT_WIDTH - 110, 2);
     const boxH = 114 + valueLines.length * 72 + 40;
 
-    ctx.fillStyle = COLORS.pale;
+    ctx.fillStyle = "#ffffff";
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.fill();
     ctx.strokeStyle = COLORS.line;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.stroke();
 
@@ -512,18 +510,17 @@ export async function renderPosterCanvas(post) {
     y += boxH;
   }
 
-  // Adaptive Scan Hero Section: expands cleanly when the post has fewer elements
-  const availSpace = footerY - y - 70;
+  // Scan Card: occupies 1/4 of the poster height (~877px), white fill with crisp border for print economy
+  const availSpace = footerY - y - 48;
   const qrImg = await qrPromise;
   const expiryTime =
     post.type === "sale" ? (post.endsAt ?? post.deleteAt) : post.deleteAt;
 
-  if (availSpace >= 900) {
-    // Spacious hero scan card filling remaining space cleanly
-    const heroY = y + 56;
-    const heroH = Math.max(840, footerY - heroY - 56);
+  if (availSpace >= scanCardTargetH) {
+    const heroH = scanCardTargetH;
+    const heroY = footerY - heroH - 48;
 
-    ctx.fillStyle = COLORS.pale;
+    ctx.fillStyle = "#ffffff";
     drawRoundedRect(ctx, MARGIN_X, heroY, CONTENT_WIDTH, heroH, 40);
     ctx.fill();
     ctx.strokeStyle = COLORS.line;
@@ -531,26 +528,25 @@ export async function renderPosterCanvas(post) {
     drawRoundedRect(ctx, MARGIN_X, heroY, CONTENT_WIDTH, heroH, 40);
     ctx.stroke();
 
-    const qrBoxSize = Math.min(900, Math.max(580, heroH - 360));
-    const qrSize = qrBoxSize - 52;
-    const innerH = 260 + qrBoxSize;
-    let hy = heroY + Math.max(64, Math.round((heroH - innerH) / 2));
+    const qrBoxSize = 576;
+    const qrSize = qrBoxSize - 48;
+    let hy = heroY + 52;
 
     // Top accent strip inside scan card
     ctx.fillStyle = COLORS.blue;
     drawRoundedRect(ctx, MARGIN_X + 64, hy, 140, 12, 6);
     ctx.fill();
-    hy += 40;
+    hy += 32;
 
     ctx.fillStyle = COLORS.blue;
-    ctx.font = `800 36px ${FONT_STACK}`;
+    ctx.font = `800 34px ${FONT_STACK}`;
     ctx.fillText(meta.scanEyebrow, MARGIN_X + 64, hy);
-    hy += 56;
+    hy += 48;
 
     ctx.fillStyle = COLORS.ink;
-    ctx.font = `800 72px ${FONT_STACK}`;
+    ctx.font = `800 66px ${FONT_STACK}`;
     ctx.fillText(meta.scanHeadline, MARGIN_X + 64, hy);
-    hy += 116;
+    hy += 96;
 
     // QR Code large & crisp
     const qrBoxX = POSTER_WIDTH - MARGIN_X - 64 - qrBoxSize;
@@ -576,27 +572,27 @@ export async function renderPosterCanvas(post) {
     ctx.restore();
 
     const textX = MARGIN_X + 64;
-    const textMaxW = qrBoxX - textX - 64;
-    let ty = qrBoxY + 24;
+    const textMaxW = qrBoxX - textX - 56;
+    let ty = qrBoxY + 18;
 
     ctx.fillStyle = COLORS.ink;
-    ctx.font = `600 46px ${FONT_STACK}`;
+    ctx.font = `600 44px ${FONT_STACK}`;
     const promptLines = wrapText(ctx, meta.scanPrompt, textMaxW, 4);
     for (const line of promptLines) {
       ctx.fillText(line, textX, ty);
-      ty += 66;
+      ty += 62;
     }
 
-    ty += 48;
+    ty += 36;
     ctx.fillStyle = COLORS.muted;
-    ctx.font = `500 36px ${FONT_STACK}`;
+    ctx.font = `500 34px ${FONT_STACK}`;
     if (post.type === "poll" && post.endsAt) {
       ctx.fillText(
         `${t("Voting closes: ", "投票截止：")}${date(post.endsAt)}`,
         textX,
         ty,
       );
-      ty += 54;
+      ty += 50;
     }
     if (expiryTime) {
       ctx.fillText(
@@ -624,10 +620,10 @@ export async function renderPosterCanvas(post) {
     ctx.textBaseline = "top";
   } else {
     // Compact scan card when post has long text / photos / many options
-    const scanCardH = Math.min(640, Math.max(560, availSpace));
+    const scanCardH = Math.min(scanCardTargetH, Math.max(560, availSpace));
     const scanCardY = footerY - scanCardH - 48;
 
-    ctx.fillStyle = COLORS.pale;
+    ctx.fillStyle = "#ffffff";
     drawRoundedRect(ctx, MARGIN_X, scanCardY, CONTENT_WIDTH, scanCardH, 36);
     ctx.fill();
     ctx.strokeStyle = COLORS.line;
