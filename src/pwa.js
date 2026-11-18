@@ -13,6 +13,7 @@ export const STATIC_ASSETS = [
   "/tasks.js",
   "/task-crypto.js",
   "/sales.js",
+  "/poster.js",
   "/social.js",
   "/map.js",
   "/pwa.js",

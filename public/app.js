@@ -19,6 +19,7 @@ import {
   uploadedPhotosHtml,
 } from "/common.js";
 import { mountSocial } from "/social.js";
+import { mountPosterActions } from "/poster.js";
 import { createTask, taskPage, stateLabel, isFinalState } from "/tasks.js";
 import { createSale, salePage, saleStateLabel } from "/sales.js";
 function showError(error) {
@@ -209,6 +210,20 @@ async function votePage(id) {
       );
     }
   };
+  mountPosterActions(main.querySelector(".share-card"), {
+    type: "poll",
+    id,
+    title: poll.title,
+    description: poll.description,
+    signature: poll.signature,
+    createdAt: poll.createdAt,
+    endsAt: poll.endsAt,
+    deleteAt: poll.deleteAt,
+    options: poll.options,
+    images: uploadedImages,
+    qrUrl: `/api/polls/${id}/qr.png`,
+    publicUrl: `${location.origin}/vote/${id}`,
+  });
   function render() {
     const closed = poll.status === "closed";
     const badge = document.querySelector("#poll-status");

@@ -17,6 +17,7 @@ import {
   bindManagementCopy,
 } from "/common.js";
 import { mountSocial } from "/social.js";
+import { mountPosterActions } from "/poster.js";
 import {
   createTaskCredentials,
   deriveTaskAuthKey,
@@ -176,6 +177,19 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     });
   }
   renderState(task.taskState);
+  mountPosterActions(main.querySelector(".share-card"), {
+    type: "task",
+    id,
+    title: task.title,
+    description: task.description,
+    signature: task.signature,
+    createdAt: task.createdAt,
+    deleteAt: task.deleteAt,
+    reward: task.reward,
+    images: task.images,
+    qrUrl: `/api/tasks/${id}/qr.png`,
+    publicUrl: `${location.origin}/task/${id}`,
+  });
   main.querySelector("#copy-task-link").onclick = async () => {
     const publicLink = `${location.origin}/task/${id}`;
     try {

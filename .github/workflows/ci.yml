@@ -54,6 +54,7 @@ jobs:
           npm run test:sales
           npm run test:pwa
           npm run test:map
+          node --test test/poster.browser.mjs
           node --test test/task-contact-privacy.browser.mjs
 
   container:
