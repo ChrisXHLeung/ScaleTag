@@ -14,7 +14,7 @@ function unavailable() {
 }
 
 export class SecrexStore {
-  constructor(directory, { clock = Date.now, pendingMs = 86400000, sessionMs = 300000 } = {}) {
+  constructor(directory, { clock = Date.now, pendingMs = 604800000, sessionMs = 300000 } = {}) {
     this.directory = directory;
     this.clock = clock;
     this.pendingMs = pendingMs;

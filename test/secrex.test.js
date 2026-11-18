@@ -87,6 +87,9 @@ test("Secrex rejects late claims, including sessions with a valid token", async 
   const pending = await f.create();
   f.advance(24 * 60 * 60 * 1000);
   await f.secrex.sweep();
+  assert.notEqual(f.secrex.db.prepare("SELECT 1 FROM secrex_payload WHERE id=?").get(pending.id), undefined);
+  f.advance(6 * 24 * 60 * 60 * 1000);
+  await f.secrex.sweep();
   assert.equal((await f.post(`/${pending.id}/claim`, { claim: pending.claim, session })).ok, false);
 });
 

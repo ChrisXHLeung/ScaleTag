@@ -71,8 +71,8 @@ function createView() {
           "浏览器端加密，服务器永远接触不到明文和分享密码。",
         )}</p>
         <p>${icons.clock} ${t(
-          "Single reading session (~5 min); expires in 24 hours if unread.",
-          "仅限单次阅读（约 5 分钟），无人打开 24 小时后自动销毁。",
+          "Single reading session (~5 min); expires in 7 days if unread.",
+          "仅限单次阅读（约 5 分钟），无人打开 7 天后自动销毁。",
         )}</p>
         <p>${icons.qr} ${t(
           "Share the link/QR code and password through separate channels.",
@@ -144,8 +144,8 @@ function createView() {
         </div>
         <img id="secrex-qr" width="192" height="192" alt="${t("QR code for the share link", "分享链接二维码")}">
         <p class="secrex-note">${t(
-          "The link expires after 24 hours if nobody opens it. Once opened, it locks to that single reading session and is destroyed right after.",
-          "如果 24 小时内无人打开，链接将自动过期失效。一旦有人打开，其他会话将被拒绝，阅读结束即销毁。",
+          "The link expires after 7 days if nobody opens it. Once opened, it locks to that single reading session and is destroyed right after.",
+          "如果 7 天内无人打开，链接将自动过期失效。一旦有人打开，其他会话将被拒绝，阅读结束即销毁。",
         )}</p>
         <a class="secrex-new text-link" href="/secrex">${t("Create another secret", "再创建一条密信")}</a>
       </div>
@@ -471,8 +471,8 @@ if (!globalThis.crypto?.subtle) {
   showUnavailable(
     t("This secret is unavailable.", "此加密信息不可用。"),
     t(
-      "The secret may have already been read, destroyed, or expired after 24 hours.",
-      "该信息可能已被阅读并销毁，或超过 24 小时已过期失效。",
+      "The secret may have already been read, destroyed, or expired after 7 days.",
+      "该信息可能已被阅读并销毁，或超过 7 天已过期失效。",
     ),
   );
 }
