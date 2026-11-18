@@ -7,7 +7,7 @@ exec </dev/null
 [[ $(id -u) -eq 0 ]] || { echo 'Root required' >&2; exit 1; }
 
 exec 9>/run/lock/scaletag-pipeline.lock
-flock -n 9 || { echo 'Another deployment is already running' >&2; exit 1; }
+flock -w 300 9 || { echo 'Timed out waiting for another deployment to finish' >&2; exit 1; }
 
 revision=${1:-${DEPLOY_REVISION:-}}
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid or missing deployment revision' >&2; exit 1; }
