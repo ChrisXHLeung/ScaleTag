@@ -10,7 +10,7 @@ import { language } from "/locale.js";
 export const POSTER_WIDTH = 2480;
 export const POSTER_HEIGHT = 3508;
 
-const MARGIN_X = 150;
+const MARGIN_X = 140;
 const CONTENT_WIDTH = POSTER_WIDTH - MARGIN_X * 2;
 const FONT_STACK =
   'Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -199,12 +199,13 @@ function drawCoverImage(ctx, img, x, y, w, h, radius) {
 function typeMeta(type) {
   if (type === "task") {
     return {
-      badge: t("TASK", "邻里任务"),
+      badge: t("LOCAL TASK", "邻里任务"),
       bylinePrefix: t("Posted by", "发布者："),
       scanEyebrow: t("SCAN TO HELP", "扫码查看任务"),
+      scanHeadline: t("Lend a hand nearby.", "邻里互助，扫码接单"),
       scanPrompt: t(
-        "Scan with your phone camera to view details or send a reply.",
-        "用手机相机扫码查看任务详情或联系发布者。",
+        "Point your phone camera at the QR code to read full details or send a reply.",
+        "用手机相机扫描二维码，即可查看任务详情或联系发布者。",
       ),
     };
   }
@@ -213,19 +214,21 @@ function typeMeta(type) {
       badge: t("FREE GIVEAWAY", "闲置赠予"),
       bylinePrefix: t("Posted by", "发布者："),
       scanEyebrow: t("SCAN TO CLAIM", "扫码查看领取"),
+      scanHeadline: t("Pick up locally for free.", "闲置分享，扫码免费领"),
       scanPrompt: t(
-        "Scan with your phone camera to check pickup details.",
-        "用手机相机扫码查看物品详情及领取地点。",
+        "Point your phone camera at the QR code to check availability and pickup details.",
+        "用手机相机扫描二维码，即可查看物品状态与领取地点。",
       ),
     };
   }
   return {
-    badge: t("POLL", "社区投票"),
+    badge: t("COMMUNITY POLL", "社区投票"),
     bylinePrefix: t("Started by", "发起人："),
     scanEyebrow: t("SCAN TO VOTE", "扫码参与投票"),
+    scanHeadline: t("Make your voice heard.", "身边事，投出你的一票"),
     scanPrompt: t(
-      "Scan with your phone camera to vote or view live results.",
-      "用手机相机扫码即可投票或查看实时结果。",
+      "Point your phone camera at the QR code to cast your vote or view live results.",
+      "用手机相机扫描二维码，即可参与投票或查看实时结果。",
     ),
   };
 }
@@ -239,9 +242,18 @@ export async function renderPosterCanvas(post) {
   ctx.fillStyle = COLORS.paper;
   ctx.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-  // Subtle top accent bar
+  // Header band
+  const headerH = 250;
+  ctx.fillStyle = COLORS.pale;
+  ctx.fillRect(0, 0, POSTER_WIDTH, headerH);
   ctx.fillStyle = COLORS.blue;
-  ctx.fillRect(0, 0, POSTER_WIDTH, 24);
+  ctx.fillRect(0, 0, POSTER_WIDTH, 28);
+  ctx.strokeStyle = COLORS.line;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, headerH);
+  ctx.lineTo(POSTER_WIDTH, headerH);
+  ctx.stroke();
 
   const meta = typeMeta(post.type);
   const qrPromise = loadImage(post.qrUrl);
@@ -253,59 +265,56 @@ export async function renderPosterCanvas(post) {
     .filter((r) => r.status === "fulfilled")
     .map((r) => r.value);
 
-  // Header: Brand mark + ScaleTag + type pill
-  let y = 120;
-  drawBrandMark(ctx, MARGIN_X, y, 88);
-
+  // Brand mark + ScaleTag + tagline
+  drawBrandMark(ctx, MARGIN_X, 82, 108);
   ctx.fillStyle = COLORS.ink;
-  ctx.font = `800 54px ${FONT_STACK}`;
-  ctx.textBaseline = "middle";
-  ctx.fillText("ScaleTag", MARGIN_X + 114, y + 46);
+  ctx.textBaseline = "top";
+  ctx.font = `800 58px ${FONT_STACK}`;
+  ctx.fillText("ScaleTag", MARGIN_X + 136, 84);
+  ctx.fillStyle = COLORS.muted;
+  ctx.font = `500 30px ${FONT_STACK}`;
+  ctx.fillText(
+    t("Small questions. Local voices.", "身边大小事，听听大家怎么说。"),
+    MARGIN_X + 136,
+    152,
+  );
 
-  ctx.font = `700 32px ${FONT_STACK}`;
-  const badgeW = ctx.measureText(meta.badge).width + 64;
-  const badgeH = 64;
+  // Solid category pill on right
+  ctx.font = `800 34px ${FONT_STACK}`;
+  const badgeW = ctx.measureText(meta.badge).width + 88;
+  const badgeH = 74;
   const badgeX = POSTER_WIDTH - MARGIN_X - badgeW;
-  const badgeY = y + 12;
-  ctx.fillStyle = COLORS.pale;
-  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 32);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.line;
-  ctx.lineWidth = 3;
-  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 32);
-  ctx.stroke();
-
+  const badgeY = 98;
   ctx.fillStyle = COLORS.blue;
+  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 37);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillText(meta.badge, badgeX + badgeW / 2, badgeY + badgeH / 2 + 2);
   ctx.textAlign = "left";
+  ctx.textBaseline = "top";
 
-  y += 128;
-  ctx.strokeStyle = COLORS.line;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(MARGIN_X, y);
-  ctx.lineTo(POSTER_WIDTH - MARGIN_X, y);
-  ctx.stroke();
-
-  // Bottom Scan Card geometry (anchored at bottom)
-  const scanCardH = 640;
-  const scanCardY = POSTER_HEIGHT - 120 - scanCardH;
-  const maxBodyBottom = scanCardY - 64;
+  // Footer reservation
+  const footerY = POSTER_HEIGHT - 140;
+  const minScanCardH = 600;
+  const maxBodyBottom = footerY - minScanCardH - 70;
 
   // Title
-  y += 72;
-  ctx.textBaseline = "top";
+  let y = headerH + 84;
+  const titleSize = String(post.title ?? "").length > 42 ? 86 : 102;
+  const titleLineH = titleSize + 22;
   ctx.fillStyle = COLORS.ink;
-  ctx.font = `800 84px ${FONT_STACK}`;
+  ctx.font = `800 ${titleSize}px ${FONT_STACK}`;
   const titleLines = wrapText(ctx, post.title, CONTENT_WIDTH, 3);
   for (const line of titleLines) {
     ctx.fillText(line, MARGIN_X, y);
-    y += 104;
+    y += titleLineH;
   }
 
   // Byline
-  y += 12;
+  y += 16;
   ctx.fillStyle = COLORS.muted;
   ctx.font = `500 38px ${FONT_STACK}`;
   const byline = `${meta.bylinePrefix} ${post.signature || t("Anonymous", "匿名")} · ${date(post.createdAt)}`;
@@ -315,31 +324,30 @@ export async function renderPosterCanvas(post) {
     y += 52;
   }
 
-  // Reserve space for thumbnails and category card so description never crowds them
+  // Reserve space for thumbnails and category card
   const thumbH = photos.length ? 380 : 0;
   const thumbBlock = photos.length ? thumbH + 48 : 0;
 
-  // Estimate highlight box height
   let highlightReserve = 0;
   if (post.type === "poll" && Array.isArray(post.options) && post.options.length) {
     const shownCount = Math.min(post.options.length, 6);
-    highlightReserve = 120 + shownCount * 76 + (post.options.length > 6 ? 56 : 0);
+    highlightReserve = 140 + shownCount * 112 + (post.options.length > 6 ? 56 : 0);
   } else if (post.type === "task" || post.type === "sale") {
-    highlightReserve = 240;
+    highlightReserve = 260;
   }
 
   // Description
   const description = String(post.description ?? "").trim();
   if (description) {
-    y += 28;
+    y += 32;
     const availForDesc = Math.max(
       140,
       maxBodyBottom - y - thumbBlock - highlightReserve - 40,
     );
-    const lineHeight = 62;
+    const lineHeight = 64;
     const maxDescLines = Math.max(2, Math.min(8, Math.floor(availForDesc / lineHeight)));
     ctx.fillStyle = COLORS.ink;
-    ctx.font = `400 42px ${FONT_STACK}`;
+    ctx.font = `400 44px ${FONT_STACK}`;
     const descLines = wrapText(ctx, description, CONTENT_WIDTH, maxDescLines);
     for (const line of descLines) {
       if (!line) {
@@ -373,18 +381,27 @@ export async function renderPosterCanvas(post) {
   }
 
   // Type-specific highlight card
-  y += 36;
-  const remainingH = maxBodyBottom - y;
-  if (post.type === "poll" && Array.isArray(post.options) && post.options.length && remainingH >= 180) {
-    const boxPadding = 48;
-    const optionLineH = 68;
+  y += 40;
+  const remainingForHighlight = maxBodyBottom - y;
+  if (
+    post.type === "poll" &&
+    Array.isArray(post.options) &&
+    post.options.length &&
+    remainingForHighlight >= 220
+  ) {
+    const boxPad = 48;
+    const rowH = 92;
+    const rowGap = 20;
     const maxOptions = Math.max(
       2,
-      Math.min(post.options.length, Math.floor((remainingH - 130) / optionLineH)),
+      Math.min(
+        post.options.length,
+        Math.floor((remainingForHighlight - 130) / (rowH + rowGap)),
+      ),
     );
     const hasMore = post.options.length > maxOptions;
     const boxH =
-      110 + maxOptions * optionLineH + (hasMore ? 52 : 0) + 28;
+      116 + maxOptions * (rowH + rowGap) - rowGap + (hasMore ? 56 : 0) + 44;
 
     ctx.fillStyle = COLORS.pale;
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
@@ -394,41 +411,65 @@ export async function renderPosterCanvas(post) {
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.stroke();
 
-    let oy = y + 40;
+    let oy = y + 44;
     ctx.fillStyle = COLORS.blue;
-    ctx.font = `700 28px ${FONT_STACK}`;
-    ctx.fillText(t("OPTIONS", "投票选项"), MARGIN_X + boxPadding, oy);
-    oy += 54;
+    ctx.font = `800 30px ${FONT_STACK}`;
+    ctx.fillText(t("OPTIONS", "投票选项"), MARGIN_X + boxPad, oy);
+    oy += 58;
 
-    ctx.font = `500 40px ${FONT_STACK}`;
     for (let i = 0; i < maxOptions; i++) {
       const optLabel = post.options[i]?.label ?? "";
-      ctx.strokeStyle = COLORS.blue;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(MARGIN_X + boxPadding + 18, oy + 22, 16, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      drawRoundedRect(ctx, MARGIN_X + boxPad, oy, CONTENT_WIDTH - boxPad * 2, rowH, 20);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.line;
+      ctx.lineWidth = 3;
+      drawRoundedRect(ctx, MARGIN_X + boxPad, oy, CONTENT_WIDTH - boxPad * 2, rowH, 20);
       ctx.stroke();
 
+      // Numbered circle badge
+      const cx = MARGIN_X + boxPad + 52;
+      const cy = oy + rowH / 2;
+      ctx.fillStyle = COLORS.pale;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.blue;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.fillStyle = COLORS.blue;
+      ctx.font = `800 28px ${FONT_STACK}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), cx, cy + 1);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+
       ctx.fillStyle = COLORS.ink;
+      ctx.font = `600 40px ${FONT_STACK}`;
       const [line] = wrapText(
         ctx,
         optLabel,
-        CONTENT_WIDTH - boxPadding * 2 - 58,
+        CONTENT_WIDTH - boxPad * 2 - 128,
         1,
       );
-      ctx.fillText(line ?? "", MARGIN_X + boxPadding + 54, oy);
-      oy += optionLineH;
+      ctx.fillText(line ?? "", MARGIN_X + boxPad + 100, cy + 2);
+      ctx.textBaseline = "top";
+      oy += rowH + rowGap;
     }
+
     if (hasMore) {
       ctx.fillStyle = COLORS.muted;
-      ctx.font = `500 32px ${FONT_STACK}`;
+      ctx.font = `600 32px ${FONT_STACK}`;
       const rest = post.options.length - maxOptions;
       ctx.fillText(
         t(`+ ${rest} more option${rest > 1 ? "s" : ""}`, `+ 另有 ${rest} 个选项`),
-        MARGIN_X + boxPadding + 54,
-        oy,
+        MARGIN_X + boxPad,
+        oy + 8,
       );
     }
+    y += boxH;
   } else if (post.type === "task" || post.type === "sale") {
     const eyebrow =
       post.type === "task"
@@ -440,9 +481,9 @@ export async function renderPosterCanvas(post) {
       post.type === "task"
         ? post.reward
         : (post.pickupLocation ?? post.price ?? "");
-    ctx.font = `800 54px ${FONT_STACK}`;
-    const valueLines = wrapText(ctx, valueText, CONTENT_WIDTH - 96, 2);
-    const boxH = 110 + valueLines.length * 70 + 36;
+    ctx.font = `800 56px ${FONT_STACK}`;
+    const valueLines = wrapText(ctx, valueText, CONTENT_WIDTH - 110, 2);
+    const boxH = 114 + valueLines.length * 72 + 40;
 
     ctx.fillStyle = COLORS.pale;
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
@@ -452,100 +493,244 @@ export async function renderPosterCanvas(post) {
     drawRoundedRect(ctx, MARGIN_X, y, CONTENT_WIDTH, boxH, 32);
     ctx.stroke();
 
-    // Left accent bar
     ctx.fillStyle = COLORS.blue;
-    drawRoundedRect(ctx, MARGIN_X, y, 16, boxH, 8);
+    drawRoundedRect(ctx, MARGIN_X, y, 18, boxH, 9);
     ctx.fill();
 
-    let hy = y + 40;
+    let hy = y + 42;
     ctx.fillStyle = COLORS.blue;
-    ctx.font = `700 28px ${FONT_STACK}`;
-    ctx.fillText(eyebrow, MARGIN_X + 56, hy);
-    hy += 52;
+    ctx.font = `800 30px ${FONT_STACK}`;
+    ctx.fillText(eyebrow, MARGIN_X + 60, hy);
+    hy += 54;
 
     ctx.fillStyle = COLORS.ink;
-    ctx.font = `800 54px ${FONT_STACK}`;
+    ctx.font = `800 56px ${FONT_STACK}`;
     for (const line of valueLines) {
-      ctx.fillText(line, MARGIN_X + 56, hy);
-      hy += 70;
+      ctx.fillText(line, MARGIN_X + 60, hy);
+      hy += 72;
     }
+    y += boxH;
   }
 
-  // Bottom Scan Card
-  ctx.fillStyle = COLORS.pale;
-  drawRoundedRect(ctx, MARGIN_X, scanCardY, CONTENT_WIDTH, scanCardH, 36);
-  ctx.fill();
-  ctx.strokeStyle = COLORS.line;
-  ctx.lineWidth = 4;
-  drawRoundedRect(ctx, MARGIN_X, scanCardY, CONTENT_WIDTH, scanCardH, 36);
-  ctx.stroke();
+  // Adaptive Scan Hero Section: expands cleanly when the post has fewer elements
+  const availSpace = footerY - y - 70;
+  const qrImg = await qrPromise;
+  const expiryTime =
+    post.type === "sale" ? (post.endsAt ?? post.deleteAt) : post.deleteAt;
 
-  const qrSize = 510;
-  const qrBoxSize = 540;
-  const qrBoxX = POSTER_WIDTH - MARGIN_X - 50 - qrBoxSize;
-  const qrBoxY = scanCardY + (scanCardH - qrBoxSize) / 2;
+  if (availSpace >= 900) {
+    // Spacious hero scan card filling remaining space cleanly
+    const heroY = y + 56;
+    const heroH = Math.max(840, footerY - heroY - 56);
 
-  ctx.fillStyle = "#ffffff";
-  drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 28);
-  ctx.fill();
+    ctx.fillStyle = COLORS.pale;
+    drawRoundedRect(ctx, MARGIN_X, heroY, CONTENT_WIDTH, heroH, 40);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.line;
+    ctx.lineWidth = 4;
+    drawRoundedRect(ctx, MARGIN_X, heroY, CONTENT_WIDTH, heroH, 40);
+    ctx.stroke();
+
+    const qrBoxSize = Math.min(900, Math.max(580, heroH - 360));
+    const qrSize = qrBoxSize - 52;
+    const innerH = 260 + qrBoxSize;
+    let hy = heroY + Math.max(64, Math.round((heroH - innerH) / 2));
+
+    // Top accent strip inside scan card
+    ctx.fillStyle = COLORS.blue;
+    drawRoundedRect(ctx, MARGIN_X + 64, hy, 140, 12, 6);
+    ctx.fill();
+    hy += 40;
+
+    ctx.fillStyle = COLORS.blue;
+    ctx.font = `800 36px ${FONT_STACK}`;
+    ctx.fillText(meta.scanEyebrow, MARGIN_X + 64, hy);
+    hy += 56;
+
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = `800 72px ${FONT_STACK}`;
+    ctx.fillText(meta.scanHeadline, MARGIN_X + 64, hy);
+    hy += 116;
+
+    // QR Code large & crisp
+    const qrBoxX = POSTER_WIDTH - MARGIN_X - 64 - qrBoxSize;
+    const qrBoxY = hy;
+
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 32);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.line;
+    ctx.lineWidth = 4;
+    drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 32);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      qrImg,
+      qrBoxX + (qrBoxSize - qrSize) / 2,
+      qrBoxY + (qrBoxSize - qrSize) / 2,
+      qrSize,
+      qrSize,
+    );
+    ctx.restore();
+
+    const textX = MARGIN_X + 64;
+    const textMaxW = qrBoxX - textX - 64;
+    let ty = qrBoxY + 24;
+
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = `600 46px ${FONT_STACK}`;
+    const promptLines = wrapText(ctx, meta.scanPrompt, textMaxW, 4);
+    for (const line of promptLines) {
+      ctx.fillText(line, textX, ty);
+      ty += 66;
+    }
+
+    ty += 48;
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = `500 36px ${FONT_STACK}`;
+    if (post.type === "poll" && post.endsAt) {
+      ctx.fillText(
+        `${t("Voting closes: ", "投票截止：")}${date(post.endsAt)}`,
+        textX,
+        ty,
+      );
+      ty += 54;
+    }
+    if (expiryTime) {
+      ctx.fillText(
+        `${post.type === "poll" ? t("Removed: ", "移除时间：") : t("Available until: ", "有效期至：")}${date(expiryTime)}`,
+        textX,
+        ty,
+      );
+    }
+
+    // URL pill at bottom-left of hero card
+    const urlPillY = qrBoxY + qrBoxSize - 82;
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(ctx, textX, urlPillY, textMaxW, 82, 20);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.line;
+    ctx.lineWidth = 3;
+    drawRoundedRect(ctx, textX, urlPillY, textMaxW, 82, 20);
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.blue;
+    ctx.font = `600 30px ${FONT_STACK}`;
+    ctx.textBaseline = "middle";
+    const [urlLine] = wrapText(ctx, post.publicUrl, textMaxW - 48, 1);
+    ctx.fillText(urlLine ?? "", textX + 24, urlPillY + 42);
+    ctx.textBaseline = "top";
+  } else {
+    // Compact scan card when post has long text / photos / many options
+    const scanCardH = Math.min(640, Math.max(560, availSpace));
+    const scanCardY = footerY - scanCardH - 48;
+
+    ctx.fillStyle = COLORS.pale;
+    drawRoundedRect(ctx, MARGIN_X, scanCardY, CONTENT_WIDTH, scanCardH, 36);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.line;
+    ctx.lineWidth = 4;
+    drawRoundedRect(ctx, MARGIN_X, scanCardY, CONTENT_WIDTH, scanCardH, 36);
+    ctx.stroke();
+
+    const qrSize = 480;
+    const qrBoxSize = 516;
+    const qrBoxX = POSTER_WIDTH - MARGIN_X - 48 - qrBoxSize;
+    const qrBoxY = scanCardY + (scanCardH - qrBoxSize) / 2;
+
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 28);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.line;
+    ctx.lineWidth = 3;
+    drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 28);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      qrImg,
+      qrBoxX + (qrBoxSize - qrSize) / 2,
+      qrBoxY + (qrBoxSize - qrSize) / 2,
+      qrSize,
+      qrSize,
+    );
+    ctx.restore();
+
+    const textX = MARGIN_X + 60;
+    const textMaxW = qrBoxX - textX - 52;
+    let sy = scanCardY + 56;
+
+    ctx.fillStyle = COLORS.blue;
+    ctx.font = `800 32px ${FONT_STACK}`;
+    ctx.fillText(meta.scanEyebrow, textX, sy);
+    sy += 52;
+
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = `700 46px ${FONT_STACK}`;
+    const promptLines = wrapText(ctx, meta.scanPrompt, textMaxW, 3);
+    for (const line of promptLines) {
+      ctx.fillText(line, textX, sy);
+      sy += 62;
+    }
+
+    sy += 20;
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = `500 34px ${FONT_STACK}`;
+    if (post.type === "poll" && post.endsAt) {
+      ctx.fillText(
+        `${t("Voting closes: ", "投票截止：")}${date(post.endsAt)}`,
+        textX,
+        sy,
+      );
+      sy += 48;
+    }
+    if (expiryTime) {
+      ctx.fillText(
+        `${post.type === "poll" ? t("Removed: ", "移除时间：") : t("Available until: ", "有效期至：")}${date(expiryTime)}`,
+        textX,
+        sy,
+      );
+    }
+
+    ctx.fillStyle = COLORS.blue;
+    ctx.font = `600 30px ${FONT_STACK}`;
+    const [urlLine] = wrapText(ctx, post.publicUrl, textMaxW, 1);
+    ctx.fillText(urlLine ?? "", textX, scanCardY + scanCardH - 80);
+  }
+
+  // Bottom trust/info strip
   ctx.strokeStyle = COLORS.line;
   ctx.lineWidth = 3;
-  drawRoundedRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 28);
+  ctx.beginPath();
+  ctx.moveTo(MARGIN_X, footerY);
+  ctx.lineTo(POSTER_WIDTH - MARGIN_X, footerY);
   ctx.stroke();
 
-  const qrImg = await qrPromise;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(
-    qrImg,
-    qrBoxX + (qrBoxSize - qrSize) / 2,
-    qrBoxY + (qrBoxSize - qrSize) / 2,
-    qrSize,
-    qrSize,
-  );
-  ctx.restore();
-
-  // Left side of scan card
-  const textX = MARGIN_X + 64;
-  const textMaxW = qrBoxX - textX - 56;
-  let sy = scanCardY + 64;
-
-  ctx.fillStyle = COLORS.blue;
-  ctx.font = `800 32px ${FONT_STACK}`;
-  ctx.fillText(meta.scanEyebrow, textX, sy);
-  sy += 56;
-
-  ctx.fillStyle = COLORS.ink;
-  ctx.font = `700 48px ${FONT_STACK}`;
-  const promptLines = wrapText(ctx, meta.scanPrompt, textMaxW, 3);
-  for (const line of promptLines) {
-    ctx.fillText(line, textX, sy);
-    sy += 64;
+  const items = [
+    t("No account needed", "无需注册账号"),
+    t("Local community board", "本地社区公告"),
+    t("Auto-expires for privacy", "到期自动清除"),
+  ];
+  ctx.font = `600 32px ${FONT_STACK}`;
+  ctx.textBaseline = "middle";
+  const fy = footerY + 58;
+  for (let i = 0; i < items.length; i++) {
+    const ix =
+      i === 0
+        ? MARGIN_X
+        : i === 1
+          ? POSTER_WIDTH / 2 - ctx.measureText(items[i]).width / 2 - 16
+          : POSTER_WIDTH - MARGIN_X - ctx.measureText(items[i]).width - 28;
+    ctx.fillStyle = i === 1 ? COLORS.red : COLORS.blue;
+    ctx.beginPath();
+    ctx.arc(ix + 10, fy, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLORS.muted;
+    ctx.fillText(items[i], ix + 30, fy + 2);
   }
-
-  sy += 24;
-  ctx.fillStyle = COLORS.muted;
-  ctx.font = `500 34px ${FONT_STACK}`;
-  const timeLines = [];
-  if (post.type === "poll" && post.endsAt) {
-    timeLines.push(`${t("Voting closes", "投票截止")}：${date(post.endsAt)}`);
-  }
-  const expiryTime = post.type === "sale" ? (post.endsAt ?? post.deleteAt) : post.deleteAt;
-  if (expiryTime) {
-    timeLines.push(
-      `${post.type === "poll" ? t("Removed", "移除时间") : t("Available until", "有效期至")}：${date(expiryTime)}`,
-    );
-  }
-  for (const line of timeLines) {
-    ctx.fillText(line, textX, sy);
-    sy += 48;
-  }
-
-  // Public URL at bottom of scan card
-  ctx.fillStyle = COLORS.blue;
-  ctx.font = `600 30px ${FONT_STACK}`;
-  const [urlLine] = wrapText(ctx, post.publicUrl, textMaxW, 1);
-  ctx.fillText(urlLine ?? "", textX, scanCardY + scanCardH - 86);
 
   return canvas;
 }
