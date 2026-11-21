@@ -1,14 +1,14 @@
-import { language, t } from "/locale.js";
-if (language === "zh") {
-  document.documentElement.lang = "zh-Hans";
-  document.title = "无法连接 — ScaleTag";
-  document.querySelector(".eyebrow").textContent = "连接中断";
-  document.querySelector("h1").textContent = "无法连接。";
+import { htmlLangFor, language, t } from "/locale.js";
+document.documentElement.lang = htmlLangFor(language);
+if (language !== "en") {
+  document.title = t("Connection unavailable — ScaleTag", "无法连接 — ScaleTag");
+  document.querySelector(".eyebrow").textContent = t("A MOMENT TO RECONNECT", "连接中断");
+  document.querySelector("h1").textContent = t("Connection unavailable.", "无法连接。");
   const paragraphs = document.querySelectorAll("main section > p:not(#offline-status)");
-  paragraphs[0].textContent = "暂时无法连接 ScaleTag。请检查网络，或稍后重试。";
-  paragraphs[1].textContent = "发布、投票和查看最新结果需要联网。投票不会排队或在后台提交。";
-  document.querySelector("#retry-connection").textContent = "重试 ↗";
-  document.querySelector("#offline-status").textContent = "网络恢复后会自动重试。";
+  paragraphs[0].textContent = t("We can’t reach ScaleTag right now. Reconnect to the internet or try again in a moment.", "暂时无法连接 ScaleTag。请检查网络，或稍后重试。");
+  paragraphs[1].textContent = t("Publishing, voting and current results need a live connection. Votes are never queued or submitted in the background.", "发布、投票和查看最新结果需要联网。投票不会排队或在后台提交。");
+  document.querySelector("#retry-connection").textContent = t("Try again ↗", "重试 ↗");
+  document.querySelector("#offline-status").textContent = t("This page will retry when your connection returns.", "网络恢复后会自动重试。");
 }
 const status = document.querySelector("#offline-status");
 let timer;

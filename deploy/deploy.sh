@@ -45,7 +45,8 @@ image=${2:-${DEPLOY_IMAGE:-}}
   exit 1
 }
 
-public_origin=${3:-${DEPLOY_PUBLIC_ORIGIN:-https://jp.scaletag.top}}
+explicit_public_origin=${3:-${DEPLOY_PUBLIC_ORIGIN:-}}
+public_origin=${explicit_public_origin:-https://asia.scaletag.top}
 [[ "$public_origin" =~ ^https://[^[:space:]]+$ ]] || {
   echo "Invalid public origin '$public_origin'; expected https://..." >&2
   exit 1
@@ -132,6 +133,28 @@ fi
   echo "Environment file path is not a regular file: $env_file" >&2
   exit 1
 }
+
+if [[ -n "$explicit_public_origin" ]]; then
+  current_origin=$(sed -n 's/^PUBLIC_ORIGIN=\(.*\)$/\1/p' "$env_file" | tail -n 1 || true)
+  if [[ "$current_origin" == "https://jp.scaletag.top" && "$current_origin" != "$public_origin" ]]; then
+    trap cleanup_tmp_env EXIT
+    tmp_env=$(umask 077 && mktemp "$env_dir/.scaletag.env.XXXXXX")
+    awk -v origin="$public_origin" '
+      BEGIN { updated = 0 }
+      /^PUBLIC_ORIGIN=/ { print "PUBLIC_ORIGIN=" origin; updated = 1; next }
+      { print }
+      END { if (!updated) print "PUBLIC_ORIGIN=" origin }
+    ' "$env_file" > "$tmp_env"
+    chmod 0600 "$tmp_env"
+    if [[ "$test_mode" -eq 0 ]]; then
+      chown 0:0 "$tmp_env"
+    fi
+    mv -f -- "$tmp_env" "$env_file"
+    tmp_env=""
+    trap - EXIT
+    echo "Updated PUBLIC_ORIGIN in $env_file to $public_origin"
+  fi
+fi
 
 cd "$release_dir"
 

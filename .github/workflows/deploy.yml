@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 20
     env:
       DEPLOY_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
-      DEPLOY_PUBLIC_ORIGIN: https://jp.scaletag.top
+      DEPLOY_PUBLIC_ORIGIN: https://asia.scaletag.top
     steps:
       - name: Confirm non-legacy runner
         run: test "${RUNNER_NAME:-}" != "eons"

@@ -13,7 +13,7 @@ export const POSTER_HEIGHT = 3508;
 const MARGIN_X = 140;
 const CONTENT_WIDTH = POSTER_WIDTH - MARGIN_X * 2;
 const FONT_STACK =
-  'Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  'Inter, "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 const COLORS = {
   paper: "#ffffff",
@@ -41,7 +41,7 @@ function loadImage(src) {
 function tokenize(text) {
   return (
     String(text ?? "").match(
-      /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]|[^\s\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+|\s+/g,
+      /[\u3040-\u30ff\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]|[^\s\u3040-\u30ff\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+|\s+/g,
     ) ?? []
   );
 }

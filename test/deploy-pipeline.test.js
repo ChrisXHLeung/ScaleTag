@@ -260,7 +260,7 @@ test("deploy.yml preserves ocihost job and defines independent deploy-jp job for
   assert.match(workflow, /runs-on:\s*\[self-hosted,\s*ocihost\]/);
   assert.match(workflow, /^\s{2}deploy-jp:\s*$/m);
   assert.match(workflow, /runs-on:\s*\[self-hosted,\s*ocijphost\]/);
-  assert.match(workflow, /DEPLOY_PUBLIC_ORIGIN:\s*https:\/\/jp\.scaletag\.top/);
+  assert.match(workflow, /DEPLOY_PUBLIC_ORIGIN:\s*https:\/\/asia\.scaletag\.top/);
   assert.match(workflow, /"\$GITHUB_WORKSPACE\/deploy\/deploy\.sh"\s+"\$DEPLOY_REVISION"\s+"\$DEPLOY_IMAGE"\s+"\$DEPLOY_PUBLIC_ORIGIN"/);
 
   const deployJpSection = workflow.slice(workflow.indexOf("  deploy-jp:"));
@@ -280,7 +280,7 @@ test("deploy.sh enforces root unless SCALETAG_DEPLOY_TEST_MODE=1 is set by non-r
 test("deploy.sh bootstraps a fresh host (release templates, env file, full compose up -d, readiness checks)", () => {
   const h = createHarness({ remoteMain: NEW_SHA, backupInstalled: false });
   try {
-    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://jp.scaletag.top"]);
+    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Created initial environment file/);
     assert.match(result.stdout, /Skipping pre-deployment backup/);
@@ -305,7 +305,7 @@ test("deploy.sh bootstraps a fresh host (release templates, env file, full compo
       "SCALETAG_UID",
       "SCALETAG_GID",
     ]);
-    assert.equal(envMap.PUBLIC_ORIGIN, "https://jp.scaletag.top");
+    assert.equal(envMap.PUBLIC_ORIGIN, "https://asia.scaletag.top");
     assert.equal(envMap.SCALETAG_PORT, "3000");
     assert.match(envMap.SCALETAG_ENCRYPTION_KEY, /^[0-9a-f]{64}$/);
     assert.equal(envMap.SCALETAG_UID, "1000");
@@ -349,7 +349,7 @@ test("deploy.sh never overwrites existing scaletag.env and reports already deplo
     mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
     writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
 
-    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://jp.scaletag.top"]);
+    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`Already deployed ${NEW_SHA}`));
     assert.equal(readFileSync(h.envFile, "utf8"), existingEnv);
@@ -400,7 +400,7 @@ test("deploy.sh runs backup and app2 -> app1 rolling update on existing ocihost 
 
 test("deploy.sh rolls back app2 and app1 to previous revisions when app2 readiness fails", () => {
   const existingEnv =
-    "PUBLIC_ORIGIN=https://jp.scaletag.top\nSCALETAG_PORT=3000\nSCALETAG_ENCRYPTION_KEY=" +
+    "PUBLIC_ORIGIN=https://asia.scaletag.top\nSCALETAG_PORT=3000\nSCALETAG_ENCRYPTION_KEY=" +
     "c".repeat(64) +
     "\nSCALETAG_UID=1000\nSCALETAG_GID=1000\n";
   const h = createHarness({
@@ -421,7 +421,7 @@ test("deploy.sh rolls back app2 and app1 to previous revisions when app2 readine
     mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
     writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
 
-    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://jp.scaletag.top"]);
+    const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Deployment failed; restoring previous images/);
     assert.match(result.stderr, /Previous images restored/);
@@ -438,7 +438,7 @@ test("deploy.sh rejects invalid revision, invalid image, stale revision, and non
     assert.equal(h.runDeploy(["not-a-sha", `${IMAGE_REPO}:${NEW_SHA}`]).status, 1);
     assert.equal(h.runDeploy([NEW_SHA, "invalid_image"]).status, 1);
     assert.equal(h.runDeploy([OLD_SHA, `${IMAGE_REPO}:${OLD_SHA}`]).status, 1);
-    assert.equal(h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "http://jp.scaletag.top"]).status, 1);
+    assert.equal(h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "http://asia.scaletag.top"]).status, 1);
     assert.equal(existsSync(h.envFile), false);
   } finally {
     h.cleanup();

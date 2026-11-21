@@ -1,35 +1,36 @@
-import { language, t, translateError } from "/locale.js";
-if (typeof document !== "undefined") document.documentElement.lang = language === "zh" ? "zh-Hans" : "en";
-if (language === "zh") {
+import { htmlLangFor, intlLocaleFor, language, t, translateError } from "/locale.js";
+if (typeof document !== "undefined") document.documentElement.lang = htmlLangFor(language);
+if (typeof document !== "undefined" && language !== "en") {
   const labels = {
-    ".skip-link": "跳至内容",
-    '[data-nav="create"]': "创建帖子",
-    ".site-footer > div:first-child p": "一个问题，一个地方，七天时间。",
-    "#install-app": "安装应用",
-    '.footer-links a[href="/privacy"]': "隐私与数据保留",
-    ".footer-links span": "让身边的交流更简单。",
-    "#connection-status": "当前处于离线状态。发布、投票、点赞和回复需要联网，显示的结果可能不是最新的。",
-    "#install-title": "安装 ScaleTag",
-    ".install-dialog > p:not([id])": "将 ScaleTag 放在主屏幕。发布、投票和查看实时结果仍需网络连接。",
-    "#install-native": "安装 ScaleTag",
-    ".install-dialog dd:first-of-type": "在 Safari 中打开 ScaleTag，点击分享，然后选择添加到主屏幕。如果出现“作为网页应用打开”，请选择它。",
-    ".install-dialog dt:last-of-type": "安卓或电脑",
-    ".install-dialog dd:last-of-type": "打开浏览器菜单，选择安装应用或添加到主屏幕（如果可用）。",
-    "#install-message": "无需应用商店账号。",
-    "#app-update strong": "新版本已准备就绪。",
-    "#app-update p": "更新前请完成或复制草稿。",
-    "#apply-update": "更新并重新加载",
-    "#dismiss-update": "稍后",
-    ".loading-state": "正在加载…",
+    ".skip-link": t("Skip to content", "跳至内容"),
+    '[data-nav="create"]': t("Create a post", "创建帖子"),
+    ".site-footer > div:first-child p": t("A question. A place. Seven days.", "一个问题，一个地方，七天时间。"),
+    "#install-app": t("Install app", "安装应用"),
+    '.footer-links a[href="/privacy"]': t("Privacy & retention", "隐私与数据保留"),
+    ".footer-links span": t("Made for small conversations.", "让身边的交流更简单。"),
+    "#connection-status": t("You’re offline. Publishing, voting, likes and replies need a connection. Results shown may be out of date.", "当前处于离线状态。发布、投票、点赞和回复需要联网，显示的结果可能不是最新的。"),
+    "#install-title": t("Install ScaleTag", "安装 ScaleTag"),
+    ".install-dialog > p:not([id])": t("Keep a little curiosity on your home screen. Publishing, voting and live results still need an internet connection.", "将 ScaleTag 放在主屏幕。发布、投票和查看实时结果仍需网络连接。"),
+    "#install-native": t("Install ScaleTag", "安装 ScaleTag"),
+    ".install-dialog dt:first-of-type": t("iPhone or iPad", "iPhone 或 iPad"),
+    ".install-dialog dd:first-of-type": t("Open ScaleTag in Safari, tap Share, then Add to Home Screen. Choose Open as Web App if shown.", "在 Safari 中打开 ScaleTag，点击分享，然后选择添加到主屏幕。如果出现“作为网页应用打开”，请选择它。"),
+    ".install-dialog dt:last-of-type": t("Android or desktop", "安卓或电脑"),
+    ".install-dialog dd:last-of-type": t("Open your browser’s menu and choose Install app or Add to Home Screen, when available.", "打开浏览器菜单，选择安装应用或添加到主屏幕（如果可用）。"),
+    "#install-message": t("No app store account is needed.", "无需应用商店账号。"),
+    "#app-update strong": t("A new version is ready.", "新版本已准备就绪。"),
+    "#app-update p": t("Finish or copy your draft before updating.", "更新前请完成或复制草稿。"),
+    "#apply-update": t("Update & reload", "更新并重新加载"),
+    "#dismiss-update": t("Later", "稍后"),
+    ".loading-state": t("Loading…", "正在加载…"),
   };
   for (const [selector, text] of Object.entries(labels)) {
     const node = document.querySelector(selector);
     if (node) node.textContent = text;
   }
-  document.querySelector("nav")?.setAttribute("aria-label", "主导航");
-  document.querySelector("#close-install")?.setAttribute("aria-label", "关闭安装指南");
-  document.querySelector("#app-update")?.setAttribute("aria-label", "应用更新");
-  document.querySelector("#dismiss-update")?.setAttribute("title", "下次访问时提醒我");
+  document.querySelector("nav")?.setAttribute("aria-label", t("Main navigation", "主导航"));
+  document.querySelector("#close-install")?.setAttribute("aria-label", t("Close installation guide", "关闭安装指南"));
+  document.querySelector("#app-update")?.setAttribute("aria-label", t("App update", "应用更新"));
+  document.querySelector("#dismiss-update")?.setAttribute("title", t("Remind me on my next visit", "下次访问时提醒我"));
 }
 const main = document.querySelector("#main");
 const escape = (v) =>
@@ -53,16 +54,17 @@ const icons = {
   download:
     '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>',
 };
+const intlLocale = intlLocaleFor(language);
 const date = (time) =>
-  new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en", {
+  new Intl.DateTimeFormat(intlLocale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(time));
 const shortDate = (time) =>
-  new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en", { month: "short", day: "numeric" }).format(
+  new Intl.DateTimeFormat(intlLocale, { month: "short", day: "numeric" }).format(
     new Date(time),
   );
-const count = (value) => new Intl.NumberFormat(language === "zh" ? "zh-CN" : "en").format(value);
+const count = (value) => new Intl.NumberFormat(intlLocale).format(value);
 const percent = (votes, total) =>
   total ? ((votes / total) * 100).toFixed(1).replace(/\.0$/, "") : "0";
 function remaining(end, now = Date.now()) {

@@ -94,7 +94,7 @@ function createPoll() {
     const row = document.createElement("div");
     row.className = "option-input";
     row.innerHTML =
-      '<span class="option-number"></span><input type="text" maxlength="120" required><button type="button" class="remove-option" title="Remove option">×</button>';
+      `<span class="option-number"></span><input type="text" maxlength="120" required><button type="button" class="remove-option" title="${t("Remove option", "删除选项")}">×</button>`;
     row.querySelector("button").onclick = () => {
       row.remove();
       renumber();
@@ -666,7 +666,7 @@ try {
     await taskPage(route.split("/")[2]);
   else if (/^\/task\/[a-f0-9]{24}\/manage$/.test(route))
     await taskPage(route.split("/")[2], { manage: true });
-  else showError(new Error("This link does not point to an available post."));
+  else showError(new Error(t("This link does not point to an available post.", "此链接未指向可用帖子。")));
 } catch (e) {
   showError(e);
 }

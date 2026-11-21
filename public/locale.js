@@ -1,11 +1,41 @@
+import {
+  TRANSLATIONS,
+  DYNAMIC_TRANSLATIONS,
+  SERVER_ERRORS,
+  FIELD_NAMES,
+} from './locale-translations.js';
+
+export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja', 'ko', 'fr'];
+const HTML_LANG = { en: 'en', zh: 'zh-Hans', ja: 'ja', ko: 'ko', fr: 'fr' };
+const INTL_LOCALE = { en: 'en', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR', fr: 'fr-FR' };
+
+export function htmlLangFor(lang = language) {
+  return HTML_LANG[lang] ?? 'en';
+}
+
+export function intlLocaleFor(lang = language) {
+  return INTL_LOCALE[lang] ?? 'en';
+}
+
 export function languageFor(languages = []) {
-  return /^zh(?:-|$)/i.test(languages[0] || '') ? 'zh' : 'en';
+  const match = /^(zh|ja|ko|fr)(?:-|$)/i.exec(languages?.[0] || '');
+  return match ? match[1].toLowerCase() : 'en';
 }
-export function translate(language, english, chinese) {
-  return language === 'zh' ? chinese : english;
+
+export function translate(lang, english, chinese) {
+  if (lang === 'zh') return chinese;
+  if (lang === 'ja' || lang === 'ko' || lang === 'fr') {
+    if (Object.hasOwn(TRANSLATIONS, english)) return TRANSLATIONS[english][lang];
+    for (const entry of DYNAMIC_TRANSLATIONS) {
+      const match = entry.pattern.exec(english);
+      if (match) return entry[lang](match);
+    }
+  }
+  return english;
 }
+
 const preferenceKey = 'scaletag-language';
-const validLanguage = value => value === 'en' || value === 'zh';
+const validLanguage = value => SUPPORTED_LANGUAGES.includes(value);
 let savedLanguage;
 let storageAvailable = false;
 if (typeof window !== 'undefined') {
@@ -35,21 +65,27 @@ export function localizedPath(path) {
 }
 
 if (typeof document !== 'undefined') {
-  document.documentElement.lang = language === 'zh' ? 'zh-Hans' : 'en';
+  document.documentElement.lang = htmlLangFor(language);
   const header = document.querySelector('.header-inner');
   if (header) {
     const control = document.createElement('div');
     control.className = 'language-control';
     const label = document.createElement('label');
     label.htmlFor = 'language-select';
-    label.textContent = 'Language / 语言';
+    label.textContent = t('Language', '语言');
     const select = document.createElement('select');
     select.id = 'language-select';
-    for (const [value, text] of [['en', 'English'], ['zh', '中文']]) {
+    for (const [value, text] of [
+      ['en', 'English'],
+      ['zh', '中文'],
+      ['ja', '日本語'],
+      ['ko', '한국어'],
+      ['fr', 'Français'],
+    ]) {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = text;
-      option.lang = value === 'zh' ? 'zh-Hans' : 'en';
+      option.lang = htmlLangFor(value);
       select.append(option);
     }
     select.value = language;
@@ -94,7 +130,7 @@ if (typeof document !== 'undefined') {
   }
 }
 
-const serverErrors = {
+export const serverErrors = {
   'Invalid request origin. Please use the ScaleTag website.': '请求来源无效，请使用 ScaleTag 网站。',
   'Invalid content type.': '内容类型无效。',
   'Invalid filter.': '筛选条件无效。',
@@ -155,39 +191,62 @@ const serverErrors = {
   'The service is currently at capacity. Please try again later.': '服务已达容量上限，请稍后重试。',
   'Too many posts are being published. Please try again in a minute.': '发布请求过多，请一分钟后重试。',
 };
-const FIELD_NAMES = {
-  'Pickup location': '领取地点',
-  'Asking price': '期望价格',
-  Offer: '出价',
-  Title: '标题',
-  Description: '描述',
-  Signature: '署名',
-  'Image URL': '图片链接',
-  Option: '选项',
-  Reward: '酬谢',
-  Reply: '回复',
-  Name: '姓名',
-  Phone: '电话',
-  Email: '邮箱',
-};
+
+const LENGTH_ERROR_RE = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer|Pickup location) (is required and )?must be at most (\d+) characters\.$/;
+const BLOCKED_ERROR_RE = /^(Title|Description|Signature|Option|Reward|Reply|Name|Pickup location) contains words or phrases that are not allowed in public text\. Please edit it and try again\.$/;
+const FINAL_REPLY_RE = /^This task is (completed|closed) and no longer accepts replies\.$/;
+const FINAL_STATE_RE = /^This task is already (completed|closed)\. Its status can no longer change\.$/;
+
+function formatLengthError(field, required, max, lang) {
+  const name = FIELD_NAMES[field][lang];
+  if (lang === 'zh') return `${name}${required ? '为必填项，且' : ''}最多 ${max} 个字符。`;
+  if (lang === 'ja') return `${name}${required ? 'は必須項目であり、' : 'は'}${max}文字以内で入力してください。`;
+  if (lang === 'ko') return `${name}${required ? '은(는) 필수이며 ' : '은(는) '}최대 ${max}자까지 입력할 수 있습니다.`;
+  return `${name} ${required ? 'est obligatoire et ' : ''}doit contenir au maximum ${max} caractères.`;
+}
+
+function formatBlockedError(field, lang) {
+  const name = FIELD_NAMES[field][lang];
+  if (lang === 'zh') return `${name}包含公开内容不允许使用的词语，请修改后重试。`;
+  if (lang === 'ja') return `${name}に公開テキストでは許可されていない語句が含まれています。修正してもう一度お試しください。`;
+  if (lang === 'ko') return `${name}에 공개 텍스트에서 허용되지 않는 단어나 문구가 포함되어 있습니다. 수정한 후 다시 시도해 주세요.`;
+  return `${name} contient des mots ou expressions non autorisés dans un texte public. Veuillez modifier le texte et réessayer.`;
+}
+
+function formatFinalTaskError(kind, state, lang) {
+  if (kind === 'reply') {
+    if (lang === 'zh') return `此任务已${state === 'completed' ? '完成' : '关闭'}，不再接受回复。`;
+    if (lang === 'ja') return `このタスクは${state === 'completed' ? '完了' : '終了'}しているため、返信を受け付けていません。`;
+    if (lang === 'ko') return `이 작업은 ${state === 'completed' ? '완료' : '종료'}되어 더 이상 댓글을 받지 않습니다.`;
+    return `Cette tâche est ${state === 'completed' ? 'terminée' : 'fermée'} et n’accepte plus de réponses.`;
+  }
+  if (lang === 'zh') return `此任务已${state === 'completed' ? '完成' : '关闭'}，状态无法再更改。`;
+  if (lang === 'ja') return `このタスクはすでに${state === 'completed' ? '完了' : '終了'}しています。ステータスは変更できません。`;
+  if (lang === 'ko') return `이 작업은 이미 ${state === 'completed' ? '완료' : '종료'}되었습니다. 상태를 변경할 수 없습니다.`;
+  return `Cette tâche est déjà ${state === 'completed' ? 'terminée' : 'fermée'}. Son statut ne peut plus être modifié.`;
+}
+
 export function translateError(message, targetLanguage = language) {
-  if (targetLanguage !== 'zh') return ({
-    'Sale not found.': 'Sale listing not found.',
-    'This management link is invalid for this sale.': 'This management link is invalid for this listing.',
-    'Replies are available on tasks and sales only.': 'Replies are available on tasks and sale listings only.',
-  })[message] ?? message;
-  if (serverErrors[message]) return serverErrors[message];
-  const match = /^(Title|Description|Signature|Image URL|Option|Reward|Reply|Name|Phone|Email|Asking price|Offer|Pickup location) (is required and )?must be at most (\d+) characters\.$/.exec(message);
-  if (match) {
-    return `${FIELD_NAMES[match[1]]}${match[2] ? '为必填项，且' : ''}最多 ${match[3]} 个字符。`;
+  if (!SUPPORTED_LANGUAGES.includes(targetLanguage) || targetLanguage === 'en') {
+    return ({
+      'Sale not found.': 'Sale listing not found.',
+      'This management link is invalid for this sale.': 'This management link is invalid for this listing.',
+      'Replies are available on tasks and sales only.': 'Replies are available on tasks and sale listings only.',
+    })[message] ?? message;
   }
-  const blocked = /^(Title|Description|Signature|Option|Reward|Reply|Name|Pickup location) contains words or phrases that are not allowed in public text\. Please edit it and try again\.$/.exec(message);
-  if (blocked) {
-    return `${FIELD_NAMES[blocked[1]]}包含公开内容不允许使用的词语，请修改后重试。`;
+  if (targetLanguage === 'zh' && Object.hasOwn(serverErrors, message)) {
+    return serverErrors[message];
   }
-  const finalReply = /^This task is (completed|closed) and no longer accepts replies\.$/.exec(message);
-  if (finalReply) return `此任务已${finalReply[1] === 'completed' ? '完成' : '关闭'}，不再接受回复。`;
-  const finalState = /^This task is already (completed|closed)\. Its status can no longer change\.$/.exec(message);
-  if (finalState) return `此任务已${finalState[1] === 'completed' ? '完成' : '关闭'}，状态无法再更改。`;
+  if (targetLanguage !== 'zh' && Object.hasOwn(SERVER_ERRORS, message)) {
+    return SERVER_ERRORS[message][targetLanguage];
+  }
+  const match = LENGTH_ERROR_RE.exec(message);
+  if (match) return formatLengthError(match[1], Boolean(match[2]), match[3], targetLanguage);
+  const blocked = BLOCKED_ERROR_RE.exec(message);
+  if (blocked) return formatBlockedError(blocked[1], targetLanguage);
+  const finalReply = FINAL_REPLY_RE.exec(message);
+  if (finalReply) return formatFinalTaskError('reply', finalReply[1], targetLanguage);
+  const finalState = FINAL_STATE_RE.exec(message);
+  if (finalState) return formatFinalTaskError('state', finalState[1], targetLanguage);
   return message;
 }
