@@ -63,3 +63,63 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$SUDO_PASS" | sudo -H -k -S -p '' /usr/bin/env bash "$GITHUB_WORKSPACE/deploy/deploy.sh" "$DEPLOY_REVISION" "$DEPLOY_IMAGE"
+  deploy-jp:
+    if: >-
+      github.repository == 'ChrisXHLeung/ScaleTag' &&
+      ((github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.head_branch == 'main' &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: [self-hosted, ocijphost]
+    timeout-minutes: 20
+    env:
+      DEPLOY_REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_PUBLIC_ORIGIN: https://jp.scaletag.top
+    steps:
+      - name: Confirm non-legacy runner
+        run: test "${RUNNER_NAME:-}" != "eons"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_REVISION }}
+          persist-credentials: false
+      - name: Reject stale deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$main_sha" = "$DEPLOY_REVISION"
+      - name: Resolve published SHA image reference
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${DOCKERHUB_REPOSITORY:-${DOCKERHUB_USERNAME:+${DOCKERHUB_USERNAME}/scaletag}}"
+          repo="${repo,,}"
+          if [[ ! "$repo" =~ ^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$ ]]; then
+            echo "::error::Invalid or missing Docker Hub repository; set vars.DOCKERHUB_REPOSITORY or secrets.DOCKERHUB_USERNAME."
+            exit 1
+          fi
+          echo "DEPLOY_IMAGE=${repo}:${DEPLOY_REVISION}" >> "$GITHUB_ENV"
+      - name: Pull SHA image and deploy
+        env:
+          SUDO_PASS: ${{ secrets.SUDO_PASS_JP || secrets.SUDO_PASS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ $(id -u) -eq 0 ]]; then
+            /usr/bin/env bash "$GITHUB_WORKSPACE/deploy/deploy.sh" "$DEPLOY_REVISION" "$DEPLOY_IMAGE" "$DEPLOY_PUBLIC_ORIGIN"
+          elif sudo -n true 2>/dev/null; then
+            sudo -H -n /usr/bin/env bash "$GITHUB_WORKSPACE/deploy/deploy.sh" "$DEPLOY_REVISION" "$DEPLOY_IMAGE" "$DEPLOY_PUBLIC_ORIGIN"
+          else
+            if [[ -z "${SUDO_PASS:-}" ]]; then
+              echo "::error::Missing required GitHub Actions secret SUDO_PASS_JP or SUDO_PASS."
+              exit 1
+            fi
+            printf '%s\n' "$SUDO_PASS" | sudo -H -k -S -p '' /usr/bin/env bash "$GITHUB_WORKSPACE/deploy/deploy.sh" "$DEPLOY_REVISION" "$DEPLOY_IMAGE" "$DEPLOY_PUBLIC_ORIGIN"
+          fi
