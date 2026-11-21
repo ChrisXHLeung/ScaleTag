@@ -8,6 +8,8 @@ import test from "node:test";
 const repoRoot = resolve(import.meta.dirname, "..");
 const deployScript = join(repoRoot, "deploy/deploy.sh");
 const deployWorkflow = join(repoRoot, ".github/workflows/deploy.yml");
+const nginxConfig = join(repoRoot, "deploy/nginx.conf");
+const composeFile = join(repoRoot, "compose.ha.yaml");
 
 const OLD_SHA = "1".repeat(40);
 const NEW_SHA = "2".repeat(40);
@@ -191,6 +193,13 @@ if (sub === "compose") {
         id: "ctr-app2-" + process.env.APP2_REVISION.slice(0, 7),
         image: process.env.APP2_IMAGE,
         revision: process.env.APP2_REVISION,
+        running: true,
+      };
+    } else if (target === "ingress") {
+      const recreates = (state.containers.ingress?.recreates ?? 0) + 1;
+      state.containers.ingress = {
+        id: "ctr-ingress-" + recreates,
+        recreates,
         running: true,
       };
     } else {
@@ -442,5 +451,284 @@ test("deploy.sh rejects invalid revision, invalid image, stale revision, and non
     assert.equal(existsSync(h.envFile), false);
   } finally {
     h.cleanup();
+  }
+});
+
+function extractBraceBlock(source, headerRegex) {
+  const match = headerRegex.exec(source);
+  assert.ok(match, `Missing block matching ${headerRegex}`);
+  const openBraceIdx = source.indexOf("{", match.index);
+  assert.ok(openBraceIdx >= 0, `Missing opening brace for ${headerRegex}`);
+  let depth = 0;
+  for (let i = openBraceIdx; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        return { start: match.index, end: i + 1, body: source.slice(openBraceIdx + 1, i) };
+      }
+    }
+  }
+  assert.fail(`Unbalanced braces in block ${headerRegex}`);
+}
+
+test("deploy/nginx.conf blocks public/proxied /readyz and /healthz requests while allowing local probes", () => {
+  const conf = readFileSync(nginxConfig, "utf8");
+  const strippedComments = conf.replace(/#[^\n]*/g, "");
+
+  let braceDepth = 0;
+  for (const ch of strippedComments) {
+    if (ch === "{") braceDepth++;
+    else if (ch === "}") braceDepth--;
+    assert.ok(braceDepth >= 0, "Unexpected closing brace in nginx.conf");
+  }
+  assert.equal(braceDepth, 0, "Unbalanced braces in nginx.conf");
+
+  assert.equal(/\bif\s*\([^)]*\|\|[^)]*\)/.test(strippedComments), false, "nginx if does not support ||");
+
+  const serverBlock = extractBraceBlock(strippedComments, /\bserver\s*\{/);
+  const probeLocMatch = /location\s+(~\*?)\s+(\S+)\s*\{/.exec(serverBlock.body);
+  assert.ok(probeLocMatch, "Missing probe regex location block inside server {}");
+  const probeBlock = extractBraceBlock(serverBlock.body, /location\s+~\*?\s+\^\/\(healthz\|readyz\)\(\/\|\$\)\s*\{/);
+  const fallbackLocIdx = serverBlock.body.search(/location\s+\/\s*\{/);
+  assert.ok(fallbackLocIdx > probeBlock.end, "Probe location block must appear before location /");
+
+  const block = probeBlock.body;
+  assert.match(block, /set\s+\$block_probe\s+0\s*;/);
+  assert.match(block, /if\s*\(\s*\$http_cf_connecting_ip\s*!=\s*""\s*\)\s*\{\s*set\s+\$block_probe\s+1\s*;\s*\}/);
+  assert.match(block, /if\s*\(\s*\$http_cf_ray\s*!=\s*""\s*\)\s*\{\s*set\s+\$block_probe\s+1\s*;\s*\}/);
+  assert.match(block, /if\s*\(\s*\$http_x_forwarded_for\s*!=\s*""\s*\)\s*\{\s*set\s+\$block_probe\s+1\s*;\s*\}/);
+  assert.match(block, /if\s*\(\s*\$http_forwarded\s*!=\s*""\s*\)\s*\{\s*set\s+\$block_probe\s+1\s*;\s*\}/);
+  assert.match(
+    block,
+    /if\s*\(\s*\$host\s+!~\*\s+\^\(127\\\.0\\\.0\\\.1\|localhost\|ingress\)\(:?\[0-9\]\+\)\?\$\s*\)\s*\{\s*set\s+\$block_probe\s+1\s*;\s*\}/,
+  );
+  assert.match(block, /if\s*\(\s*\$block_probe\s*=\s*1\s*\)\s*\{\s*return\s+404\s*;\s*\}/);
+  assert.match(block, /proxy_pass\s+http:\/\/scaletag\s*;/);
+  assert.match(block, /proxy_http_version\s+1\.1\s*;/);
+  assert.match(block, /proxy_set_header\s+Connection\s+""\s*;/);
+  assert.match(block, /proxy_set_header\s+Host\s+\$http_host\s*;/);
+  assert.match(block, /proxy_cache\s+off\s*;/);
+
+  const locFlags = probeLocMatch[1] === "~*" ? "i" : "";
+  const locRegex = new RegExp(probeLocMatch[2], locFlags);
+  const hostMatch = /\$host\s+!~\*\s+(\S+)\s*\)/.exec(block);
+  assert.ok(hostMatch);
+  const hostRegex = new RegExp(hostMatch[1], "i");
+  const headerVars = [...block.matchAll(/\$http_([a-z0-9_]+)\s*!=\s*""/g)].map((m) => m[1]);
+  assert.deepEqual(headerVars.sort(), ["cf_connecting_ip", "cf_ray", "forwarded", "x_forwarded_for"]);
+
+  const evaluateNginx = (path, headers = {}) => {
+    if (!locRegex.test(path)) return "location_slash";
+    const normHeaders = Object.fromEntries(
+      Object.entries(headers).map(([k, v]) => [k.toLowerCase().replace(/-/g, "_"), v]),
+    );
+    let blockProbe = 0;
+    for (const hVar of headerVars) {
+      if ((normHeaders[hVar] ?? "") !== "") blockProbe = 1;
+    }
+    const rawHost = normHeaders.host ?? "";
+    const nginxHost = rawHost.replace(/:\d+$/, "");
+    if (!hostRegex.test(rawHost) || !hostRegex.test(nginxHost)) blockProbe = 1;
+    return blockProbe === 1 ? 404 : "proxy";
+  };
+
+  for (const path of ["/readyz", "/healthz", "/readyz/", "/healthz/live", "/READYZ", "/Healthz"]) {
+    assert.equal(evaluateNginx(path, { Host: "asia.scaletag.top" }), 404, `public Host must block ${path}`);
+    assert.equal(evaluateNginx(path, { Host: "www.scaletag.top" }), 404, `www Host must block ${path}`);
+    assert.equal(evaluateNginx(path, { Host: "127.0.0.1.evil.test" }), 404, `prefix spoof Host must block ${path}`);
+    assert.equal(evaluateNginx(path, { Host: "evil-ingress" }), 404, `suffix spoof Host must block ${path}`);
+    assert.equal(evaluateNginx(path, {}), 404, `missing Host must block ${path}`);
+
+    for (const localHost of ["127.0.0.1:3000", "127.0.0.1", "localhost:3000", "ingress:8080", "ingress"]) {
+      assert.equal(evaluateNginx(path, { Host: localHost }), "proxy", `local Host ${localHost} must allow ${path}`);
+      assert.equal(
+        evaluateNginx(path, { Host: localHost, "CF-Connecting-IP": "203.0.113.10" }),
+        404,
+        `CF-Connecting-IP must block ${path} even with ${localHost}`,
+      );
+      assert.equal(
+        evaluateNginx(path, { Host: localHost, "Cf-Ray": "8f1234abcd-NRT" }),
+        404,
+        `Cf-Ray must block ${path} even with ${localHost}`,
+      );
+      assert.equal(
+        evaluateNginx(path, { Host: localHost, "X-Forwarded-For": "203.0.113.10" }),
+        404,
+        `X-Forwarded-For must block ${path} even with ${localHost}`,
+      );
+      assert.equal(
+        evaluateNginx(path, { Host: localHost, Forwarded: "for=203.0.113.10" }),
+        404,
+        `Forwarded must block ${path} even with ${localHost}`,
+      );
+    }
+  }
+
+  for (const appPath of ["/", "/api/posts", "/healthz-other", "/readyz2"]) {
+    assert.equal(evaluateNginx(appPath, { Host: "asia.scaletag.top", "CF-Connecting-IP": "203.0.113.10" }), "location_slash");
+  }
+});
+
+test("deploy.sh recreates ingress only when nginx.conf or compose.ha.yaml changes", () => {
+  const existingEnv =
+    "PUBLIC_ORIGIN=https://asia.scaletag.top\nSCALETAG_PORT=3000\nSCALETAG_ENCRYPTION_KEY=" +
+    "d".repeat(64) +
+    "\nSCALETAG_UID=1000\nSCALETAG_GID=1000\n";
+  const repoCompose = readFileSync(composeFile, "utf8");
+  const repoNginx = readFileSync(nginxConfig, "utf8");
+
+  const seedRelease = (releaseDir, { composeContent = repoCompose, nginxContent = repoNginx } = {}) => {
+    mkdirSync(join(releaseDir, "deploy"), { recursive: true });
+    writeFileSync(join(releaseDir, "compose.ha.yaml"), composeContent, { mode: 0o644 });
+    writeFileSync(join(releaseDir, "deploy/nginx.conf"), nginxContent, { mode: 0o644 });
+  };
+
+  // 1. Rolling update when nginx.conf changes -> recreates ingress before final ingress readiness check
+  {
+    const h = createHarness({
+      remoteMain: NEW_SHA,
+      initialState: {
+        containers: {
+          app1: { id: "ctr-app1-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+          app2: { id: "ctr-app2-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+        },
+        pulled: [],
+        tagged: [],
+        ingressRevision: OLD_SHA,
+      },
+    });
+    try {
+      mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
+      writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
+      seedRelease(h.releaseDir, { nginxContent: "# stale nginx\n" });
+
+      const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(readFileSync(join(h.releaseDir, "deploy/nginx.conf"), "utf8"), repoNginx);
+
+      const calls = h.readCalls();
+      const app2Idx = calls.findIndex((c) => c.cmd === "docker" && c.args[0] === "compose" && c.args.at(-1) === "app2");
+      const app1Idx = calls.findIndex((c) => c.cmd === "docker" && c.args[0] === "compose" && c.args.at(-1) === "app1");
+      const ingressIdx = calls.findIndex(
+        (c) =>
+          c.cmd === "docker" &&
+          c.args[0] === "compose" &&
+          c.args.slice(-5).join(" ") === "up -d --no-deps --force-recreate ingress",
+      );
+      const curlIdx = calls.findIndex((c) => c.cmd === "curl" && c.ingressRevision === NEW_SHA);
+      assert.ok(app2Idx >= 0 && app1Idx > app2Idx && ingressIdx > app1Idx && curlIdx > ingressIdx);
+    } finally {
+      h.cleanup();
+    }
+  }
+
+  // 2. Rolling update when compose.ha.yaml changes -> recreates ingress before final ingress readiness check
+  {
+    const h = createHarness({
+      remoteMain: NEW_SHA,
+      initialState: {
+        containers: {
+          app1: { id: "ctr-app1-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+          app2: { id: "ctr-app2-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+        },
+        pulled: [],
+        tagged: [],
+        ingressRevision: OLD_SHA,
+      },
+    });
+    try {
+      mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
+      writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
+      seedRelease(h.releaseDir, { composeContent: "# stale compose\n" });
+
+      const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(readFileSync(join(h.releaseDir, "compose.ha.yaml"), "utf8"), repoCompose);
+
+      const calls = h.readCalls();
+      const app1Idx = calls.findIndex((c) => c.cmd === "docker" && c.args[0] === "compose" && c.args.at(-1) === "app1");
+      const ingressIdx = calls.findIndex(
+        (c) =>
+          c.cmd === "docker" &&
+          c.args[0] === "compose" &&
+          c.args.slice(-5).join(" ") === "up -d --no-deps --force-recreate ingress",
+      );
+      const curlIdx = calls.findIndex((c) => c.cmd === "curl" && c.ingressRevision === NEW_SHA);
+      assert.ok(app1Idx >= 0 && ingressIdx > app1Idx && curlIdx > ingressIdx);
+    } finally {
+      h.cleanup();
+    }
+  }
+
+  // 3. Rolling update when neither nginx.conf nor compose.ha.yaml changes -> skips ingress recreation
+  {
+    const h = createHarness({
+      remoteMain: NEW_SHA,
+      initialState: {
+        containers: {
+          app1: { id: "ctr-app1-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+          app2: { id: "ctr-app2-old", image: `scaletag:${OLD_SHA}`, revision: OLD_SHA, running: true },
+        },
+        pulled: [],
+        tagged: [],
+        ingressRevision: OLD_SHA,
+      },
+    });
+    try {
+      mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
+      writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
+      seedRelease(h.releaseDir);
+
+      const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
+      assert.equal(result.status, 0, result.stderr);
+
+      const calls = h.readCalls();
+      assert.equal(
+        calls.some((c) => c.cmd === "docker" && c.args[0] === "compose" && c.args.includes("ingress")),
+        false,
+      );
+    } finally {
+      h.cleanup();
+    }
+  }
+
+  // 4. Already-deployed revision when nginx.conf changes -> recreates ingress without pulling image
+  {
+    const h = createHarness({
+      remoteMain: NEW_SHA,
+      initialState: {
+        containers: {
+          app1: { id: "ctr-app1", image: `scaletag:${NEW_SHA}`, revision: NEW_SHA, running: true },
+          app2: { id: "ctr-app2", image: `scaletag:${NEW_SHA}`, revision: NEW_SHA, running: true },
+        },
+        pulled: [],
+        tagged: [],
+        ingressRevision: NEW_SHA,
+      },
+    });
+    try {
+      mkdirSync(join(h.root, "etc/scaletag-fresh"), { mode: 0o700, recursive: true });
+      writeFileSync(h.envFile, existingEnv, { mode: 0o600 });
+      seedRelease(h.releaseDir, { nginxContent: "# stale nginx\n" });
+
+      const result = h.runDeploy([NEW_SHA, `${IMAGE_REPO}:${NEW_SHA}`, "https://asia.scaletag.top"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, new RegExp(`Already deployed ${NEW_SHA}`));
+      assert.equal(readFileSync(join(h.releaseDir, "deploy/nginx.conf"), "utf8"), repoNginx);
+
+      const calls = h.readCalls();
+      assert.equal(calls.some((c) => c.cmd === "docker" && c.args[0] === "pull"), false);
+      const ingressIdx = calls.findIndex(
+        (c) =>
+          c.cmd === "docker" &&
+          c.args[0] === "compose" &&
+          c.args.slice(-5).join(" ") === "up -d --no-deps --force-recreate ingress",
+      );
+      const curlIdx = calls.findIndex((c) => c.cmd === "curl" && c.ingressRevision === NEW_SHA);
+      assert.ok(ingressIdx >= 0 && curlIdx > ingressIdx);
+    } finally {
+      h.cleanup();
+    }
   }
 });

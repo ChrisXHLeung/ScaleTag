@@ -72,6 +72,7 @@ compose_file="$release_dir/compose.ha.yaml"
 dst_nginx="$release_dir/deploy/nginx.conf"
 install -d -m 0755 "$release_dir" "$release_dir/deploy"
 
+ingress_config_changed=0
 sync_config_file() {
   local src="$1" dst="$2"
   if [[ -e "$dst" ]]; then
@@ -81,6 +82,7 @@ sync_config_file() {
     fi
   fi
   install -m 0644 "$src" "$dst"
+  ingress_config_changed=1
 }
 
 sync_config_file "$src_compose" "$compose_file"
@@ -184,6 +186,14 @@ wait_ingress() {
   return 1
 }
 
+recreate_ingress_if_changed() {
+  if [[ "$ingress_config_changed" -eq 1 ]]; then
+    compose up -d --no-deps --force-recreate ingress >/dev/null
+  else
+    return 0
+  fi
+}
+
 slot_check() {
   local slot="$1" expected="$2" id
   id=$(docker ps -q --filter label=com.docker.compose.project=scaletag-ha --filter "label=com.docker.compose.service=$slot")
@@ -252,6 +262,7 @@ old_revision2=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end
 [[ "$old_revision2" =~ ^[0-9a-f]{40}$ ]] || { echo 'Current app2 revision unknown' >&2; exit 1; }
 
 if [[ "$revision" == "$old_revision" && "$revision" == "$old_revision2" ]]; then
+  recreate_ingress_if_changed || { echo "Slots report $revision but ingress recreate failed" >&2; exit 1; }
   wait_ingress "$revision" || { echo "Slots report $revision but ingress readiness check failed" >&2; exit 1; }
   echo "Already deployed $revision"
   exit 0
@@ -265,7 +276,7 @@ pull_and_tag_image
 run_backup_if_installed
 
 export APP1_IMAGE="scaletag:$revision" APP2_IMAGE="scaletag:$revision" APP1_REVISION="$revision" APP2_REVISION="$revision"
-if compose up -d --no-deps app2 >/dev/null && wait_slot app2 "$revision" && sleep "$rollout_sleep" && compose up -d --no-deps app1 >/dev/null && wait_slot app1 "$revision" && wait_ingress "$revision"; then
+if compose up -d --no-deps app2 >/dev/null && wait_slot app2 "$revision" && sleep "$rollout_sleep" && compose up -d --no-deps app1 >/dev/null && wait_slot app1 "$revision" && recreate_ingress_if_changed && wait_ingress "$revision"; then
   echo "Deployed $revision from $image"
   exit 0
 fi
