@@ -20,12 +20,10 @@ SAMPLE = {
 
 
 class KumaTrafficTests(unittest.TestCase):
-    def test_appends_both_windows_and_fails_open(self):
+    def test_formats_four_numeric_pairs_in_one_line_and_fails_open(self):
         with patch.object(kuma, "read_stats", return_value=SAMPLE):
             self.assertEqual(kuma.with_traffic("ready", 3000),
-                "ready | 7d: visits=10 polls=1 tasks=2 giveaways=3 secrex=4 | "
-                "30d: visits=50 polls=5 tasks=6 giveaways=7 secrex=8")
-            self.assertEqual(kuma.with_traffic("x" * 240, 3000), "x" * 240)
+                "10/50 1/5 2/6 3/7")
         with patch.object(kuma, "read_stats", side_effect=TimeoutError):
             self.assertEqual(kuma.with_traffic("readiness unavailable", 3000), "readiness unavailable")
         with patch.object(kuma, "read_stats", return_value={"days7": {}}):

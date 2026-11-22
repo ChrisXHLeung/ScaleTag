@@ -21,16 +21,14 @@ def read_stats(port):
 def with_traffic(health, port):
     try:
         stats = read_stats(port)
-        parts = [health]
+        windows = []
         for days in (7, 30):
             window = stats[f"days{days}"]
-            counts = {"visits": window["visits"], **{
-                name: window["created"][name] for name in ("polls", "tasks", "giveaways", "secrex")
-            }}
-            if any(type(value) is not int or value < 0 for value in counts.values()):
+            counts = (window["visits"], *(window["created"][kind] for kind in ("polls", "tasks", "giveaways")))
+            if any(type(value) is not int or value < 0 for value in counts):
                 return health
-            parts.append(f"{days}d: " + " ".join(f"{key}={value}" for key, value in counts.items()))
-        summary = " | ".join(parts)
+            windows.append(counts)
+        summary = " ".join(f"{week}/{month}" for week, month in zip(*windows))
         if len(summary) > 240:
             return health
         if os.environ.get("SCALETAG_VERIFY_KUMA_TRAFFIC") == "1":

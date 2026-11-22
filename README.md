@@ -48,7 +48,7 @@ Canada and Japan count independently. The homepage footer shows site page views 
 - `GET /api/visits/{poll|task|giveaway}/{id}` returns the same fields for a public post.
 - `GET /api/stats` is an operations endpoint on each installation's local ingress. On either host, query it with `curl --fail http://127.0.0.1:3000/api/stats`. The response contains the site origin, the collection start and snapshot timestamps, and the visit and publication counts for both windows. Publication counts cover creations within each period. A destroyed Secrex still contributes to the aggregate creation count. The endpoint returns no secret IDs or contents.
 
-The HA deployment configures the existing Kuma Push collector, if present, to add both windows to its status message. Each region keeps its own monitor and push token. If the statistics request fails, the collector continues to send its original health heartbeat.
+The existing Kuma Push monitor for each region displays four space-separated pairs for site visits, polls, tasks, and giveaways. Each pair shows the 7-day count followed by the 30-day count, such as `2/2 1/1 0/0 3/3`. The collector preserves the health status and response time and falls back to the original message if statistics cannot be read.
 
 ## Browser encryption for task reply contacts
 
