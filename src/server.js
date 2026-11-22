@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { PollStore } from "./store.js";
 import { createApp } from "./app.js";
 import { SecrexStore } from "./secrex-store.js";
@@ -26,6 +26,14 @@ const store = new Store(directory, {
   maxVotes: positive("MAX_VOTES_PER_POLL", 50000),
 });
 await store.init();
+let trafficDb;
+if (!store.traffic) {
+  const { openDatabase } = await import("./database.js");
+  const { TrafficCounters } = await import("./traffic.js");
+  trafficDb = openDatabase(join(directory, "traffic.sqlite"));
+  trafficDb.pragma("busy_timeout=3000");
+  store.traffic = new TrafficCounters(trafficDb, async operation => trafficDb.transaction(operation).immediate(), store.clock());
+}
 const secrex = new SecrexStore(directory);
 await secrex.init();
 const app = createApp(store, {
@@ -44,6 +52,7 @@ const cleanup = setInterval(async () => {
   try {
     await secrex.sweep();
     await store.sweep();
+    await store.traffic.sweep(store.clock());
   } catch (e) {
     console.error("Retention cleanup failed:", e.code ?? e.name);
   } finally {
@@ -64,6 +73,7 @@ for (const signal of ["SIGINT", "SIGTERM"])
     server.close(() => {
       secrex.close();
       store.close?.();
+      trafficDb?.close();
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 10000).unref();

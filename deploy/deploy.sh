@@ -237,6 +237,12 @@ run_backup_if_installed() {
   fi
 }
 
+sync_kuma_traffic() {
+  if [[ "$test_mode" == "0" ]] && ! python3 "$script_dir/kuma_traffic.py" "$ingress_port"; then
+    echo '::warning::ScaleTag app deployment succeeded, but Kuma traffic delivery was not verified'
+  fi
+}
+
 app1=$(docker ps -q --filter label=com.docker.compose.project=scaletag-ha --filter label=com.docker.compose.service=app1)
 app2=$(docker ps -q --filter label=com.docker.compose.project=scaletag-ha --filter label=com.docker.compose.service=app2)
 
@@ -247,6 +253,7 @@ if [[ -z "$app1" || -z "$app2" ]]; then
   export APP1_IMAGE="scaletag:$revision" APP2_IMAGE="scaletag:$revision" APP1_REVISION="$revision" APP2_REVISION="$revision"
   if compose up -d && wait_slot app1 "$revision" && wait_slot app2 "$revision" && wait_ingress "$revision"; then
     echo "Bootstrapped and deployed $revision from $image"
+    sync_kuma_traffic
     exit 0
   fi
 
@@ -265,6 +272,7 @@ if [[ "$revision" == "$old_revision" && "$revision" == "$old_revision2" ]]; then
   recreate_ingress_if_changed || { echo "Slots report $revision but ingress recreate failed" >&2; exit 1; }
   wait_ingress "$revision" || { echo "Slots report $revision but ingress readiness check failed" >&2; exit 1; }
   echo "Already deployed $revision"
+  sync_kuma_traffic
   exit 0
 fi
 
@@ -278,6 +286,7 @@ run_backup_if_installed
 export APP1_IMAGE="scaletag:$revision" APP2_IMAGE="scaletag:$revision" APP1_REVISION="$revision" APP2_REVISION="$revision"
 if compose up -d --no-deps app2 >/dev/null && wait_slot app2 "$revision" && sleep "$rollout_sleep" && compose up -d --no-deps app1 >/dev/null && wait_slot app1 "$revision" && recreate_ingress_if_changed && wait_ingress "$revision"; then
   echo "Deployed $revision from $image"
+  sync_kuma_traffic
   exit 0
 fi
 

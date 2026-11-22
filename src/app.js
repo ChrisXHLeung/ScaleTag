@@ -14,7 +14,7 @@ import {
   manageKeyInput,
   taskStateInput,
 } from "./validation.js";
-import { ID_PATTERN } from "./store.js";
+import { DAY, ID_PATTERN } from "./store.js";
 import { canonical, createSecrexRouter } from "./secrex.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
@@ -63,6 +63,66 @@ export function createApp(
     }
     next();
   });
+  const traffic = store.traffic;
+  let lastTrafficWarning = -Infinity;
+  function sendPublicPage(req, res, file, postId) {
+    const purpose = `${req.get("sec-purpose") ?? ""} ${req.get("purpose") ?? ""}`;
+    if (traffic && req.method === "GET" && !/prefetch|prerender/i.test(purpose)) {
+      res.once("finish", () => {
+        if (res.statusCode !== 200 && res.statusCode !== 304) return;
+        const now = store.clock();
+        void traffic.record(now, postId).catch(error => {
+          if (now - lastTrafficWarning < 60000) return;
+          lastTrafficWarning = now;
+          console.error("Visit count failed:", error.code ?? error.name);
+        });
+      });
+    }
+    res.sendFile(file, { root: publicDir });
+  }
+
+  const visitTypes = new Map([["poll", "poll"], ["task", "task"], ["giveaway", "sale"]]);
+  async function visiblePost(type, id) {
+    const post = await store.get(id);
+    if ((post.type ?? "poll") !== type) throw new AppError(404, "Post not found.");
+    return post;
+  }
+
+  if (traffic) {
+    app.get("/api/visits", (_req, res) => res.json(traffic.views(store.clock())));
+    app.get("/api/visits/:type/:id", async (req, res) => {
+      const { type, id } = req.params;
+      if (!visitTypes.has(type) || !ID_PATTERN.test(id))
+        throw new AppError(404, "Post not found.");
+      await visiblePost(visitTypes.get(type), id);
+      res.json(traffic.views(store.clock(), id));
+    });
+    app.get("/api/stats", (req, res) => {
+      const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+      const ingress = req.get("x-scaletag-local-stats") === "1";
+      const localHost = /^(127\.0\.0\.1|localhost|ingress)(:[0-9]+)?$/i.test(req.get("host") ?? "");
+      const forwarded = ["cf-connecting-ip", "cf-ray", "x-forwarded-for", "forwarded"].some(name => req.get(name));
+      if ((!loopback && !ingress) || !localHost || forwarded)
+        throw new AppError(404, "Page not found.");
+      const now = store.clock();
+      const views = traffic.views(now);
+      const window = days => {
+        const after = now - days * DAY;
+        return {
+          visits: views[`days${days}`],
+          created: { ...store.createdCounts(after, now), secrex: secrex?.createdCount(after, now) ?? 0 },
+        };
+      };
+      res.json({
+        site: origin,
+        asOf: new Date(now).toISOString(),
+        collectionStartedAt: new Date(traffic.startedAt).toISOString(),
+        days7: window(7),
+        days30: window(30),
+      });
+    });
+  }
+
   // Only image publication accepts a larger body; every other route retains 24 KiB.
   app.post(["/api/polls", "/api/tasks", "/api/sales"], express.json({ limit: 4300000, strict: true }));
   app.use(express.json({ limit: "24kb", strict: true }));
@@ -75,10 +135,11 @@ export function createApp(
       res.type("png").send(image);
     });
     app.use("/api/secrex", createSecrexRouter(secrex));
-    app.get(["/create/secrex", "/secrex", "/secrex/:secretId"], (_req, res) => {
+    app.get(["/create/secrex", "/secrex", "/secrex/:secretId"], (req, res) => {
       res.set("Content-Security-Policy",
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
-      res.sendFile("secrex.html", { root: publicDir });
+      if (req.params.secretId) res.sendFile("secrex.html", { root: publicDir });
+      else sendPublicPage(req, res, "secrex.html");
     });
   }
 
@@ -427,22 +488,26 @@ export function createApp(
   );
   app.get(
     ["/", "/create", "/create/task", "/create/sale", "/PostList", "/privacy", "/install"],
-    (req, res) => res.sendFile(join(publicDir, "index.html")),
+    (req, res) => sendPublicPage(req, res, "index.html"),
   );
   app.get("/vote/:id", async (req, res) => {
     const poll = await store.get(req.params.id);
     if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
-    res.sendFile(join(publicDir, "index.html"));
+    sendPublicPage(req, res, "index.html", req.params.id);
   });
   app.get(["/task/:id", "/task/:id/manage"], async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
-    res.sendFile(join(publicDir, "index.html"));
+    if (/\/manage\/?$/i.test(req.path))
+      res.sendFile(join(publicDir, "index.html"));
+    else sendPublicPage(req, res, "index.html", req.params.id);
   });
   app.get(["/sale/:id", "/sale/:id/manage"], async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
-    res.sendFile(join(publicDir, "index.html"));
+    if (/\/manage\/?$/i.test(req.path))
+      res.sendFile(join(publicDir, "index.html"));
+    else sendPublicPage(req, res, "index.html", req.params.id);
   });
   app.use((req, res, next) => next(new AppError(404, "Page not found.")));
   app.use((err, req, res, next) => {

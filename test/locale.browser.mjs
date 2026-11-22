@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { createApp } from '../src/app.js';
-import { PollStore } from '../src/store.js';
+import { SQLiteStore } from '../src/sqlite-store.js';
 import { SecrexStore } from '../src/secrex-store.js';
 import { createTaskCredentials } from '../public/task-crypto.js';
 import { TRANSLATIONS } from '../public/locale-translations.js';
@@ -21,7 +21,7 @@ const addedLocales = [
 
 test('browser language, manual preference, storage fallback and offline switching', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'scaletag-locale-'));
-  const store = new PollStore(directory);
+  const store = new SQLiteStore(directory);
   await store.init();
   const secrex = new SecrexStore(directory);
   await secrex.init();
@@ -35,6 +35,7 @@ test('browser language, manual preference, storage fallback and offline switchin
     await browser.close();
     secrex.close();
     await new Promise(r => server.close(r));
+    store.close();
     await rm(directory, { recursive: true, force: true });
   });
 
@@ -60,6 +61,12 @@ test('browser language, manual preference, storage fallback and offline switchin
     await page.goto(origin);
     await page.getByText(home, { exact: false }).first().waitFor();
     assert.equal(await page.locator('html').getAttribute('lang'), htmlLang);
+    const visits = page.locator('#footer-visits');
+    await visits.waitFor();
+    const visitLabel = htmlLang === 'en' ? 'Site page views'
+      : htmlLang === 'zh-Hans' ? '本站访问量' : TRANSLATIONS['Site page views'][htmlLang];
+    assert.ok((await visits.textContent()).startsWith(visitLabel));
+
     const options = await page.locator('#language-select option').evaluateAll(nodes =>
       nodes.map(node => ({ value: node.value, text: node.textContent, lang: node.lang })),
     );
@@ -151,6 +158,7 @@ test('browser language, manual preference, storage fallback and offline switchin
 
   await page.goto(`${origin}/task/${task.id}`);
   await page.getByRole('heading', { name: 'My task 我的任务', exact: true }).waitFor();
+  await page.getByText('本帖访问量 · 近 7 日 1 · 近 30 日 1', { exact: true }).waitFor();
   await page.locator('#reply-message').fill('草稿 draft');
   page.once('dialog', dialog => dialog.dismiss());
   await page.locator('#language-select').selectOption('en');

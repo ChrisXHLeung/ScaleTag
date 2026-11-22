@@ -2,6 +2,51 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Site page views": {
+    ja: "サイトの閲覧数",
+    ko: "사이트 조회수",
+    fr: "Vues du site",
+    pt: "Visualizações do site",
+    es: "Visitas al sitio",
+    de: "Seitenaufrufe der Website",
+    it: "Visualizzazioni del sito",
+  },
+  "Post page views": {
+    ja: "投稿の閲覧数",
+    ko: "게시물 조회수",
+    fr: "Vues de la publication",
+    pt: "Visualizações da publicação",
+    es: "Visitas a la publicación",
+    de: "Aufrufe dieses Beitrags",
+    it: "Visualizzazioni del post",
+  },
+  "Last 7 days": {
+    ja: "過去7日間",
+    ko: "최근 7일",
+    fr: "7 derniers jours",
+    pt: "Últimos 7 dias",
+    es: "Últimos 7 días",
+    de: "Letzte 7 Tage",
+    it: "Ultimi 7 giorni",
+  },
+  "Last 30 days": {
+    ja: "過去30日間",
+    ko: "최근 30일",
+    fr: "30 derniers jours",
+    pt: "Últimos 30 dias",
+    es: "Últimos 30 días",
+    de: "Letzte 30 Tage",
+    it: "Ultimi 30 giorni",
+  },
+  "We keep aggregate page-view counts for 30 days. Visit statistics do not store IP addresses, cookies, or Secrex links.": {
+    ja: "閲覧数の集計を30日間保存します。閲覧統計にはIPアドレス、Cookie、Secrexのリンクは保存されません。",
+    ko: "페이지 조회수 집계를 30일간 보관합니다. 방문 통계에는 IP 주소, 쿠키 또는 Secrex 링크를 저장하지 않습니다.",
+    fr: "Nous conservons les nombres agrégés de vues pendant 30 jours. Les statistiques de visites ne conservent ni adresses IP, ni cookies, ni liens Secrex.",
+    pt: "Mantemos os totais de visualizações de páginas por 30 dias. As estatísticas de visitas não armazenam endereços IP, cookies nem links do Secrex.",
+    es: "Conservamos los recuentos agregados de visitas durante 30 días. Las estadísticas de visitas no guardan direcciones IP, cookies ni enlaces de Secrex.",
+    de: "Wir speichern zusammengefasste Seitenaufrufe 30 Tage lang. Die Besuchsstatistik speichert keine IP-Adressen, Cookies oder Secrex-Links.",
+    it: "Conserviamo i conteggi aggregati delle visualizzazioni per 30 giorni. Le statistiche delle visite non memorizzano indirizzi IP, cookie o link Secrex.",
+  },
   "Language": {
     ja: "言語",
     ko: "언어",

@@ -489,7 +489,7 @@ test("deploy/nginx.conf blocks public/proxied /readyz and /healthz requests whil
   const serverBlock = extractBraceBlock(strippedComments, /\bserver\s*\{/);
   const probeLocMatch = /location\s+(~\*?)\s+(\S+)\s*\{/.exec(serverBlock.body);
   assert.ok(probeLocMatch, "Missing probe regex location block inside server {}");
-  const probeBlock = extractBraceBlock(serverBlock.body, /location\s+~\*?\s+\^\/\(healthz\|readyz\)\(\/\|\$\)\s*\{/);
+  const probeBlock = extractBraceBlock(serverBlock.body, /location\s+~\*?\s+\^\/\(healthz\|readyz\|api\/stats\)\(\/\|\$\)\s*\{/);
   const fallbackLocIdx = serverBlock.body.search(/location\s+\/\s*\{/);
   assert.ok(fallbackLocIdx > probeBlock.end, "Probe location block must appear before location /");
 
@@ -508,6 +508,8 @@ test("deploy/nginx.conf blocks public/proxied /readyz and /healthz requests whil
   assert.match(block, /proxy_http_version\s+1\.1\s*;/);
   assert.match(block, /proxy_set_header\s+Connection\s+""\s*;/);
   assert.match(block, /proxy_set_header\s+Host\s+\$http_host\s*;/);
+  assert.match(block, /proxy_set_header\s+X-ScaleTag-Local-Stats\s+1\s*;/);
+  assert.match(serverBlock.body.slice(fallbackLocIdx), /proxy_set_header\s+X-ScaleTag-Local-Stats\s+""\s*;/);
   assert.match(block, /proxy_cache\s+off\s*;/);
 
   const locFlags = probeLocMatch[1] === "~*" ? "i" : "";
@@ -533,7 +535,7 @@ test("deploy/nginx.conf blocks public/proxied /readyz and /healthz requests whil
     return blockProbe === 1 ? 404 : "proxy";
   };
 
-  for (const path of ["/readyz", "/healthz", "/readyz/", "/healthz/live", "/READYZ", "/Healthz"]) {
+  for (const path of ["/readyz", "/healthz", "/readyz/", "/healthz/live", "/READYZ", "/Healthz", "/api/stats", "/API/Stats/"]) {
     assert.equal(evaluateNginx(path, { Host: "asia.scaletag.top" }), 404, `public Host must block ${path}`);
     assert.equal(evaluateNginx(path, { Host: "www.scaletag.top" }), 404, `www Host must block ${path}`);
     assert.equal(evaluateNginx(path, { Host: "127.0.0.1.evil.test" }), 404, `prefix spoof Host must block ${path}`);

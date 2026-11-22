@@ -4,6 +4,7 @@ import { statfsSync, chmodSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { PollStore, ID_PATTERN } from "./store.js";
 import { AppError } from "./validation.js";
+import { TrafficCounters } from "./traffic.js";
 
 // Also serialize connections in the same JS process: a synchronous busy wait
 // must never prevent another connection's pending microtask from committing.
@@ -33,6 +34,7 @@ export class SQLiteStore extends PollStore {
         delete_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS posts_expiry ON posts(delete_at);
+      CREATE INDEX IF NOT EXISTS posts_creation ON posts(created_at);
       CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, start INTEGER NOT NULL, count INTEGER NOT NULL);
     `);
@@ -41,6 +43,7 @@ export class SQLiteStore extends PollStore {
       this.close();
       throw Error("Legacy JSON found: stop the JSON writer and run npm run migrate:sqlite first.");
     }
+    this.traffic = new TrafficCounters(this.db, operation => this.exclusive("traffic", operation), this.clock());
   }
 
   async exclusive(key, fn) {
@@ -90,6 +93,15 @@ export class SQLiteStore extends PollStore {
         OR (json_extract(document,'$.giveawayVersion') = 1
           AND coalesce(json_extract(document,'$.saleState'),'open') <> 'closed' AND ends_at>?))`)
       .get(this.clock(), this.clock()).count;
+  }
+
+  createdCounts(after, now) {
+    return this.db.prepare(`
+      SELECT coalesce(sum(CASE WHEN coalesce(json_extract(document,'$.type'),'poll') = 'poll' THEN 1 ELSE 0 END), 0) AS polls,
+             coalesce(sum(CASE WHEN json_extract(document,'$.type') = 'task' THEN 1 ELSE 0 END), 0) AS tasks,
+             coalesce(sum(CASE WHEN json_extract(document,'$.type') = 'sale' AND json_extract(document,'$.giveawayVersion') = 1 THEN 1 ELSE 0 END), 0) AS giveaways
+      FROM posts WHERE created_at > ? AND created_at <= ?
+    `).get(after, now);
   }
 
   storedCount() {

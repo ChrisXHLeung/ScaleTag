@@ -265,6 +265,17 @@ export class PollStore {
     return this.index.size;
   }
 
+  createdCounts(after, now) {
+    const counts = { polls: 0, tasks: 0, giveaways: 0 };
+    for (const post of this.index.values()) {
+      if (post.createdAt <= after || post.createdAt > now) continue;
+      if (post.type === "poll") counts.polls++;
+      if (post.type === "task") counts.tasks++;
+      if (post.type === "sale" && post.giveawayVersion === 1) counts.giveaways++;
+    }
+    return counts;
+  }
+
   public(p, token) {
     const {
       location,

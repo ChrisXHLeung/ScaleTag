@@ -45,6 +45,7 @@ export class SecrexStore {
           pending_until INTEGER NOT NULL, session_hash TEXT,
           session_until INTEGER
         );
+        CREATE INDEX IF NOT EXISTS secrex_creation ON secrex_history(created_at);
         CREATE INDEX IF NOT EXISTS secrex_pending ON secrex_payload(pending_until);
         CREATE INDEX IF NOT EXISTS secrex_sessions ON secrex_payload(session_until);
       `);
@@ -83,6 +84,11 @@ export class SecrexStore {
       this.db.prepare("INSERT INTO secrex_payload VALUES (?, ?, ?, ?, NULL, NULL)")
         .run(id, JSON.stringify(envelope), verifier, now + this.pendingMs);
     }).immediate();
+  }
+
+  createdCount(after, now) {
+    return this.db.prepare("SELECT count(*) AS count FROM secrex_history WHERE created_at > ? AND created_at <= ?")
+      .get(after, now).count;
   }
 
   finish(id, now, state) {

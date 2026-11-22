@@ -641,30 +641,56 @@ function privacy() {
       "If you install ScaleTag, the app may cache interface files and a generic offline page. It does not cache private management data or queue votes, likes, replies, reports or posts while offline. Your browser can remember your language choice.",
       "安装 ScaleTag 后，浏览器可能缓存界面文件和通用离线页。私人管理数据不会进入离线缓存，离线时提交的投票、点赞、回复、举报或帖子也不会排队发送。浏览器可以记住你的语言选择。",
     )}</p>
+    <p>${t("We keep aggregate page-view counts for 30 days. Visit statistics do not store IP addresses, cookies, or Secrex links.", "我们保留 30 天的汇总访问量。访问统计不保存 IP 地址、Cookie 或 Secrex 链接。")}</p>
     <a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">${t("Read the architecture and source on GitHub ↗", "在 GitHub 查看架构与源代码 ↗")}</a>
   </article>`;
+}
+
+async function showVisitCounts(path, title) {
+  try {
+    const { days7, days30 } = await api(path);
+    if (![days7, days30].every(value => Number.isSafeInteger(value) && value >= 0)) return;
+    const footer = document.querySelector("#footer-visits");
+    if (!footer) return;
+    footer.textContent = [
+      title,
+      `${t("Last 7 days", "近 7 日")} ${count(days7)}`,
+      `${t("Last 30 days", "近 30 日")} ${count(days30)}`,
+    ].join(" · ");
+    footer.hidden = false;
+  } catch {
+    // A statistics outage or offline session does not affect the page.
+  }
 }
 
 const route = window.location.pathname;
 try {
   if (route === "/" && location.hash === "#create")
     window.location.replace(localizedPath("/create"));
-  else if (route === "/") home();
-  else if (route === "/create") createPoll();
+  else if (route === "/") {
+    home();
+    void showVisitCounts("/api/visits", t("Site page views", "本站访问量"));
+  } else if (route === "/create") createPoll();
   else if (route === "/create/task") createTask();
   else if (route === "/create/sale") createSale();
   else if (route === "/install") installPage();
   else if (route === "/PostList") postList();
   else if (route === "/privacy") privacy();
-  else if (/^\/vote\/[a-f0-9]{24}$/.test(route))
-    await votePage(route.split("/")[2]);
-  else if (/^\/sale\/[a-f0-9]{24}$/.test(route))
-    await salePage(route.split("/")[2]);
-  else if (/^\/sale\/[a-f0-9]{24}\/manage$/.test(route))
+  else if (/^\/vote\/[a-f0-9]{24}$/.test(route)) {
+    const id = route.split("/")[2];
+    await votePage(id);
+    void showVisitCounts(`/api/visits/poll/${id}`, t("Post page views", "本帖访问量"));
+  } else if (/^\/sale\/[a-f0-9]{24}$/.test(route)) {
+    const id = route.split("/")[2];
+    await salePage(id);
+    void showVisitCounts(`/api/visits/giveaway/${id}`, t("Post page views", "本帖访问量"));
+  } else if (/^\/sale\/[a-f0-9]{24}\/manage$/.test(route))
     await salePage(route.split("/")[2], { manage: true });
-  else if (/^\/task\/[a-f0-9]{24}$/.test(route))
-    await taskPage(route.split("/")[2]);
-  else if (/^\/task\/[a-f0-9]{24}\/manage$/.test(route))
+  else if (/^\/task\/[a-f0-9]{24}$/.test(route)) {
+    const id = route.split("/")[2];
+    await taskPage(id);
+    void showVisitCounts(`/api/visits/task/${id}`, t("Post page views", "本帖访问量"));
+  } else if (/^\/task\/[a-f0-9]{24}\/manage$/.test(route))
     await taskPage(route.split("/")[2], { manage: true });
   else showError(new Error(t("This link does not point to an available post.", "此链接未指向可用帖子。")));
 } catch (e) {
