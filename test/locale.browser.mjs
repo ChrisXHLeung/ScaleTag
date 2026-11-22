@@ -10,6 +10,14 @@ import { createApp } from '../src/app.js';
 import { PollStore } from '../src/store.js';
 import { SecrexStore } from '../src/secrex-store.js';
 import { createTaskCredentials } from '../public/task-crypto.js';
+import { TRANSLATIONS } from '../public/locale-translations.js';
+
+const addedLocales = [
+  ['pt-BR', 'pt', 'Português'],
+  ['es-MX', 'es', 'Español'],
+  ['de-CH', 'de', 'Deutsch'],
+  ['it-IT', 'it', 'Italiano'],
+];
 
 test('browser language, manual preference, storage fallback and offline switching', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'scaletag-locale-'));
@@ -30,7 +38,7 @@ test('browser language, manual preference, storage fallback and offline switchin
     await rm(directory, { recursive: true, force: true });
   });
 
-  // 1. Auto-detect all 5 languages (zh, en, ja, ko, fr) + unsupported fallback to en
+  // 1. Detect supported browser languages and fall back to English
   for (const [locale, htmlLang, home, task, privacy, secrex] of [
     ['zh-CN', 'zh-Hans', '关心身边事', '发布任务', '隐私', '创建阅后即焚私密信息'],
     ['zh-TW', 'zh-Hans', '关心身边事', '发布任务', '隐私', '创建阅后即焚私密信息'],
@@ -38,7 +46,12 @@ test('browser language, manual preference, storage fallback and offline switchin
     ['ja-JP', 'ja', '身近な疑問から', '新しいタスク', 'プライバシーとデータ保持', 'ワンタイムシークレットを作成'],
     ['ko-KR', 'ko', '우리 동네의 질문', '새 작업 만들기', '개인정보 및 데이터 보관', '일회성 비밀 메시지 만들기'],
     ['fr-FR', 'fr', 'Questions locales', 'Votre nouvelle tâche', 'Confidentialité et conservation des données', 'Créer un secret à usage unique'],
-    ['de-DE', 'en', 'Local questions', 'Your new task', 'Privacy', 'Create a one-time secret'],
+    ...addedLocales.map(([locale, lang]) => [
+      locale, lang, TRANSLATIONS['Local questions.'][lang],
+      TRANSLATIONS['Your new task'][lang], TRANSLATIONS['Privacy and data retention'][lang],
+      TRANSLATIONS['Create a one-time secret'][lang],
+    ]),
+    ['nl-NL', 'en', 'Local questions', 'Your new task', 'Privacy', 'Create a one-time secret'],
   ]) {
     const context = await browser.newContext({ locale });
     const page = await context.newPage();
@@ -56,6 +69,7 @@ test('browser language, manual preference, storage fallback and offline switchin
       { value: 'ja', text: '日本語', lang: 'ja' },
       { value: 'ko', text: '한국어', lang: 'ko' },
       { value: 'fr', text: 'Français', lang: 'fr' },
+      ...addedLocales.map(([, lang, text]) => ({ value: lang, text, lang })),
     ]);
     await page.goto(`${origin}/create/task`);
     await page.getByText(task, { exact: false }).first().waitFor();
@@ -67,7 +81,7 @@ test('browser language, manual preference, storage fallback and offline switchin
     await context.close();
   }
 
-  // 2. Manual switching across all 5 languages, reload persistence, draft guard, management hash, offline switching
+  // 2. Manual switching across all supported languages, reload persistence, draft guard, management hash, offline switching
   const context = await browser.newContext({ locale: 'zh-CN' });
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
@@ -86,6 +100,9 @@ test('browser language, manual preference, storage fallback and offline switchin
     ['ja', 'ja', /身近な疑問から/, '言語'],
     ['ko', 'ko', /우리 동네의 질문/, '언어'],
     ['fr', 'fr', /Questions locales/, 'Langue'],
+    ...addedLocales.map(([, lang]) => [
+      lang, lang, TRANSLATIONS['Local questions.'][lang], TRANSLATIONS.Language[lang],
+    ]),
   ]) {
     await page.locator('#language-select').selectOption(lang);
     await page.getByRole('heading', { name: homeSnippet }).waitFor();
@@ -176,6 +193,11 @@ test('browser language, manual preference, storage fallback and offline switchin
   await page.locator('#language-select').selectOption('fr');
   await page.getByRole('heading', { name: 'Connexion indisponible.', exact: true }).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'), 'fr');
+  for (const [, lang] of addedLocales) {
+    await page.locator('#language-select').selectOption(lang);
+    await page.getByRole('heading', { name: TRANSLATIONS['Connection unavailable.'][lang], exact: true }).waitFor();
+    assert.equal(await page.locator('html').getAttribute('lang'), lang);
+  }
   await page.locator('#language-select').selectOption('en');
   await page.getByRole('heading', { name: 'Connection unavailable.', exact: true }).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'), 'en');

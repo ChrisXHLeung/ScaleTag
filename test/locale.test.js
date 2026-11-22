@@ -18,6 +18,9 @@ import {
 } from '../public/locale-translations.js';
 import { STATIC_ASSETS } from '../src/pwa.js';
 
+const catalogLanguages = SUPPORTED_LANGUAGES.filter(lang => lang !== 'en' && lang !== 'zh');
+const localizedLanguages = SUPPORTED_LANGUAGES.filter(lang => lang !== 'en');
+
 function extractStaticCalls(publicDir) {
   const keys = new Map();
   const files = readdirSync(publicDir)
@@ -89,8 +92,8 @@ function extractStaticCalls(publicDir) {
   return keys;
 }
 
-test('languageFor selects en, zh, ja, ko, fr from browser preferred languages and falls back to en', () => {
-  assert.deepEqual(SUPPORTED_LANGUAGES, ['en', 'zh', 'ja', 'ko', 'fr']);
+test('languageFor selects a supported primary browser language and falls back to en', () => {
+  assert.deepEqual(SUPPORTED_LANGUAGES, ['en', 'zh', 'ja', 'ko', 'fr', 'pt', 'es', 'de', 'it']);
   assert.equal(languageFor(['zh-CN', 'en-US']), 'zh');
   assert.equal(languageFor(['zh-TW']), 'zh');
   assert.equal(languageFor(['ZH-hk']), 'zh');
@@ -106,18 +109,24 @@ test('languageFor selects en, zh, ja, ko, fr from browser preferred languages an
   assert.equal(languageFor(['FR-ca']), 'fr');
   assert.equal(languageFor(['en-US', 'zh-CN']), 'en');
   assert.equal(languageFor(['en-US', 'ja-JP']), 'en');
-  assert.equal(languageFor(['de-DE', 'fr-FR']), 'en');
-  assert.equal(languageFor(['es-ES']), 'en');
+  assert.equal(languageFor(['de-DE', 'fr-FR']), 'de');
+  assert.equal(languageFor(['DE-CH']), 'de');
+  assert.equal(languageFor(['es-MX']), 'es');
+  assert.equal(languageFor(['pt-BR']), 'pt');
+  assert.equal(languageFor(['PT-pt']), 'pt');
+  assert.equal(languageFor(['it-CH']), 'it');
+  assert.equal(languageFor(['nl-NL', 'es-ES']), 'en');
   assert.equal(languageFor(['']), 'en');
   assert.equal(languageFor([]), 'en');
 });
 
-test('htmlLangFor and intlLocaleFor map all 5 languages accurately', () => {
+test('htmlLangFor and intlLocaleFor map all supported languages', () => {
   assert.equal(htmlLangFor('en'), 'en');
   assert.equal(htmlLangFor('zh'), 'zh-Hans');
   assert.equal(htmlLangFor('ja'), 'ja');
   assert.equal(htmlLangFor('ko'), 'ko');
   assert.equal(htmlLangFor('fr'), 'fr');
+  for (const lang of ['pt', 'es', 'de', 'it']) assert.equal(htmlLangFor(lang), lang);
   assert.equal(htmlLangFor('xx'), 'en');
 
   assert.equal(intlLocaleFor('en'), 'en');
@@ -125,15 +134,23 @@ test('htmlLangFor and intlLocaleFor map all 5 languages accurately', () => {
   assert.equal(intlLocaleFor('ja'), 'ja-JP');
   assert.equal(intlLocaleFor('ko'), 'ko-KR');
   assert.equal(intlLocaleFor('fr'), 'fr-FR');
+  assert.equal(intlLocaleFor('pt'), 'pt-BR');
+  assert.equal(intlLocaleFor('es'), 'es-ES');
+  assert.equal(intlLocaleFor('de'), 'de-DE');
+  assert.equal(intlLocaleFor('it'), 'it-IT');
   assert.equal(intlLocaleFor('xx'), 'en');
 });
 
-test('translate handles static and dynamic strings for en, zh, ja, ko, fr', () => {
+test('translate handles static and dynamic strings across supported languages', () => {
   assert.equal(translate('en', 'Create a poll', '创建投票'), 'Create a poll');
   assert.equal(translate('zh', 'Create a poll', '创建投票'), '创建投票');
   assert.equal(translate('ja', 'Create a poll', '创建投票'), '投票を作成');
   assert.equal(translate('ko', 'Create a poll', '创建投票'), '투표 만들기');
   assert.equal(translate('fr', 'Create a poll', '创建投票'), 'Créer un sondage');
+  assert.equal(translate('pt', 'Create a poll', '创建投票'), 'Criar enquete');
+  assert.equal(translate('es', 'Create a poll', '创建投票'), 'Crear una encuesta');
+  assert.equal(translate('de', 'Create a poll', '创建投票'), 'Umfrage erstellen');
+  assert.equal(translate('it', 'Create a poll', '创建投票'), 'Crea un sondaggio');
 
   const dynamicSamples = [
     ['Option 3', '选项 3', { ja: '選択肢 3', ko: '선택지 3', fr: 'Option 3' }],
@@ -173,17 +190,48 @@ test('translate handles static and dynamic strings for en, zh, ja, ko, fr', () =
     ['Mark this task as 完了? New replies will stop and this cannot be undone.', '确定将任务标记为已完成？这将停止新回复且无法撤销。', { ja: 'このタスクを「完了」にしますか？新規の返信は停止され、元に戻すことはできません。', ko: '이 작업을 ‘完了’ 상태로 변경하시겠습니까? 새 댓글이 중단되며 되돌릴 수 없습니다.', fr: 'Marquer cette tâche comme « 完了 » ? Les nouvelles réponses seront arrêtées et cette action est irréversible.' }],
     ['Task marked 完了.', '任务已标记为已完成。', { ja: 'タスクを「完了」にしました。', ko: '작업 상태가 ‘完了’(으)로 변경되었습니다.', fr: 'Tâche marquée comme « 完了 ».' }],
   ];
+  const preservedValues = new Set(['photo.jpg', 'doc.pdf', 'https://example.com/m', 'secret', 'Coffee', '完了']);
+  const coveredPatterns = new Set();
   for (const [en, zh, expected] of dynamicSamples) {
     assert.equal(translate('en', en, zh), en);
     assert.equal(translate('zh', en, zh), zh);
-    for (const lang of ['ja', 'ko', 'fr']) {
-      assert.equal(translate(lang, en, zh), expected[lang], `dynamic ${lang}: ${en}`);
+    const entry = DYNAMIC_TRANSLATIONS.find(({ pattern }) => pattern.test(en));
+    assert.ok(entry, `Missing dynamic pattern for ${en}`);
+    coveredPatterns.add(entry.pattern);
+    const match = entry.pattern.exec(en);
+    const preserved = match.slice(1).filter(value =>
+      value && (/^\d/.test(value) || preservedValues.has(value)),
+    );
+    for (const lang of catalogLanguages) {
+      const translated = translate(lang, en, zh);
+      assert.equal(typeof entry[lang], 'function', `Missing ${lang} formatter for ${entry.pattern}`);
+      assert.equal(translated, expected[lang] ?? entry[lang](match), `dynamic ${lang}: ${en}`);
+      for (const value of preserved) assert.ok(translated.includes(value), `Missing ${value} in ${lang}: ${en}`);
     }
   }
-  assert.ok(DYNAMIC_TRANSLATIONS.length >= 24);
+  assert.equal(coveredPatterns.size, DYNAMIC_TRANSLATIONS.length);
 });
 
-test('100% of static t() strings across public/*.js have ja, ko, and fr translations without direct zh checks', () => {
+test('new locales preserve formatted counts and user content in dynamic messages', () => {
+  for (const [lang, singular, plural] of [
+    ['pt', '1 voto', '10.000 votos'],
+    ['es', '1 voto', '10.000 votos'],
+    ['de', '1 Stimme', '10.000 Stimmen'],
+    ['it', '1 voto', '10.000 voti'],
+  ]) {
+    const count = new Intl.NumberFormat(intlLocaleFor(lang)).format(10000);
+    assert.equal(translate(lang, '1 vote', ''), singular);
+    assert.equal(translate(lang, `${count} votes`, ''), plural);
+    const reward = 'Coffee 咖啡';
+    const english = `Task · Reward: ${reward} · View task ↗`;
+    const translated = translate(lang, english, '');
+    assert.notEqual(translated, english);
+    assert.ok(translated.includes(reward));
+    assert.equal(translate(lang, 'Unknown text', ''), 'Unknown text');
+  }
+});
+
+test('static t() strings have translations for each catalog language without direct zh checks', () => {
   const publicDir = new URL('../public/', import.meta.url);
   const keys = extractStaticCalls(publicDir);
   assert.ok(keys.size >= 500, `expected at least 500 static t() keys, found ${keys.size}`);
@@ -194,7 +242,7 @@ test('100% of static t() strings across public/*.js have ja, ko, and fr translat
       `Missing TRANSLATIONS entry for ${JSON.stringify(enKey)} (from ${meta.file})`,
     );
     const entry = TRANSLATIONS[enKey];
-    for (const lang of ['ja', 'ko', 'fr']) {
+    for (const lang of catalogLanguages) {
       assert.equal(typeof entry[lang], 'string', `Missing ${lang} string for ${JSON.stringify(enKey)}`);
       assert.ok(entry[lang].trim().length > 0, `Empty ${lang} string for ${JSON.stringify(enKey)}`);
       if (enKey.includes('<br>')) {
@@ -227,7 +275,7 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
   for (const key of errorKeys) {
     assert.ok(Object.hasOwn(SERVER_ERRORS, key), `Missing SERVER_ERRORS entry for ${JSON.stringify(key)}`);
     assert.equal(translateError(key, 'zh'), serverErrors[key]);
-    for (const lang of ['ja', 'ko', 'fr']) {
+    for (const lang of catalogLanguages) {
       const value = SERVER_ERRORS[key][lang];
       assert.equal(typeof value, 'string', `Missing ${lang} error translation for ${JSON.stringify(key)}`);
       assert.ok(value.trim().length > 0, `Empty ${lang} error translation for ${JSON.stringify(key)}`);
@@ -241,11 +289,11 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
   assert.equal(translateError('This management link is invalid for this sale.'), 'This management link is invalid for this listing.');
   assert.equal(translateError('Replies are available on tasks and sales only.'), 'Replies are available on tasks and sale listings only.');
 
-  // Dynamic error patterns across all 13 fields and 4 non-English languages
+  // Dynamic error patterns across all 13 fields and all non-English languages
   const allFields = Object.keys(FIELD_NAMES);
   assert.equal(allFields.length, 13);
   for (const field of allFields) {
-    for (const lang of ['zh', 'ja', 'ko', 'fr']) {
+    for (const lang of localizedLanguages) {
       const fieldName = FIELD_NAMES[field][lang];
       assert.ok(fieldName && fieldName.trim().length > 0, `Missing FIELD_NAMES[${field}][${lang}]`);
       const maxErr = translateError(`${field} is required and must be at most 140 characters.`, lang);
@@ -256,14 +304,14 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
   }
   const blockedFields = ['Title', 'Description', 'Signature', 'Option', 'Reward', 'Reply', 'Name', 'Pickup location'];
   for (const field of blockedFields) {
-    for (const lang of ['zh', 'ja', 'ko', 'fr']) {
+    for (const lang of localizedLanguages) {
       const msg = translateError(`${field} contains words or phrases that are not allowed in public text. Please edit it and try again.`, lang);
       assert.ok(msg.includes(FIELD_NAMES[field][lang]), `blocked translation failed for ${field}/${lang}: ${msg}`);
       assert.notEqual(msg, `${field} contains words or phrases that are not allowed in public text. Please edit it and try again.`);
     }
   }
   for (const state of ['completed', 'closed']) {
-    for (const lang of ['zh', 'ja', 'ko', 'fr']) {
+    for (const lang of localizedLanguages) {
       const replyErr = translateError(`This task is ${state} and no longer accepts replies.`, lang);
       const stateErr = translateError(`This task is already ${state}. Its status can no longer change.`, lang);
       assert.notEqual(replyErr, `This task is ${state} and no longer accepts replies.`);

@@ -5,37 +5,46 @@ import {
   FIELD_NAMES,
 } from './locale-translations.js';
 
-export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja', 'ko', 'fr'];
-const HTML_LANG = { en: 'en', zh: 'zh-Hans', ja: 'ja', ko: 'ko', fr: 'fr' };
-const INTL_LOCALE = { en: 'en', zh: 'zh-CN', ja: 'ja-JP', ko: 'ko-KR', fr: 'fr-FR' };
+const LANGUAGES = new Map([
+  ['en', { name: 'English', intl: 'en' }],
+  ['zh', { name: '中文', html: 'zh-Hans', intl: 'zh-CN' }],
+  ['ja', { name: '日本語', intl: 'ja-JP' }],
+  ['ko', { name: '한국어', intl: 'ko-KR' }],
+  ['fr', { name: 'Français', intl: 'fr-FR' }],
+  ['pt', { name: 'Português', intl: 'pt-BR' }],
+  ['es', { name: 'Español', intl: 'es-ES' }],
+  ['de', { name: 'Deutsch', intl: 'de-DE' }],
+  ['it', { name: 'Italiano', intl: 'it-IT' }],
+]);
+
+export const SUPPORTED_LANGUAGES = [...LANGUAGES.keys()];
 
 export function htmlLangFor(lang = language) {
-  return HTML_LANG[lang] ?? 'en';
+  return LANGUAGES.has(lang) ? LANGUAGES.get(lang).html ?? lang : 'en';
 }
 
 export function intlLocaleFor(lang = language) {
-  return INTL_LOCALE[lang] ?? 'en';
+  return LANGUAGES.get(lang)?.intl ?? 'en';
 }
 
 export function languageFor(languages = []) {
-  const match = /^(zh|ja|ko|fr)(?:-|$)/i.exec(languages?.[0] || '');
-  return match ? match[1].toLowerCase() : 'en';
+  const primary = String(languages?.[0] ?? '').split('-')[0].toLowerCase();
+  return LANGUAGES.has(primary) ? primary : 'en';
 }
 
 export function translate(lang, english, chinese) {
   if (lang === 'zh') return chinese;
-  if (lang === 'ja' || lang === 'ko' || lang === 'fr') {
-    if (Object.hasOwn(TRANSLATIONS, english)) return TRANSLATIONS[english][lang];
-    for (const entry of DYNAMIC_TRANSLATIONS) {
-      const match = entry.pattern.exec(english);
-      if (match) return entry[lang](match);
-    }
+  if (lang === 'en' || !LANGUAGES.has(lang)) return english;
+  if (Object.hasOwn(TRANSLATIONS, english)) return TRANSLATIONS[english][lang] ?? english;
+  for (const entry of DYNAMIC_TRANSLATIONS) {
+    const match = entry.pattern.exec(english);
+    if (match) return entry[lang]?.(match) ?? english;
   }
   return english;
 }
 
 const preferenceKey = 'scaletag-language';
-const validLanguage = value => SUPPORTED_LANGUAGES.includes(value);
+const validLanguage = value => LANGUAGES.has(value);
 let savedLanguage;
 let storageAvailable = false;
 if (typeof window !== 'undefined') {
@@ -75,16 +84,10 @@ if (typeof document !== 'undefined') {
     label.textContent = t('Language', '语言');
     const select = document.createElement('select');
     select.id = 'language-select';
-    for (const [value, text] of [
-      ['en', 'English'],
-      ['zh', '中文'],
-      ['ja', '日本語'],
-      ['ko', '한국어'],
-      ['fr', 'Français'],
-    ]) {
+    for (const [value, { name }] of LANGUAGES) {
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = text;
+      option.textContent = name;
       option.lang = htmlLangFor(value);
       select.append(option);
     }
@@ -197,37 +200,59 @@ const BLOCKED_ERROR_RE = /^(Title|Description|Signature|Option|Reward|Reply|Name
 const FINAL_REPLY_RE = /^This task is (completed|closed) and no longer accepts replies\.$/;
 const FINAL_STATE_RE = /^This task is already (completed|closed)\. Its status can no longer change\.$/;
 
-function formatLengthError(field, required, max, lang) {
-  const name = FIELD_NAMES[field][lang];
-  if (lang === 'zh') return `${name}${required ? '为必填项，且' : ''}最多 ${max} 个字符。`;
-  if (lang === 'ja') return `${name}${required ? 'は必須項目であり、' : 'は'}${max}文字以内で入力してください。`;
-  if (lang === 'ko') return `${name}${required ? '은(는) 필수이며 ' : '은(는) '}최대 ${max}자까지 입력할 수 있습니다.`;
-  return `${name} ${required ? 'est obligatoire et ' : ''}doit contenir au maximum ${max} caractères.`;
-}
-
-function formatBlockedError(field, lang) {
-  const name = FIELD_NAMES[field][lang];
-  if (lang === 'zh') return `${name}包含公开内容不允许使用的词语，请修改后重试。`;
-  if (lang === 'ja') return `${name}に公開テキストでは許可されていない語句が含まれています。修正してもう一度お試しください。`;
-  if (lang === 'ko') return `${name}에 공개 텍스트에서 허용되지 않는 단어나 문구가 포함되어 있습니다. 수정한 후 다시 시도해 주세요.`;
-  return `${name} contient des mots ou expressions non autorisés dans un texte public. Veuillez modifier le texte et réessayer.`;
-}
-
-function formatFinalTaskError(kind, state, lang) {
-  if (kind === 'reply') {
-    if (lang === 'zh') return `此任务已${state === 'completed' ? '完成' : '关闭'}，不再接受回复。`;
-    if (lang === 'ja') return `このタスクは${state === 'completed' ? '完了' : '終了'}しているため、返信を受け付けていません。`;
-    if (lang === 'ko') return `이 작업은 ${state === 'completed' ? '완료' : '종료'}되어 더 이상 댓글을 받지 않습니다.`;
-    return `Cette tâche est ${state === 'completed' ? 'terminée' : 'fermée'} et n’accepte plus de réponses.`;
-  }
-  if (lang === 'zh') return `此任务已${state === 'completed' ? '完成' : '关闭'}，状态无法再更改。`;
-  if (lang === 'ja') return `このタスクはすでに${state === 'completed' ? '完了' : '終了'}しています。ステータスは変更できません。`;
-  if (lang === 'ko') return `이 작업은 이미 ${state === 'completed' ? '완료' : '종료'}되었습니다. 상태를 변경할 수 없습니다.`;
-  return `Cette tâche est déjà ${state === 'completed' ? 'terminée' : 'fermée'}. Son statut ne peut plus être modifié.`;
-}
+const ERROR_FORMATS = {
+  zh: {
+    length: (name, required, max) => `${name}${required ? '为必填项，且' : ''}最多 ${max} 个字符。`,
+    blocked: name => `${name}包含公开内容不允许使用的词语，请修改后重试。`,
+    finalReply: completed => `此任务已${completed ? '完成' : '关闭'}，不再接受回复。`,
+    finalState: completed => `此任务已${completed ? '完成' : '关闭'}，状态无法再更改。`,
+  },
+  ja: {
+    length: (name, required, max) => `${name}${required ? 'は必須項目であり、' : 'は'}${max}文字以内で入力してください。`,
+    blocked: name => `${name}に公開テキストでは許可されていない語句が含まれています。修正してもう一度お試しください。`,
+    finalReply: completed => `このタスクは${completed ? '完了' : '終了'}しているため、返信を受け付けていません。`,
+    finalState: completed => `このタスクはすでに${completed ? '完了' : '終了'}しています。ステータスは変更できません。`,
+  },
+  ko: {
+    length: (name, required, max) => `${name}${required ? '은(는) 필수이며 ' : '은(는) '}최대 ${max}자까지 입력할 수 있습니다.`,
+    blocked: name => `${name}에 공개 텍스트에서 허용되지 않는 단어나 문구가 포함되어 있습니다. 수정한 후 다시 시도해 주세요.`,
+    finalReply: completed => `이 작업은 ${completed ? '완료' : '종료'}되어 더 이상 댓글을 받지 않습니다.`,
+    finalState: completed => `이 작업은 이미 ${completed ? '완료' : '종료'}되었습니다. 상태를 변경할 수 없습니다.`,
+  },
+  fr: {
+    length: (name, required, max) => `${name} ${required ? 'est obligatoire et ' : ''}doit contenir au maximum ${max} caractères.`,
+    blocked: name => `${name} contient des mots ou expressions non autorisés dans un texte public. Veuillez modifier le texte et réessayer.`,
+    finalReply: completed => `Cette tâche est ${completed ? 'terminée' : 'fermée'} et n’accepte plus de réponses.`,
+    finalState: completed => `Cette tâche est déjà ${completed ? 'terminée' : 'fermée'}. Son statut ne peut plus être modifié.`,
+  },
+  pt: {
+    length: (name, required, max) => `${name}: ${required ? 'campo obrigatório, com ' : ''}no máximo ${max} caracteres.`,
+    blocked: name => `${name}: há palavras ou expressões proibidas em conteúdo público. Edite o texto e tente novamente.`,
+    finalReply: completed => `Esta tarefa foi ${completed ? 'concluída' : 'encerrada'} e não aceita mais respostas.`,
+    finalState: completed => `Esta tarefa já foi ${completed ? 'concluída' : 'encerrada'}. O status não pode mais ser alterado.`,
+  },
+  es: {
+    length: (name, required, max) => `${name}: ${required ? 'campo obligatorio, con un ' : ''}máximo de ${max} caracteres.`,
+    blocked: name => `${name}: el texto contiene palabras o expresiones no permitidas en contenido público. Edítalo e inténtalo de nuevo.`,
+    finalReply: completed => `Esta tarea se ha ${completed ? 'completado' : 'cerrado'} y ya no admite respuestas.`,
+    finalState: completed => `Esta tarea ya se ha ${completed ? 'completado' : 'cerrado'}. Su estado ya no se puede cambiar.`,
+  },
+  de: {
+    length: (name, required, max) => `${name}: ${required ? 'Pflichtfeld mit ' : ''}maximal ${max} Zeichen.`,
+    blocked: name => `${name}: Der Text enthält Wörter oder Ausdrücke, die in öffentlichen Inhalten nicht erlaubt sind. Bearbeite ihn und versuche es erneut.`,
+    finalReply: completed => `Diese Aufgabe wurde ${completed ? 'erledigt' : 'geschlossen'}. Antworten sind nicht mehr möglich.`,
+    finalState: completed => `Diese Aufgabe wurde bereits ${completed ? 'erledigt' : 'geschlossen'}. Ihr Status kann nicht mehr geändert werden.`,
+  },
+  it: {
+    length: (name, required, max) => `${name}: ${required ? 'campo obbligatorio con un ' : ''}massimo di ${max} caratteri.`,
+    blocked: name => `${name}: il testo contiene parole o espressioni non consentite nei contenuti pubblici. Modificalo e riprova.`,
+    finalReply: completed => `Questa attività è stata ${completed ? 'completata' : 'chiusa'} e non accetta più risposte.`,
+    finalState: completed => `Questa attività è già stata ${completed ? 'completata' : 'chiusa'}. Non è più possibile modificarne lo stato.`,
+  },
+};
 
 export function translateError(message, targetLanguage = language) {
-  if (!SUPPORTED_LANGUAGES.includes(targetLanguage) || targetLanguage === 'en') {
+  if (!validLanguage(targetLanguage) || targetLanguage === 'en') {
     return ({
       'Sale not found.': 'Sale listing not found.',
       'This management link is invalid for this sale.': 'This management link is invalid for this listing.',
@@ -238,15 +263,16 @@ export function translateError(message, targetLanguage = language) {
     return serverErrors[message];
   }
   if (targetLanguage !== 'zh' && Object.hasOwn(SERVER_ERRORS, message)) {
-    return SERVER_ERRORS[message][targetLanguage];
+    return SERVER_ERRORS[message][targetLanguage] ?? message;
   }
-  const match = LENGTH_ERROR_RE.exec(message);
-  if (match) return formatLengthError(match[1], Boolean(match[2]), match[3], targetLanguage);
+  const format = ERROR_FORMATS[targetLanguage];
+  const length = LENGTH_ERROR_RE.exec(message);
+  if (length) return format.length(FIELD_NAMES[length[1]][targetLanguage], Boolean(length[2]), length[3]);
   const blocked = BLOCKED_ERROR_RE.exec(message);
-  if (blocked) return formatBlockedError(blocked[1], targetLanguage);
+  if (blocked) return format.blocked(FIELD_NAMES[blocked[1]][targetLanguage]);
   const finalReply = FINAL_REPLY_RE.exec(message);
-  if (finalReply) return formatFinalTaskError('reply', finalReply[1], targetLanguage);
+  if (finalReply) return format.finalReply(finalReply[1] === 'completed');
   const finalState = FINAL_STATE_RE.exec(message);
-  if (finalState) return formatFinalTaskError('state', finalState[1], targetLanguage);
+  if (finalState) return format.finalState(finalState[1] === 'completed');
   return message;
 }
