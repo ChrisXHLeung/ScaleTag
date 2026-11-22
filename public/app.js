@@ -652,11 +652,16 @@ async function showVisitCounts(path, title) {
     if (![days7, days30].every(value => Number.isSafeInteger(value) && value >= 0)) return;
     const footer = document.querySelector("#footer-visits");
     if (!footer) return;
-    footer.textContent = [
-      title,
-      `${t("Last 7 days", "近 7 日")} ${count(days7)}`,
-      `${t("Last 30 days", "近 30 日")} ${count(days30)}`,
-    ].join(" · ");
+    const week = count(days7);
+    const month = count(days30);
+    const summary = document.createElement("span");
+    summary.setAttribute("aria-hidden", "true");
+    summary.textContent = `${week}/${month}`;
+    const description = document.createElement("span");
+    description.className = "sr-only";
+    description.textContent = `${t("Last 7 days", "近 7 日")} ${week} · ${t("Last 30 days", "近 30 日")} ${month}`;
+    summary.title = description.textContent;
+    footer.replaceChildren(`${title} · `, summary, description);
     footer.hidden = false;
   } catch {
     // A statistics outage or offline session does not affect the page.

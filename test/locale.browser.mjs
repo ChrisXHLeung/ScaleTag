@@ -66,6 +66,7 @@ test('browser language, manual preference, storage fallback and offline switchin
     const visitLabel = htmlLang === 'en' ? 'Site page views'
       : htmlLang === 'zh-Hans' ? '本站访问量' : TRANSLATIONS['Site page views'][htmlLang];
     assert.ok((await visits.textContent()).startsWith(visitLabel));
+    assert.match(await visits.locator('[aria-hidden="true"]').textContent({ timeout: 5000 }), /^[^/]+\/[^/]+$/);
 
     const options = await page.locator('#language-select option').evaluateAll(nodes =>
       nodes.map(node => ({ value: node.value, text: node.textContent, lang: node.lang })),
@@ -158,7 +159,9 @@ test('browser language, manual preference, storage fallback and offline switchin
 
   await page.goto(`${origin}/task/${task.id}`);
   await page.getByRole('heading', { name: 'My task 我的任务', exact: true }).waitFor();
-  await page.getByText('本帖访问量 · 近 7 日 1 · 近 30 日 1', { exact: true }).waitFor();
+  const detailVisits = page.locator('#footer-visits');
+  assert.equal(await detailVisits.locator('[aria-hidden="true"]').textContent({ timeout: 5000 }), '1/1');
+  assert.equal(await detailVisits.locator('.sr-only').textContent(), '近 7 日 1 · 近 30 日 1');
   await page.locator('#reply-message').fill('草稿 draft');
   page.once('dialog', dialog => dialog.dismiss());
   await page.locator('#language-select').selectOption('en');
