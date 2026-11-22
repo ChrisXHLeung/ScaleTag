@@ -42,7 +42,7 @@ Browser ─ HTTPS ─ Cloudflare Tunnel ─ Nginx on OCI Host
 
 ## Traffic and publication statistics
 
-Canada and Japan count independently. The homepage footer shows site page views for the last 7 and 30 days. A public poll, task, or giveaway footer shows the same windows for that post. Reloads count as additional views. Counts begin when collection starts and measure successful public HTML requests, including visits without JavaScript. They exclude API and asset requests, management pages, Secrex share links, failed requests, and recognized browser prefetches. They are page views, not unique visitors. Counters use UTC hour buckets and display the current hour plus the preceding 167 or 719 hours.
+Canada and Japan count independently. The homepage footer counts distinct browsers for the site, and a public poll, task, or giveaway footer counts distinct browsers for that post. Each browser contributes once to each 7-day or 30-day window. Reloading updates the last visit. The count uses a random 30-day browser cookie, with separate hashes for the site and individual posts. Browsers that clear the cookie are counted again. Visits use successful public HTML requests, including visits without JavaScript. They exclude API and asset requests, management pages, Secrex share links, failed requests, and recognized browser prefetches. Counters use UTC hour buckets and include the current hour plus the preceding 167 or 719 hours. Deduplicated counts start at the changeover, and previous aggregate page views expire on their original schedule.
 
 - `GET /api/visits` returns `days7` and `days30` for the current site.
 - `GET /api/visits/{poll|task|giveaway}/{id}` returns the same fields for a public post.

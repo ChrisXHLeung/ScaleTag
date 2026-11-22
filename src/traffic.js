@@ -1,3 +1,5 @@
+import { voterHash } from "./store.js";
+
 const HOUR = 60 * 60 * 1000;
 const SITE = "";
 const hourOf = timestamp => Math.floor(timestamp / HOUR);
@@ -8,37 +10,44 @@ export class TrafficCounters {
     this.write = write;
     this.lastSweepHour = null;
     db.exec(`
-      CREATE TABLE IF NOT EXISTS traffic_views (
+      CREATE TABLE IF NOT EXISTS traffic_visitors (
         scope TEXT NOT NULL,
+        browser_hash TEXT NOT NULL,
         hour INTEGER NOT NULL,
-        count INTEGER NOT NULL CHECK(count > 0),
-        PRIMARY KEY(scope, hour)
+        PRIMARY KEY(scope, browser_hash)
       ) WITHOUT ROWID;
-      CREATE INDEX IF NOT EXISTS traffic_views_hour ON traffic_views(hour);
-      CREATE TABLE IF NOT EXISTS traffic_collection (
+      CREATE INDEX IF NOT EXISTS traffic_visitors_scope_hour ON traffic_visitors(scope, hour);
+      CREATE INDEX IF NOT EXISTS traffic_visitors_hour ON traffic_visitors(hour);
+      CREATE TABLE IF NOT EXISTS traffic_visitor_collection (
         singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
         started_at INTEGER NOT NULL
       );
     `);
-    db.prepare("INSERT OR IGNORE INTO traffic_collection VALUES (1, ?)").run(now);
-    this.startedAt = db.prepare("SELECT started_at FROM traffic_collection WHERE singleton = 1").get().started_at;
-    this.increment = db.prepare(`
-      INSERT INTO traffic_views VALUES (?, ?, 1)
-      ON CONFLICT(scope, hour) DO UPDATE SET count = count + 1
+    db.prepare("INSERT OR IGNORE INTO traffic_visitor_collection VALUES (1, ?)").run(now);
+    this.startedAt = db.prepare("SELECT started_at FROM traffic_visitor_collection WHERE singleton = 1").get().started_at;
+    this.touch = db.prepare(`
+      INSERT INTO traffic_visitors VALUES (?, ?, ?)
+      ON CONFLICT(scope, browser_hash) DO UPDATE SET hour = excluded.hour
+      WHERE excluded.hour > traffic_visitors.hour
     `);
     this.totals = db.prepare(`
-      SELECT coalesce(sum(CASE WHEN hour >= ? THEN count END), 0) AS days7,
-             coalesce(sum(count), 0) AS days30
-      FROM traffic_views WHERE scope = ? AND hour BETWEEN ? AND ?
+      SELECT count(CASE WHEN hour >= ? THEN 1 END) AS days7, count(*) AS days30
+      FROM traffic_visitors WHERE scope = ? AND hour BETWEEN ? AND ?
     `);
-    this.removeOld = db.prepare("DELETE FROM traffic_views WHERE hour < ?");
+    this.removeOld = db.prepare("DELETE FROM traffic_visitors WHERE hour < ?");
+    // Raw page views collected by old deployments age out under the same policy.
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'traffic_views'").get())
+      this.removeOldPageViews = db.prepare("DELETE FROM traffic_views WHERE hour < ?");
   }
 
-  record(now, id = SITE) {
+  record(now, browserToken, id = SITE) {
     const hour = hourOf(now);
+    // Use different hashes for the same browser on the site and each post.
+    const siteHash = voterHash(`traffic:${SITE}:${browserToken}`);
+    const postHash = id === SITE ? null : voterHash(`traffic:${id}:${browserToken}`);
     return this.write(() => {
-      this.increment.run(SITE, hour);
-      if (id !== SITE) this.increment.run(id, hour);
+      this.touch.run(SITE, siteHash, hour);
+      if (postHash) this.touch.run(id, postHash, hour);
     });
   }
 
@@ -51,7 +60,11 @@ export class TrafficCounters {
   async sweep(now) {
     const hour = hourOf(now);
     if (hour === this.lastSweepHour) return;
-    await this.write(() => this.removeOld.run(firstHour(hour, 30)));
+    const cutoff = firstHour(hour, 30);
+    await this.write(() => {
+      this.removeOld.run(cutoff);
+      this.removeOldPageViews?.run(cutoff);
+    });
     this.lastSweepHour = hour;
   }
 }

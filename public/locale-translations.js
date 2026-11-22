@@ -2,23 +2,23 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
-  "Site page views": {
-    ja: "サイトの閲覧数",
-    ko: "사이트 조회수",
-    fr: "Vues du site",
-    pt: "Visualizações do site",
+  "Site visits": {
+    ja: "サイトの訪問数",
+    ko: "사이트 방문 수",
+    fr: "Visites du site",
+    pt: "Visitas ao site",
     es: "Visitas al sitio",
-    de: "Seitenaufrufe der Website",
-    it: "Visualizzazioni del sito",
+    de: "Websitebesuche",
+    it: "Visite al sito",
   },
-  "Post page views": {
-    ja: "投稿の閲覧数",
-    ko: "게시물 조회수",
-    fr: "Vues de la publication",
-    pt: "Visualizações da publicação",
+  "Post visits": {
+    ja: "投稿への訪問数",
+    ko: "게시물 방문 수",
+    fr: "Visites de la publication",
+    pt: "Visitas à publicação",
     es: "Visitas a la publicación",
-    de: "Aufrufe dieses Beitrags",
-    it: "Visualizzazioni del post",
+    de: "Besuche dieses Beitrags",
+    it: "Visite al post",
   },
   "Last 7 days": {
     ja: "過去7日間",
@@ -38,14 +38,14 @@ export const TRANSLATIONS = {
     de: "Letzte 30 Tage",
     it: "Ultimi 30 giorni",
   },
-  "We keep aggregate page-view counts for 30 days. Visit statistics do not store IP addresses, cookies, or Secrex links.": {
-    ja: "閲覧数の集計を30日間保存します。閲覧統計にはIPアドレス、Cookie、Secrexのリンクは保存されません。",
-    ko: "페이지 조회수 집계를 30일간 보관합니다. 방문 통계에는 IP 주소, 쿠키 또는 Secrex 링크를 저장하지 않습니다.",
-    fr: "Nous conservons les nombres agrégés de vues pendant 30 jours. Les statistiques de visites ne conservent ni adresses IP, ni cookies, ni liens Secrex.",
-    pt: "Mantemos os totais de visualizações de páginas por 30 dias. As estatísticas de visitas não armazenam endereços IP, cookies nem links do Secrex.",
-    es: "Conservamos los recuentos agregados de visitas durante 30 días. Las estadísticas de visitas no guardan direcciones IP, cookies ni enlaces de Secrex.",
-    de: "Wir speichern zusammengefasste Seitenaufrufe 30 Tage lang. Die Besuchsstatistik speichert keine IP-Adressen, Cookies oder Secrex-Links.",
-    it: "Conserviamo i conteggi aggregati delle visualizzazioni per 30 giorni. Le statistiche delle visite non memorizzano indirizzi IP, cookie o link Secrex.",
+  "Visit counts use a random browser cookie. Active storage keeps separate hashes for the site and each post for up to 30 days after the last visit. Visit statistics do not record IP addresses or Secrex share links.": {
+    ja: "訪問数の集計にはランダムなブラウザー Cookie を使用します。サイト全体と各投稿で別々のハッシュを使い、最終訪問から最長30日間、稼働中のストレージに保存します。訪問統計には IP アドレスや Secrex の共有リンクを記録しません。",
+    ko: "방문 통계에는 무작위 브라우저 쿠키를 사용합니다. 사이트와 게시물별로 별도의 해시를 마지막 방문 후 최대 30일 동안 활성 저장소에 보관합니다. 방문 통계는 IP 주소나 Secrex 공유 링크를 기록하지 않습니다.",
+    fr: "Le comptage des visites utilise un cookie aléatoire. Les données actives conservent des empreintes distinctes pour le site et chaque publication pendant 30 jours au plus après la dernière visite. Les statistiques ne consignent aucune adresse IP ni aucun lien de partage Secrex.",
+    pt: "A contagem de visitas usa um cookie aleatório do navegador. O armazenamento ativo mantém hashes separados para o site e para cada publicação por até 30 dias após a última visita. As estatísticas não registram endereços IP nem links de compartilhamento do Secrex.",
+    es: "El recuento de visitas utiliza una cookie aleatoria del navegador. Los datos activos conservan hashes separados para el sitio y para cada publicación hasta 30 días después de la última visita. Las estadísticas no registran direcciones IP ni enlaces compartidos de Secrex.",
+    de: "Die Besuchszählung verwendet ein zufälliges Browser-Cookie. Im aktiven Speicher bleiben getrennte Hashwerte für die Website und jeden Beitrag bis zu 30 Tage nach dem letzten Besuch erhalten. Die Besuchsstatistik erfasst keine IP-Adressen oder Secrex-Freigabelinks.",
+    it: "Il conteggio delle visite usa un cookie casuale del browser. L’archivio attivo conserva hash distinti per il sito e per ciascun post fino a 30 giorni dopo l’ultima visita. Le statistiche non registrano indirizzi IP né link di condivisione Secrex.",
   },
   "Language": {
     ja: "言語",

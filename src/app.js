@@ -22,6 +22,15 @@ import { saleImages } from "./sale-images.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
+const VISITOR_COOKIE = "st_visit";
+
+function cookieToken(req, name) {
+  const prefix = `${name}=`;
+  const item = (req.headers.cookie ?? "").split(";")
+    .map(value => value.trim()).find(value => value.startsWith(prefix));
+  const token = item?.slice(prefix.length);
+  return COOKIE_PATTERN.test(token ?? "") ? token : undefined;
+}
 
 export function createApp(
   store,
@@ -68,10 +77,18 @@ export function createApp(
   function sendPublicPage(req, res, file, postId) {
     const purpose = `${req.get("sec-purpose") ?? ""} ${req.get("purpose") ?? ""}`;
     if (traffic && req.method === "GET" && !/prefetch|prerender/i.test(purpose)) {
+      const browserToken = cookieToken(req, VISITOR_COOKIE) ?? randomBytes(32).toString("hex");
+      res.cookie(VISITOR_COOKIE, browserToken, {
+        httpOnly: true,
+        secure,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * DAY,
+      });
       res.once("finish", () => {
         if (res.statusCode !== 200 && res.statusCode !== 304) return;
         const now = store.clock();
-        void traffic.record(now, postId).catch(error => {
+        void traffic.record(now, browserToken, postId).catch(error => {
           if (now - lastTrafficWarning < 60000) return;
           lastTrafficWarning = now;
           console.error("Visit count failed:", error.code ?? error.name);
@@ -250,12 +267,7 @@ export function createApp(
     return `${prefix}_${id}`;
   }
   function tokenFor(req, id, prefix = "st") {
-    const item = (req.headers.cookie ?? "")
-      .split(";")
-      .map((s) => s.trim())
-      .find((s) => s.startsWith(`${cookieName(id, prefix)}=`));
-    const token = item?.slice(cookieName(id, prefix).length + 1);
-    return COOKIE_PATTERN.test(token ?? "") ? token : undefined;
+    return cookieToken(req, cookieName(id, prefix));
   }
   app.param("id", (req, res, next, id) =>
     ID_PATTERN.test(id)

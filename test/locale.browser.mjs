@@ -63,10 +63,16 @@ test('browser language, manual preference, storage fallback and offline switchin
     assert.equal(await page.locator('html').getAttribute('lang'), htmlLang);
     const visits = page.locator('#footer-visits');
     await visits.waitFor();
-    const visitLabel = htmlLang === 'en' ? 'Site page views'
-      : htmlLang === 'zh-Hans' ? '本站访问量' : TRANSLATIONS['Site page views'][htmlLang];
+    const visitLabel = htmlLang === 'en' ? 'Site visits'
+      : htmlLang === 'zh-Hans' ? '本站访问量' : TRANSLATIONS['Site visits'][htmlLang];
     assert.ok((await visits.textContent()).startsWith(visitLabel));
     assert.match(await visits.locator('[aria-hidden="true"]').textContent({ timeout: 5000 }), /^[^/]+\/[^/]+$/);
+    if (locale === 'zh-CN') {
+      const pair = visits.locator('[aria-hidden="true"]');
+      assert.equal(await pair.textContent(), '1/1');
+      await page.reload();
+      assert.equal(await pair.textContent({ timeout: 5000 }), '1/1');
+    }
 
     const options = await page.locator('#language-select option').evaluateAll(nodes =>
       nodes.map(node => ({ value: node.value, text: node.textContent, lang: node.lang })),
