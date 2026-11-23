@@ -16,9 +16,16 @@ async function fixture(t) {
   const store = new PollStore(directory, { clock: () => now });
   await store.init();
   let app,
-    nextVersion = false;
+    nextVersion = false,
+    unavailablePath;
   const server = createServer((req, res) => {
-    if (req.url === "/sw.js" && nextVersion) {
+    const { pathname } = new URL(req.url, "http://localhost");
+    if (pathname === "/healthz") {
+      // The public ingress does not expose the internal health check.
+      res.writeHead(404).end();
+    } else if (pathname === unavailablePath) {
+      res.writeHead(503).end();
+    } else if (req.url === "/sw.js" && nextVersion) {
       res.writeHead(200, {
         "Content-Type": "application/javascript",
         "Cache-Control": "no-store",
@@ -63,6 +70,9 @@ async function fixture(t) {
     errors,
     nextVersion: () => {
       nextVersion = true;
+    },
+    setUnavailablePath: (path) => {
+      unavailablePath = path;
     },
     advance: (ms) => {
       now += ms;
@@ -186,7 +196,8 @@ test(
       .getByText(/offline/)
       .waitFor();
     assert.equal(f.store.index.size, 1);
-    await page.goto(origin + `/vote/${id}`);
+    const voteUrl = `${origin}/vote/${id}?lang=en#ballot`;
+    await page.goto(voteUrl);
     await page
       .getByRole("heading", { name: "Connection unavailable." })
       .waitFor();
@@ -226,6 +237,7 @@ test(
       );
       throw error;
     }
+    assert.equal(page.url(), voteUrl);
     assert.equal(f.store.index.size, 1); // No queued offline publication on reconnect.
 
     f.advance(30 * DAY);
@@ -238,6 +250,32 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test("manual retry restores the original page once the public route responds", { timeout: 40000 }, async (t) => {
+  const { context, errors, origin, page, setUnavailablePath } = await fixture(t);
+  const path = "/vote/000000000000000000000000";
+  const url = `${origin}${path}?lang=en#ballot`;
+  assert.equal((await context.request.get(`${origin}/healthz`)).status(), 404);
+  // Pause automatic retries so only the click can restore the page.
+  const time = Date.now();
+  await page.clock.install({ time });
+  await page.clock.pauseAt(time + 60000);
+  setUnavailablePath(path);
+  await page.goto(url);
+  await page.getByRole("heading", { name: "Connection unavailable." }).waitFor();
+  const status = page.locator("#offline-status");
+  await status.getByText(/ScaleTag is not reachable yet/).waitFor();
+  setUnavailablePath();
+  const navigation = page.waitForResponse(
+    (response) => response.request().isNavigationRequest() &&
+      response.status() === 404 && new URL(response.url()).pathname === path,
+  );
+  await page.locator("#retry-connection").click();
+  await navigation;
+  await page.getByRole("heading", { name: "This page is unavailable." }).waitFor();
+  assert.equal(page.url(), url);
+  assert.deepEqual(errors, []);
+});
 
 test(
   "install help, native prompt, standalone mode and mobile layout",

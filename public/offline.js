@@ -32,16 +32,20 @@ async function checkConnection() {
   checking = true;
   status.textContent = t("Checking the connection…", "正在检查连接…");
   try {
-    const response = await fetch("/healthz", {
+    // HEAD bypasses the service worker's navigation fallback and visit counting.
+    const response = await fetch(location.href, {
+      method: "HEAD",
+      mode: "same-origin",
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
     });
-    if (response.ok && (await response.json()).status === "ok") {
+    // The original post may have expired while the browser was offline.
+    if (response.ok || response.status === 404) {
       location.reload();
       return;
     }
   } catch {
-    /* Wait for a successful health response, not just an online event. */
+    /* The connection may return before the site is reachable. */
   } finally {
     checking = false;
   }
