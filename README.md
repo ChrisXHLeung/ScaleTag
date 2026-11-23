@@ -8,12 +8,14 @@ ScaleTag is an installable web app for local polls, tasks, free giveaways, and o
 
 | Type | What people can do | Public lifetime |
 | --- | --- | --- |
-| Poll | Vote, see results and like the post | Voting lasts up to seven days. Publishers can delay results until voting closes. Results remain available until day 30. |
-| Task | Offer a reward, receive replies and update progress | Available for 30 days. Completed and Closed tasks stop accepting new replies. |
+| Poll | Vote, see results and download a result card | Voting lasts up to seven days. Publishers can end voting early, delay results until voting closes, or take down the poll. Results remain available until day 30 unless withdrawn. |
+| Task | Offer a reward, receive replies and privately choose a respondent | Available for 30 days. Selecting a respondent pauses applications. The publisher can reopen them before the task reaches a final state. |
 | Free giveaway | Share a pickup location and mark the item claimed | Public for up to 72 hours. Marking it claimed hides pickup details and removes it from discovery while the original link shows the status. Active storage retains the record until day 30. |
 | Secrex | Encrypt text for one-time reading and optionally revoke it before it is opened | Never listed in PostList. Expires after seven days if unopened, or is destroyed after a single reading session (up to 5 minutes). |
 
-Each post has a unique ID. PostList combines polls, tasks and giveaways in one list and an optional map. Nearby search supports GPS or a manually chosen map area, with 2, 10, 50 and 100 km radii and a nearest-first sort. Nearby search and public map pins use a rounded 0.01° grid for post locations. Posts appear on the map only with explicit consent. Search coordinates are used for that request and are not stored.
+Each post has a unique ID. PostList combines publicly discoverable polls, tasks and giveaways in one list and an optional map. Keyword search matches titles and descriptions and works alongside post type, status, distance and sorting. Nearby search supports GPS or a manually chosen map area, with 2, 10, 50 and 100 km radii and a nearest-first sort. Nearby search and public map pins use a rounded 0.01° grid for post locations. Posts appear on the map only with explicit consent. Search coordinates are used for that request and are not stored.
+
+Polls, tasks and giveaways can also be published as link-only. Anyone with the direct link or QR code can open them. Link-only posts skip GPS, stay out of PostList and the map, and are excluded from visit counters.
 
 Text drafts and saved links stay in the current browser. Drafts cover public post fields. Images, location permissions, management credentials and private replies are excluded. Saved management URLs still require their separate passwords.
 
@@ -25,7 +27,7 @@ Public task replies show the submitted name and message. The reply form encrypts
 | Discover | [PostList](https://www.scaletag.top/PostList) and its optional map |
 | Saved links | `/saved` |
 | View a post or secret | `/vote/<id>`, `/task/<id>`, `/sale/<id>`, `/secrex/<id>` |
-| Manage a post | `/task/<id>/manage`, `/sale/<id>/manage` |
+| Manage a post | `/vote/<id>/manage`, `/task/<id>/manage`, `/sale/<id>/manage` |
 | Install and learn about data | [Install](https://www.scaletag.top/install), [privacy](https://www.scaletag.top/privacy) |
 
 ## Production architecture
@@ -94,11 +96,11 @@ Secrex ([`/secrex`](https://www.scaletag.top/secrex), [`/create/secrex`](https:/
 
 For tasks, the browser derives a 256-bit authentication credential from the decoded password bytes using HKDF-SHA-256, the fixed salt `scaletag:task:hkdf-salt:v1` and the separate label `scaletag:task:auth-key:v1`. It sends the credential as 64 hexadecimal characters at publication and when requesting management data or changing task status. The credential grants access to the management API. Decrypting the new contact ciphertext requires the private key protected by the task password.
 
-For giveaways, the server generates a separate 32-byte random password, encodes it as 64 hexadecimal characters and returns it once in the uncached creation response. The giveaway browser sends that password for verification. Both flows send the management credential in a same-origin JSON POST over HTTPS in production. The management page can copy the URL and password together as text.
+For new polls and giveaways, the server generates a separate 32-byte random password, encodes it as 64 hexadecimal characters and returns it once in the uncached creation response. The browser sends that password for verification. Polls created before management was introduced retain their original public links and voting behavior. Both flows send the management credential in a same-origin JSON POST over HTTPS in production. The management page can copy the URL and password together as text.
 
 ### Hashing parameters
 
-ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/packages/argon2) to produce an [Argon2id v1.3](https://www.rfc-editor.org/rfc/rfc9106) verifier for the task authentication credential or giveaway password. The production SQLite post document stores the verifier in `manageKeyHash` as a PHC string containing the algorithm, version, parameters, salt and derived hash.
+ScaleTag uses [@node-rs/argon2](https://github.com/napi-rs/node-rs/tree/main/packages/argon2) to produce an [Argon2id v1.3](https://www.rfc-editor.org/rfc/rfc9106) verifier for a task authentication credential or a poll or giveaway management password. The production SQLite post document stores the verifier in `manageKeyHash` as a PHC string containing the algorithm, version, parameters, salt and derived hash.
 
 | Setting | Value |
 | --- | --- |

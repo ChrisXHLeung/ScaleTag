@@ -12,6 +12,7 @@ import {
   offerInput,
   replyInput,
   manageKeyInput,
+  ownerEditInput,
   taskStateInput,
 } from "./validation.js";
 import { DAY, ID_PATTERN } from "./store.js";
@@ -104,6 +105,16 @@ export function createApp(
     res.sendFile(file, { root: publicDir });
   }
 
+  function markPostRobots(res, post) {
+    if (post.visibility === "unlisted") res.set("X-Robots-Tag", "noindex");
+  }
+
+  function sendPostPage(req, res, post) {
+    markPostRobots(res, post);
+    if (post.visibility === "unlisted") return res.sendFile(join(publicDir, "index.html"));
+    return sendPublicPage(req, res, "index.html", post.id);
+  }
+
   const visitTypes = new Map([["poll", "poll"], ["task", "task"], ["giveaway", "sale"]]);
   async function visiblePost(type, id) {
     const post = await store.get(id);
@@ -147,8 +158,11 @@ export function createApp(
     });
   }
 
-  // Only image publication accepts a larger body; every other route retains 24 KiB.
-  app.post(["/api/polls", "/api/tasks", "/api/sales"], express.json({ limit: 4300000, strict: true }));
+  // Only publication and owner photo edits accept image uploads.
+  app.post([
+    "/api/polls", "/api/tasks", "/api/sales",
+    "/api/polls/:id/edit", "/api/tasks/:id/edit", "/api/sales/:id/edit",
+  ], express.json({ limit: 4300000, strict: true }));
   app.use(express.json({ limit: "24kb", strict: true }));
   if (secrex) {
     app.get("/api/secrex/:secretId/qr.png", async (req, res) => {
@@ -258,6 +272,7 @@ export function createApp(
         status: data.status,
         cursor: data.cursor,
         type: contentType(data),
+        query: keywordQuery(data.query),
       }),
     );
   }
@@ -274,9 +289,17 @@ export function createApp(
         ...nearbyOptions(data, data.location ? coordinates(data.location) : undefined),
         status: data.status,
         type: contentType(data),
+        query: keywordQuery(data.query),
       }),
     );
   });
+
+  function keywordQuery(value) {
+    if (value === undefined) return "";
+    if (typeof value !== "string" || value.length > 240 || [...value].length > 120)
+      throw new AppError(400, "Search must be at most 120 characters.");
+    return value;
+  }
 
   function cookieName(id, prefix = "st") {
     return `${prefix}_${id}`;
@@ -298,6 +321,7 @@ export function createApp(
     let token = tokenFor(req, req.params.id);
     const poll = await store.get(req.params.id, token);
     if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
+    markPostRobots(res, poll);
     if (poll.status === "open" && !token) {
       token = randomBytes(32).toString("hex");
       res.cookie(cookieName(poll.id), token, {
@@ -329,9 +353,29 @@ export function createApp(
       throw new AppError(400, "Please select exactly one option.");
     res.json(await store.vote(req.params.id, token, req.body.optionId));
   });
+  app.post("/api/polls/:id/manage", async (req, res) => {
+    res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache",
+      "X-Robots-Tag": "noindex" });
+    res.json(await store.managePoll(req.params.id, manageKeyInput(req.body)));
+  });
+  app.post("/api/polls/:id/state", async (req, res) => {
+    const key = manageKeyInput(req.body);
+    res.json(await store.setPollState(req.params.id, key, req.body.state));
+  });
+  for (const [type, collection] of [["poll", "polls"], ["task", "tasks"], ["sale", "sales"]]) {
+    app.post(`/api/${collection}/:id/edit`, async (req, res) => {
+      res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache" });
+      const { key, changes } = ownerEditInput(req.body, type);
+      const update = await store.editManagedPost(req.params.id, key, type, changes,
+        type === "sale" ? saleImages : publicationImages);
+      markPostRobots(res, update);
+      res.json(update);
+    });
+  }
   app.get("/api/polls/:id/qr.png", async (req, res) => {
     const poll = await store.get(req.params.id);
     if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
+    markPostRobots(res, poll);
     const png = await QRCode.toBuffer(`${origin}/vote/${poll.id}`, {
       type: "png",
       width: 768,
@@ -349,6 +393,7 @@ export function createApp(
   app.get("/api/sales/:id", async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
+    markPostRobots(res, sale);
     res.json(sale);
   });
   app.post("/api/sales/:id/manage", async (req, res) => {
@@ -362,12 +407,14 @@ export function createApp(
   app.get("/api/sales/:id/qr.png", async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
+    markPostRobots(res, sale);
     const png = await QRCode.toBuffer(`${origin}/sale/${sale.id}`, { type: "png", width: 768, margin: 4 });
     res.type("png").send(png);
   });
   app.get("/api/tasks/:id", async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
+    markPostRobots(res, task);
     res.json(task);
   });
   // Private management: the key is accepted only in a same-origin JSON POST
@@ -386,9 +433,17 @@ export function createApp(
     const { key, state } = taskStateInput(req.body);
     res.json(await store.setTaskState(req.params.id, key, state));
   });
+  app.post("/api/tasks/:id/assignment", async (req, res) => {
+    const key = manageKeyInput(req.body);
+    const replyId = req.body.replyId;
+    if (replyId !== null && (typeof replyId !== "string" || !ID_PATTERN.test(replyId)))
+      throw new AppError(400, "Choose a valid task reply.");
+    res.json(await store.setTaskAssignment(req.params.id, key, replyId));
+  });
   app.get("/api/tasks/:id/qr.png", async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
+    markPostRobots(res, task);
     const png = await QRCode.toBuffer(`${origin}/task/${task.id}`, {
       type: "png",
       width: 768,
@@ -406,6 +461,7 @@ export function createApp(
   app.get("/api/posts/:id/social", async (req, res) => {
     let token = tokenFor(req, req.params.id, "ss");
     const data = await store.getSocial(req.params.id, token);
+    markPostRobots(res, data);
     if (!token) {
       token = randomBytes(32).toString("hex");
       res.cookie(cookieName(req.params.id, "ss"), token, {
@@ -517,27 +573,26 @@ export function createApp(
     ["/", "/create", "/create/task", "/create/sale", "/PostList", "/privacy", "/install"],
     (req, res) => sendPublicPage(req, res, "index.html"),
   );
-  app.get("/vote/:id", async (req, res) => {
+  app.get(["/vote/:id", "/vote/:id/manage"], async (req, res) => {
     const poll = await store.get(req.params.id);
     if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
-    if (poll.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
-    sendPublicPage(req, res, "index.html", poll.visibility === "unlisted" ? undefined : req.params.id);
+    if (/\/manage\/?$/i.test(req.path))
+      return res.set("X-Robots-Tag", "noindex").sendFile(join(publicDir, "index.html"));
+    sendPostPage(req, res, poll);
   });
   app.get(["/task/:id", "/task/:id/manage"], async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
-    if (task.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
     if (/\/manage\/?$/i.test(req.path))
-      res.sendFile(join(publicDir, "index.html"));
-    else sendPublicPage(req, res, "index.html", task.visibility === "unlisted" ? undefined : req.params.id);
+      return res.set("X-Robots-Tag", "noindex").sendFile(join(publicDir, "index.html"));
+    sendPostPage(req, res, task);
   });
   app.get(["/sale/:id", "/sale/:id/manage"], async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
-    if (sale.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
     if (/\/manage\/?$/i.test(req.path))
-      res.sendFile(join(publicDir, "index.html"));
-    else sendPublicPage(req, res, "index.html", sale.visibility === "unlisted" ? undefined : req.params.id);
+      return res.set("X-Robots-Tag", "noindex").sendFile(join(publicDir, "index.html"));
+    sendPostPage(req, res, sale);
   });
   app.use((req, res, next) => next(new AppError(404, "Page not found.")));
   app.use((err, req, res, next) => {

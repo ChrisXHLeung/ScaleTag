@@ -298,6 +298,63 @@ test("the browser restores public draft text and keeps saved post links locally"
   assert.equal(await page.getByLabel("The question").inputValue(), "Newer edit before the response");
 });
 
+test("new poll owner can copy management details, edit photos, end and take down", { timeout: 60000 }, async (t) => {
+  const { page, context, origin } = await fixture(t);
+  await context.grantPermissions(["geolocation", "clipboard-read", "clipboard-write"], { origin });
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("A question for our street");
+  await page.getByLabel("Option 1", { exact: true }).fill("Today");
+  await page.getByLabel("Option 2", { exact: true }).fill("Tomorrow");
+  await page.getByLabel("Your signature").fill("Test");
+  await page.locator("#map-consent").check();
+  await page.locator("#retention").check();
+  const creation = page.waitForResponse(response =>
+    response.url() === `${origin}/api/polls` && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  const response = await creation;
+  assert.equal(response.status(), 201);
+  const { id, manageKey } = await response.json();
+  await page.getByRole("heading", { name: "Manage this poll" }).waitFor();
+  assert.equal(new URL(page.url()).pathname, `/vote/${id}`);
+  assert.ok(!page.url().includes(manageKey));
+  await page.getByRole("button", { name: "Copy URL and password" }).click();
+  await page.getByText("Management details copied.", { exact: true }).waitFor();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  assert.ok(copied.includes(manageKey) && copied.includes(`/vote/${id}/manage`));
+
+  const visitor = await context.newPage();
+  await visitor.goto(`${origin}/vote/${id}`);
+  await visitor.getByRole("heading", { name: "A question for our street" }).waitFor();
+
+  await page.getByRole("link", { name: "Open poll management" }).click();
+  await page.getByLabel("Management password").fill(manageKey);
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await page.getByText("Edit public details", { exact: true }).click();
+  await page.getByLabel("Title", { exact: true }).fill("A clearer question for our street");
+  await page.getByLabel("Option 1", { exact: true }).fill("This week");
+  await page.locator("#owner-images").setInputFiles("public/icons/icon-192.png");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByText("Changes saved.", { exact: true }).waitFor();
+  await visitor.evaluate(() => window.dispatchEvent(new Event("online")));
+  await visitor.getByRole("heading", { name: "A clearer question for our street" }).waitFor();
+  await visitor.getByRole("radio", { name: "This week" }).check();
+  await visitor.reload();
+  await visitor.locator(".sale-photos img").waitFor();
+  await visitor.getByRole("radio", { name: "This week" }).check();
+  await visitor.getByRole("button", { name: "Cast my vote" }).click();
+  await visitor.getByRole("button", { name: "Your vote is counted" }).waitFor();
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "End voting now" }).click();
+  await page.getByText("Voting closed", { exact: true }).waitFor();
+  await visitor.reload();
+  await visitor.locator("#total-votes").getByText("1 vote").waitFor();
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Take down" }).click();
+  await page.getByRole("heading", { name: "This poll has been taken down." }).waitFor();
+  assert.equal((await visitor.reload()).status(), 404);
+  assert.equal((await context.request.get(`${origin}/api/polls/${id}/qr.png`)).status(), 404);
+});
+
 test("manual retry restores the original page once the public route responds", { timeout: 40000 }, async (t) => {
   const { context, errors, origin, page, setUnavailablePath } = await fixture(t);
   const path = "/vote/000000000000000000000000";

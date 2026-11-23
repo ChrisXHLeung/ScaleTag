@@ -240,6 +240,49 @@ test("visitors can search a chosen map area without geolocation permission", asy
   assert.deepEqual(f.errors, []);
 });
 
+test("link-only publication skips location and public keyword search filters both views", async (t) => {
+  const f = await fixture(t);
+  await f.context.clearPermissions();
+  await f.page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = () => { throw new Error("Geolocation must not be called"); };
+  });
+  await f.store.create({ ...f.input, title: "Library equipment", description: "A guide to the shared tools" });
+  await f.store.create({ ...f.input, title: "Community garden" });
+  await f.page.goto(f.origin + "/create");
+  await f.page.getByLabel("The question").fill("Shared tools schedule");
+  await f.page.getByLabel("Option 1", { exact: true }).fill("Before noon");
+  await f.page.getByLabel("Option 2", { exact: true }).fill("After noon");
+  await f.page.getByLabel("Your signature").fill("Neighbor");
+  await f.page.getByLabel("Post visibility").selectOption("unlisted");
+  assert.equal(await f.page.locator("#map-consent").isDisabled(), true);
+  await f.page.reload();
+  assert.equal(await f.page.getByLabel("Post visibility").inputValue(), "unlisted");
+  assert.equal(await f.page.locator("#map-consent").isDisabled(), true);
+  await f.page.locator("#retention").check();
+  const creation = f.page.waitForResponse(response => response.request().method() === "POST" &&
+    new URL(response.url()).pathname === "/api/polls");
+  await f.page.getByRole("button", { name: "Publish my poll" }).click();
+  const response = await creation;
+  assert.equal(response.status(), 201);
+  const { id } = await response.json();
+  const visitor = await f.context.newPage();
+  const direct = await visitor.goto(`${f.origin}/vote/${id}`);
+  assert.equal(direct.status(), 200);
+  assert.match(direct.headers()["x-robots-tag"], /noindex/);
+  await visitor.getByRole("heading", { name: "Shared tools schedule" }).waitFor();
+
+  await f.page.goto(f.origin + "/PostList");
+  await f.page.getByLabel("Search posts").fill("shared TOOLS");
+  await f.page.getByRole("button", { name: "Search", exact: true }).click();
+  await f.page.getByRole("link", { name: /Library equipment/ }).waitFor();
+  assert.equal(await f.page.locator("#poll-list a").count(), 1);
+  await mapReady(f.page);
+  await f.page.getByText("Browse mapped posts without the map", { exact: true }).click();
+  assert.equal(await f.page.locator("#mapped-poll-links a").count(), 1);
+  assert.match(await f.page.locator("#mapped-poll-links a").innerText(), /Library equipment/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("mobile layout, explicit publishing consent and rapid view changes", async (t) => {
   const f = await fixture(t);
   await f.store.create({

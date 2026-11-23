@@ -38,7 +38,8 @@ const reportHash = (token) => voterHash(`report:${token}`);
 const REPORT_FREEZE_THRESHOLD = 6;
 const FROZEN_POST = "This post has been permanently frozen after reports.";
 const isDiscoverable = (p, now) =>
-  p.frozenAt == null && p.withdrawnAt == null && p.visibility !== "unlisted" && p.deleteAt > now &&
+  p.visibility !== "unlisted" &&
+  p.frozenAt == null && p.withdrawnAt == null && p.deleteAt > now &&
   (p.type !== "sale" || (p.giveawayVersion === 1 && (p.saleState ?? "open") === "open" && p.endsAt > now));
 
 const onMapGrid = ({ latitude, longitude }) => ({
@@ -68,12 +69,23 @@ function mapPosition(location) {
   return [longitude, latitude];
 }
 
+const normalizeSearch = (value) => value.normalize("NFKC").toLowerCase();
+
+function searchFilter(query) {
+  const terms = normalizeSearch(query).trim().split(/\s+/u).filter(Boolean);
+  if (!terms.length) return () => true;
+  return (post) => {
+    const content = normalizeSearch(`${post.title ?? ""}\n${post.searchDescription ?? post.description ?? ""}`);
+    return terms.every(term => content.includes(term));
+  };
+}
+
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
   (p.type ?? "poll") === "task" ? (p.taskState ?? "open") : undefined;
 // Tasks created before management credentials were introduced have no verifier.
 export const hasManageKey = (p) =>
-  ["task", "sale"].includes(p.type) &&
+  ["poll", "task", "sale"].includes(p.type ?? "poll") &&
   typeof p.manageKeyHash === "string" &&
   (MANAGE_KEY_PATTERN.test(p.manageKeyHash) || ARGON2_VERIFIER.test(p.manageKeyHash));
 // Public reply view: name and message only. Phone and email are never
@@ -100,6 +112,10 @@ export function postStatus(p, now) {
 }
 function pollResultsHidden(p, now) {
   return p.resultsVisibility === "after_close" && now < p.endsAt;
+}
+
+function pollOptionsEditable(p, now) {
+  return p.totalVotes === 0 && now < p.endsAt;
 }
 
 const INVALID_MANAGE_LINK = "This management link is invalid for this task.";
@@ -157,11 +173,12 @@ export class PollStore {
       taskState: p.taskState,
       frozenAt: p.frozenAt,
       withdrawnAt: p.withdrawnAt,
-      visibility: p.visibility,
       ...(p.contactPublicKey ? { contactPublicKey: p.contactPublicKey } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
       title: p.title,
+      searchDescription: p.description,
+      visibility: p.visibility,
       signature: p.signature,
       createdAt: p.createdAt,
       endsAt: p.endsAt,
@@ -219,9 +236,9 @@ export class PollStore {
     this.index.delete(id);
   }
 
-  async live(id) {
+  async live(id, { allowWithdrawn = false } = {}) {
     const db = await this.read(id);
-    if (!db.data || db.data.withdrawnAt != null)
+    if (!db.data)
       throw new AppError(
         404,
         "This poll does not exist or has been removed from the website.",
@@ -236,16 +253,17 @@ export class PollStore {
       );
     }
     if (db.data.frozenAt != null) throw new AppError(404, FROZEN_POST);
+    if (db.data.withdrawnAt != null && !allowWithdrawn)
+      throw new AppError(404, "This poll has been taken down.");
     return db;
   }
 
   async create(input) {
-    const managed = input.type === "task" || input.type === "sale";
-    const manageKey = input.type === "sale" ? randomBytes(32).toString("hex") : undefined;
-    const secret = input.type === "task" ? input.authKey : manageKey;
-    const manageKeyHash = managed
-      ? await passwordOperation(() => hash(secret, { ...ARGON2_OPTIONS, salt: randomBytes(16) }))
-      : undefined;
+    const type = input.type ?? "poll";
+    const manageKey = type === "task" ? undefined : randomBytes(32).toString("hex");
+    const secret = type === "task" ? input.authKey : manageKey;
+    const manageKeyHash = await passwordOperation(() =>
+      hash(secret, { ...ARGON2_OPTIONS, salt: randomBytes(16) }));
     return this.exclusive("create", async () => {
       if (this.storedCount() >= this.maxPolls)
         throw new AppError(
@@ -255,11 +273,12 @@ export class PollStore {
       const now = this.clock();
       const id = randomBytes(12).toString("hex");
       const { authKey, votingHours = 168, ...postInput } = input;
-      const lifetime = input.type === "sale" ? 3 * DAY :
-        input.type === "task" ? 30 * DAY : votingHours * 3600000;
+      const lifetime = type === "sale" ? 3 * DAY :
+        type === "task" ? 30 * DAY : votingHours * 3600000;
       const p = {
         version: 1,
         ...postInput,
+        type,
         id,
         createdAt: now,
         endsAt: now + lifetime,
@@ -275,16 +294,14 @@ export class PollStore {
         likers: {},
         replies: [],
         replyAuthors: {},
+        manageKeyHash,
       };
-      // Only the verifier is persisted; creation returns the password once for sales.
-      if (managed) {
-        if (p.type === "sale") p.saleState = "open";
-        else {
-          p.taskState = "open";
-          p.contactPublicKey = input.contactPublicKey;
-          p.encryptedPrivateKey = input.encryptedPrivateKey;
-        }
-        p.manageKeyHash = manageKeyHash;
+      // Only the verifier is persisted. Poll and giveaway creation return the password once.
+      if (type === "sale") p.saleState = "open";
+      if (type === "task") {
+        p.taskState = "open";
+        p.contactPublicKey = input.contactPublicKey;
+        p.encryptedPrivateKey = input.encryptedPrivateKey;
       }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
       await this.write(db);
@@ -318,6 +335,7 @@ export class PollStore {
       voters,
       version,
       needsPrune,
+      searchDescription,
       mapVisible,
       mapConsentSource,
       likers,
@@ -326,12 +344,12 @@ export class PollStore {
       reportHashes,
       frozenAt,
       withdrawnAt,
-      assignedReplyId,
       manageKeyHash,
       manageKey,
       authKey,
       encryptedPrivateKey,
       taskState,
+      assignedReplyId,
       pickupLocation,
       totalVotes,
       options,
@@ -347,6 +365,7 @@ export class PollStore {
       options: resultsHidden ? options.map(({ id, label }) => ({ id, label })) : options,
       ...(pickupLocation !== undefined && p.saleState !== "claimed" ? { pickupLocation } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
+      ...(p.type === "task" && assignedReplyId ? { taskAssigned: true } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
       status: postStatus(p, now),
@@ -391,7 +410,7 @@ export class PollStore {
     });
   }
 
-  list({ location, radiusKm = 100, sort = "newest", status = "all", cursor, type = "all" } = {}) {
+  list({ location, radiusKm = 100, sort = "newest", status = "all", cursor, type = "all", query = "" } = {}) {
     let before;
     if (cursor) {
       try {
@@ -413,6 +432,7 @@ export class PollStore {
     if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
       rows = rows.filter((p) => postStatus(p, now) === status);
+    rows = rows.filter(searchFilter(query));
     let ordered = nearbyRows(rows, location, radiusKm, sort);
     if (before) {
       const boundary = { post: before, distanceBand: sort === "nearest" ? before.distanceBand : 0 };
@@ -436,12 +456,13 @@ export class PollStore {
     };
   }
 
-  map({ location, radiusKm = 100, sort = "newest", status = "all", type = "all" } = {}) {
+  map({ location, radiusKm = 100, sort = "newest", status = "all", type = "all", query = "" } = {}) {
     const now = this.clock();
     const posts = [...this.index.values()]
       .filter((p) => p.mapVisible && isDiscoverable(p, now))
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
-      .filter((p) => status === "all" || postStatus(p, now) === status);
+      .filter((p) => status === "all" || postStatus(p, now) === status)
+      .filter(searchFilter(query));
     const rows = nearbyRows(posts, location, radiusKm, sort).sort(compareNearbyRows);
     return {
       serverTime: now,
@@ -475,12 +496,14 @@ export class PollStore {
       hasLiked: Boolean(
         token && Object.hasOwn(p.likers ?? {}, voterHash(token)),
       ),
+      ...(p.visibility === "unlisted" ? { visibility: p.visibility } : {}),
       hasReported: Boolean(token && p.reportHashes?.includes(reportHash(token))),
       // Unauthenticated: never includes phone or email.
       replies: task ? (p.replies ?? []).map(publicReply) : [],
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
       ...(p.type === "sale" ? { saleState: p.saleState ?? "open" } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
+      ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
       deleteAt: p.type === "sale" ? p.endsAt : p.deleteAt,
       serverTime: this.clock(),
     };
@@ -537,10 +560,10 @@ export class PollStore {
           409,
           `This task is ${taskStateOf(p)} and no longer accepts replies.`,
         );
-      if (p.type === "task" && p.assignedReplyId)
-        throw new AppError(409, "This task already has someone assigned.");
       if (!hasManageKey(p))
         throw new AppError(409, LEGACY_TASK_NO_REPLIES);
+      if (p.type === "task" && p.assignedReplyId)
+        throw new AppError(409, "This task already has someone assigned.");
       if (p.type === "task" && (!p.contactPublicKey || !p.encryptedPrivateKey))
         throw new AppError(409, LEGACY_TASK_NO_REPLIES);
       const hasContact = p.type === "task" ? Boolean(input.encryptedContact) : Boolean(input.phone || input.email);
@@ -577,15 +600,17 @@ export class PollStore {
     });
   }
 
-  async withManagedPost(id, key, type, fn) {
+  async withManagedPost(id, key, type, fn, { prepare, allowWithdrawn = false } = {}) {
     if (typeof key !== "string" || !MANAGE_KEY_PATTERN.test(key))
       throw new AppError(403, INVALID_MANAGE_LINK);
     const snapshot = (await this.read(id)).data;
-    if (snapshot?.type !== type || snapshot.deleteAt <= this.clock() ||
+    if (!snapshot || (snapshot.type ?? "poll") !== type || snapshot.deleteAt <= this.clock() ||
         (type === "sale" && (snapshot.giveawayVersion !== 1 ||
          snapshot.saleState === "closed" || snapshot.endsAt <= this.clock())))
       throw new AppError(404, "Post not found.");
     if (snapshot.frozenAt != null) throw new AppError(404, FROZEN_POST);
+    if (snapshot.withdrawnAt != null && !allowWithdrawn)
+      throw new AppError(404, "This poll has been taken down.");
     const verifier = snapshot.manageKeyHash;
     if (!hasManageKey(snapshot)) throw new AppError(403, INVALID_MANAGE_LINK);
     // Verify outside the SQLite writer transaction; recheck the live record
@@ -594,12 +619,72 @@ export class PollStore {
       ? await passwordOperation(() => verify(verifier, key))
       : timingSafeEqual(Buffer.from(voterHash(key), "hex"), Buffer.from(verifier, "hex"));
     if (!valid) throw new AppError(403, INVALID_MANAGE_LINK);
+    // Media processing runs only after authentication and without a database lock.
+    const prepared = await prepare?.();
     return this.exclusive(id, async () => {
-      const db = await this.live(id);
-      if (db.data.type !== type || db.data.manageKeyHash !== verifier)
+      const db = await this.live(id, { allowWithdrawn });
+      if ((db.data.type ?? "poll") !== type || db.data.manageKeyHash !== verifier)
         throw new AppError(403, INVALID_MANAGE_LINK);
-      return fn(db);
+      return fn(db, prepared);
     });
+  }
+
+  async managePoll(id, key) {
+    return this.withManagedPost(id, key, "poll", ({ data: p }) => ({
+      ...this.public(p),
+      canEditOptions: pollOptionsEditable(p, this.clock()),
+    }));
+  }
+
+  async setPollState(id, key, state) {
+    if (!["closed", "withdrawn"].includes(state))
+      throw new AppError(400, "Choose a valid poll status.");
+    return this.withManagedPost(id, key, "poll", async (db) => {
+      const p = db.data;
+      const now = this.clock();
+      if (state === "withdrawn") {
+        if (p.withdrawnAt == null) {
+          p.withdrawnAt = now;
+          await this.write(db);
+        }
+        return { withdrawn: true };
+      }
+      if (now < p.endsAt) {
+        p.endsAt = now;
+        p.voters = {};
+        await this.write(db);
+      }
+      return { ...this.public(p), canEditOptions: false };
+    }, { allowWithdrawn: state === "withdrawn" });
+  }
+
+  async editManagedPost(id, key, type, changes, prepareImages) {
+    const { options, images, ...copy } = changes;
+    return this.withManagedPost(id, key, type, async (db, preparedImages) => {
+      const post = db.data;
+      const now = this.clock();
+      if (type === "sale" && post.saleState === "claimed")
+        throw new AppError(409, "This giveaway has already been claimed.");
+      const questionChanged = type === "poll" && copy.title !== undefined && copy.title !== post.title;
+      const optionsChanged = options && (options.length !== post.options.length ||
+        options.some((label, index) => label !== post.options[index].label));
+      const ballotChanged = questionChanged || optionsChanged;
+      if (ballotChanged && !pollOptionsEditable(post, now))
+        throw new AppError(409, "The poll question and options can change only before the first vote and before voting closes.");
+      Object.assign(post, copy);
+      if (preparedImages) post.images = preparedImages;
+      if (ballotChanged) {
+        // A ballot loaded before a rewrite can never cast a vote for a new option.
+        const lastId = Math.max(0, ...post.options.map(option => option.id));
+        const labels = options ?? post.options.map(option => option.label);
+        post.options = labels.map((label, i) => ({ id: lastId + i + 1, label, votes: 0 }));
+      }
+      await this.write(db);
+      return {
+        ...this.public(post),
+        ...(type === "poll" ? { canEditOptions: pollOptionsEditable(post, now) } : {}),
+      };
+    }, { prepare: images === undefined ? undefined : () => prepareImages(images) });
   }
 
   // Authenticated view: the only response that includes reply phone/email.
@@ -607,6 +692,7 @@ export class PollStore {
     return this.withManagedPost(id, key, "task", ({ data: p }) => {
       return {
         ...this.public(p),
+        assignedReplyId: p.assignedReplyId ?? null,
         encryptedPrivateKey: p.encryptedPrivateKey,
         replies: (p.replies ?? []).map(privateReply),
       };
@@ -633,6 +719,27 @@ export class PollStore {
       p.stateChangedAt = this.clock();
       await this.write(db);
       return this.public(p);
+    });
+  }
+
+  async setTaskAssignment(id, key, replyId) {
+    return this.withManagedPost(id, key, "task", async (db) => {
+      const post = db.data;
+      if (FINAL_TASK_STATES.includes(taskStateOf(post)))
+        throw new AppError(409, "This task can no longer change its assignment.");
+      const previous = post.assignedReplyId ?? null;
+      if (previous !== replyId) {
+        if (previous && replyId)
+          throw new AppError(409, "Reopen applications before selecting another reply.");
+        if (replyId && !(post.replies ?? []).some(reply => reply.id === replyId))
+          throw new AppError(404, "Task reply not found.");
+        if (replyId) post.assignedReplyId = replyId;
+        else delete post.assignedReplyId;
+        post.taskState = replyId ? "in_progress" : "open";
+        post.stateChangedAt = this.clock();
+        await this.write(db);
+      }
+      return { ...this.public(post), assignedReplyId: replyId };
     });
   }
 

@@ -105,6 +105,7 @@ if (typeof document !== 'undefined') {
     select.addEventListener('change', () => {
       if (select.value === language) return;
       const hasDraft = [...document.querySelectorAll('form input, form textarea, form select')].some(field => {
+        if (field.form?.getAttribute('role') === 'search') return false;
         if (field.type === 'hidden' || field.type === 'submit' || field.type === 'button') return false;
         if (field.type === 'checkbox' || field.type === 'radio') return field.checked !== field.defaultChecked;
         if (field instanceof HTMLSelectElement) {

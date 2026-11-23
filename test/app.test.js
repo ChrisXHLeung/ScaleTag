@@ -291,6 +291,79 @@ test("short polls can hide all public counts until their chosen deadline", async
   assert.equal(final.options[0].votes, 1);
 });
 
+test("new poll publishers can edit, end and withdraw without changing its address", async (t) => {
+  const f = await fixture(t);
+  const poll = await f.create({ resultsVisibility: "after_close", mapVisible: true });
+  assert.match(poll.manageKey, /^[a-f0-9]{64}$/);
+  const endpoint = `/api/polls/${poll.id}`;
+  const poster = `/vote/${poll.id}`;
+  const { manageKey: key } = poll;
+  const getPoll = async () => (await f.request(endpoint)).json();
+  assert.equal((await getPoll()).manageKey, undefined);
+  assert.equal((await (await f.request("/api/posts")).json()).polls[0].manageKey, undefined);
+  assert.equal((await f.request(poster + "/manage")).status, 200);
+  assert.equal((await f.request(endpoint + "/manage", { key: "0".repeat(64) })).status, 403);
+  const unlock = await f.request(endpoint + "/manage", { key });
+  assert.equal(unlock.status, 200);
+  assert.match(unlock.headers.get("cache-control"), /no-store.*private/);
+  assert.equal((await unlock.json()).canEditOptions, true);
+  assert.equal((await f.request(endpoint + "/edit", { key, title: "A clearer question", options: ["First", "Second"] })).status, 200);
+  const changed = await getPoll();
+  assert.equal(changed.title, "A clearer question");
+  assert.equal(changed.options[0].label, "First");
+  assert.notEqual(changed.options[0].id, poll.options[0].id);
+  assert.equal((await f.request(endpoint + "/edit", { key, title: "The final question" })).status, 200);
+  const rewritten = await getPoll();
+  assert.equal(rewritten.options[0].label, "First");
+  assert.notEqual(rewritten.options[0].id, changed.options[0].id);
+  const cookie = await f.session(poll.id);
+  assert.equal((await f.request(endpoint + "/votes", { optionId: poll.options[0].id }, cookie)).status, 400);
+  assert.equal((await f.request(endpoint + "/votes", { optionId: changed.options[0].id }, cookie)).status, 400);
+  assert.equal((await f.request(endpoint + "/votes", { optionId: rewritten.options[0].id }, cookie)).status, 200);
+  assert.equal((await f.request(endpoint + "/edit", { key, options: ["Changed", "Second"] })).status, 409);
+  assert.equal((await f.request(endpoint + "/edit", { key, title: "Another question" })).status, 409);
+  assert.equal((await f.request(endpoint + "/edit", { key, description: "A correction for readers." })).status, 200);
+  f.advance(1000);
+  const close = await f.request(endpoint + "/state", { key, state: "closed" });
+  assert.equal(close.status, 200);
+  const results = await close.json();
+  assert.equal(results.status, "closed");
+  assert.equal(results.endsAt, f.now());
+  assert.equal(results.deleteAt, poll.deleteAt);
+  assert.equal(results.totalVotes, 1);
+  assert.equal((await f.request(endpoint + "/qr.png")).status, 200);
+  for (let i = 0; i < 2; i++) {
+    assert.equal((await f.request(endpoint + "/state", { key, state: "withdrawn" })).status, 200);
+  }
+  assert.equal((await f.request(poster)).status, 404);
+  assert.equal((await f.request(endpoint + "/qr.png")).status, 404);
+  assert.equal((await (await f.request("/api/posts")).json()).polls.length, 0);
+  assert.equal((await (await f.request("/api/map/search", {})).json()).polls.length, 0);
+});
+
+test("managed posts accept validated public edits without changing private task material", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f);
+  const before = (await (await f.request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })).json());
+  const edit = await f.request(`/api/tasks/${task.id}/edit`, {
+    key: task.manageKey, description: "Updated task details.", reward: "CAD 45",
+    contactPublicKey: "ignored",
+  });
+  assert.equal(edit.status, 200);
+  assert.equal((await edit.json()).description, "Updated task details.");
+  const after = await (await f.request(`/api/tasks/${task.id}/manage`, { key: task.manageKey })).json();
+  assert.equal(after.reward, "CAD 45");
+  assert.deepEqual(after.encryptedPrivateKey, before.encryptedPrivateKey);
+  const create = await f.request("/api/sales", input({ pickupLocation: "Library", images: [] }));
+  assert.equal(create.status, 201);
+  const sale = await create.json();
+  const salePath = `/api/sales/${sale.id}`;
+  assert.equal((await f.request(salePath + "/edit", { key: sale.manageKey, pickupLocation: "Community center" })).status, 200);
+  assert.equal((await (await f.request(salePath)).json()).pickupLocation, "Community center");
+  await f.request(salePath + "/state", { key: sale.manageKey, state: "claimed" });
+  assert.equal((await f.request(salePath + "/edit", { key: sale.manageKey, pickupLocation: "Library" })).status, 409);
+});
+
 test("30-day deletion removes JSON, list entry, original page, QR and crash leftovers", async (t) => {
   const f = await fixture(t);
   const p = await f.create();
@@ -727,6 +800,41 @@ function stateRequest(f, id, body, headers) {
   return f.request(`/api/tasks/${id}/state`, body, undefined, headers);
 }
 
+test("task managers privately choose one reply and can reopen applications", async (t) => {
+  const f = await fixture(t);
+  const task = await createTask(f);
+  const path = `/api/posts/${task.id}`;
+  const assignment = `/api/tasks/${task.id}/assignment`;
+  for (const [name, message] of [["Avery", "I can help on Saturday."], ["Sam", "I can help on Sunday."]]) {
+    const { cookie } = await socialSession(f, task.id);
+    assert.equal((await f.request(`${path}/replies`, await replyBody(task, { name, message }), cookie)).status, 201);
+  }
+  const candidates = (await (await manageRequest(f, task.id, { authKey: task.manageKey })).json()).replies;
+  assert.equal((await f.request(assignment, { authKey: "a".repeat(64), replyId: candidates[0].id })).status, 403);
+  assert.equal((await f.request(assignment, { authKey: task.manageKey, replyId: "0".repeat(24) })).status, 404);
+  const responses = await Promise.all(candidates.map(({ id }) =>
+    f.request(assignment, { authKey: task.manageKey, replyId: id }),
+  ));
+  assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
+  const selected = await responses.find((r) => r.ok).json();
+  assert.ok(candidates.some(({ id }) => id === selected.assignedReplyId));
+  const detail = await (await f.request(`/api/tasks/${task.id}`)).json();
+  const social = await (await f.request(`${path}/social`)).json();
+  for (const view of [detail, social]) {
+    assert.equal(view.taskAssigned, true);
+    assert.equal(Object.hasOwn(view, "assignedReplyId"), false);
+    assert.equal(view.taskState, "in_progress");
+  }
+  const third = await socialSession(f, task.id);
+  assert.equal((await f.request(`${path}/replies`, await replyBody(task), third.cookie)).status, 409);
+  assert.equal((await stateRequest(f, task.id, { authKey: task.manageKey, state: "open" })).status, 409);
+  assert.equal((await (await manageRequest(f, task.id, { authKey: task.manageKey })).json()).assignedReplyId, selected.assignedReplyId);
+  const reopen = await f.request(assignment, { authKey: task.manageKey, replyId: null });
+  assert.equal(reopen.status, 200);
+  assert.equal((await reopen.json()).taskState, "open");
+  assert.equal((await f.request(`${path}/replies`, await replyBody(task), third.cookie)).status, 201);
+});
+
 test("tasks require title, description, reward and GPS; discover by type and share a canonical QR", async (t) => {
   const f = await fixture(t);
   for (const extra of [
@@ -1159,9 +1267,9 @@ test("task creation returns a private management key once; only its hash is stor
   const reopened = new PollStore(f.directory, { clock: f.now });
   await reopened.init();
   assert.ok(!JSON.stringify(reopened.list()).includes(disk.manageKeyHash));
-  // Polls have no management links or task states.
+  // A poll's management credential is separate from task state.
   const poll = await f.create();
-  assert.equal(poll.manageKey, undefined);
+  assert.match(poll.manageKey, /^[a-f0-9]{64}$/);
   assert.equal(poll.taskState, undefined);
 });
 

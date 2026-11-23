@@ -1,11 +1,12 @@
 import {
   DATA_IMAGE_PATTERN,
+  count,
   date,
   icons,
   t,
   toast,
 } from "/common.js";
-import { language } from "/locale.js";
+import { intlLocaleFor, language } from "/locale.js";
 
 export const POSTER_WIDTH = 2480;
 export const POSTER_HEIGHT = 3508;
@@ -744,15 +745,18 @@ export async function renderPosterCanvas(post) {
   return canvas;
 }
 
-export async function generatePosterBlobUrl(post) {
-  const canvas = await renderPosterCanvas(post);
+async function canvasBlobUrl(canvas) {
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("Poster export failed"))),
+      (b) => (b ? resolve(b) : reject(new Error("Image export failed"))),
       "image/png",
     );
   });
   return URL.createObjectURL(blob);
+}
+
+export async function generatePosterBlobUrl(post) {
+  return canvasBlobUrl(await renderPosterCanvas(post));
 }
 
 function getPrintRoot() {
@@ -841,4 +845,137 @@ export function mountPosterActions(shareCard, post) {
       saveBtn.innerHTML = originalHtml;
     }
   };
+}
+
+function hasPublicResults(poll) {
+  return (
+    !poll.resultsHidden &&
+    Number.isSafeInteger(poll.totalVotes) && poll.totalVotes >= 0 &&
+    Number.isFinite(poll.endsAt) && Number.isFinite(poll.serverTime) &&
+    Array.isArray(poll.options) && poll.options.length > 0 &&
+    poll.options.every(({ votes }) => Number.isSafeInteger(votes) && votes >= 0)
+  );
+}
+
+function renderResultCard(poll) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas is unavailable");
+  canvas.width = 1080;
+  const left = 56;
+  const right = canvas.width - left;
+  const width = right - left;
+  const locale = intlLocaleFor(language);
+  const percentage = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 });
+  const timestamp = new Intl.DateTimeFormat(locale, {
+    year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "shortOffset",
+  });
+  const titleFont = `800 50px ${FONT_STACK}`;
+  const optionFont = `650 32px ${FONT_STACK}`;
+  ctx.font = titleFont;
+  const titleLines = wrapText(ctx, poll.title, width, Infinity);
+  ctx.font = optionFont;
+  const rows = poll.options.map((option) => {
+    const lines = wrapText(ctx, option.label, width - 204, Infinity);
+    return { lines, votes: option.votes, height: Math.max(lines.length * 40 + 46, 104) };
+  });
+  const totalY = 124 + titleLines.length * 62 + 34;
+  const firstRowY = totalY + 64;
+  const footerY = firstRowY + rows.reduce((height, row) => height + row.height, 0);
+  canvas.height = footerY + 137;
+
+  ctx.fillStyle = COLORS.paper;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textBaseline = "top";
+  drawBrandMark(ctx, left, 46, 44);
+  ctx.fillStyle = COLORS.ink;
+  ctx.font = `800 30px ${FONT_STACK}`;
+  ctx.fillText("ScaleTag", left + 58, 53);
+  ctx.textAlign = "right";
+  ctx.fillStyle = COLORS.blue;
+  ctx.font = `700 27px ${FONT_STACK}`;
+  const closed = poll.status === "closed";
+  ctx.fillText(closed ? t("Final results", "最终结果") : t("Live results", "实时结果"), right, 55);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLORS.ink;
+  ctx.font = titleFont;
+  titleLines.forEach((line, index) => ctx.fillText(line, left, 124 + index * 62));
+  ctx.font = `700 32px ${FONT_STACK}`;
+  ctx.fillText(t("Total votes", "总票数"), left, totalY);
+  ctx.textAlign = "right";
+  ctx.fillText(count(poll.totalVotes), right, totalY);
+
+  let y = firstRowY;
+  for (const { lines, votes, height } of rows) {
+    const share = poll.totalVotes ? votes / poll.totalVotes : 0;
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLORS.ink;
+    ctx.font = optionFont;
+    lines.forEach((line, index) => ctx.fillText(line, left, y + index * 40));
+    ctx.textAlign = "right";
+    ctx.fillStyle = COLORS.blue;
+    ctx.font = `800 29px ${FONT_STACK}`;
+    ctx.fillText(percentage.format(share), right, y);
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = `500 23px ${FONT_STACK}`;
+    ctx.fillText(t(`${count(votes)} ${votes === 1 ? "vote" : "votes"}`, `${count(votes)} 票`), right, y + 35);
+
+    ctx.fillStyle = COLORS.pale;
+    drawRoundedRect(ctx, left, y + height - 29, width, 12, 6);
+    ctx.fill();
+    if (share > 0) {
+      ctx.fillStyle = COLORS.blue;
+      drawRoundedRect(ctx, left, y + height - 29, width * share, 12, 6);
+      ctx.fill();
+    }
+    y += height;
+  }
+
+  ctx.fillStyle = COLORS.line;
+  ctx.fillRect(left, footerY + 4, width, 2);
+  ctx.fillStyle = COLORS.muted;
+  ctx.font = `500 24px ${FONT_STACK}`;
+  ctx.textAlign = "left";
+  ctx.fillText(closed ? t("Voting closed", "投票已结束") : t("Voting closes", "投票截止时间"), left, footerY + 28);
+  ctx.fillText(t("Snapshot time", "结果生成时间"), left, footerY + 65);
+  ctx.textAlign = "right";
+  ctx.fillText(timestamp.format(poll.endsAt), right, footerY + 28);
+  ctx.fillText(timestamp.format(poll.serverTime), right, footerY + 65);
+  return canvas;
+}
+
+export function mountResultCard(host, id, loadResults) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button secondary small";
+  button.textContent = t("Download result card", "下载投票结果卡");
+  host.append(button);
+
+  function update(poll) {
+    button.hidden = !hasPublicResults(poll);
+  }
+
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      // A poll can expire or be withdrawn while its page is open.
+      const poll = await loadResults();
+      update(poll);
+      if (button.hidden) throw new Error("Poll results are unavailable");
+      const url = await canvasBlobUrl(renderResultCard(poll));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ScaleTag-results-${id}.png`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast(t("Could not download the result card. Please try again.", "无法下载投票结果卡，请重试。"));
+    } finally {
+      button.disabled = false;
+    }
+  };
+  return update;
 }

@@ -149,7 +149,37 @@ function locate() {
   });
 }
 function notice() {
-  return `<div class="retention-note">${icons.clock}<div><strong>${t("Public for 30 days. Backed up for recovery.", "公开 30 天，并保留用于灾难恢复的备份。")}</strong><p>${t("Posts leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.", "帖子发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。请在公开链接失效前保存需要的内容。")}</p></div></div>`;
+  return `<div class="retention-note">${icons.clock}<div><strong>${t("Available for 30 days. Backed up for recovery.", "保留 30 天，并保留用于灾难恢复的备份。")}</strong><p>${t("Posts leave the website 30 days after publication. Private daily backups are retained for up to 90 days after each backup is created. Save anything you need before the public link expires.", "帖子发布 30 天后从网站移除。每日私有备份自创建起最多保留 90 天。请在公开链接失效前保存需要的内容。")}</p></div></div>`;
+}
+
+export function postVisibilityFields() {
+  return `<label for="post-visibility">${t("Post visibility", "帖子可见范围")}</label>
+    <select id="post-visibility" name="visibility" aria-describedby="post-visibility-hint">
+      <option value="public">${t("Public discovery", "公开发现")}</option>
+      <option value="unlisted">${t("Anyone with the link", "仅通过链接访问")}</option>
+    </select>
+    <p id="post-visibility-hint" class="field-hint">${t("Anyone who has the link can open a link-only post. It stays out of PostList and the map.", "任何持有链接的人都可以打开仅链接可见的帖子。帖子不会出现在 PostList 或地图上。")}</p>`;
+}
+
+export function bindPostVisibility(form) {
+  const visibility = form.elements.visibility;
+  const fields = form.querySelector(".post-location-fields");
+  const consent = fields.querySelector("input[type=checkbox]");
+  const unlisted = () => visibility.value === "unlisted";
+  function render() {
+    fields.hidden = fields.disabled = unlisted();
+  }
+  visibility.addEventListener("change", render);
+  form.addEventListener("draftreset", render);
+  render();
+  return {
+    get unlisted() { return unlisted(); },
+    payload(location) {
+      return unlisted()
+        ? { visibility: "unlisted" }
+        : { visibility: "public", location, mapVisible: consent.checked };
+    },
+  };
 }
 const DATA_IMAGE_PATTERN =
   /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;

@@ -75,19 +75,12 @@ export function coordinates(value) {
   return { latitude: value.latitude, longitude: value.longitude };
 }
 
-function baseInput(body) {
-  if (!body || typeof body !== "object")
-    throw new AppError(400, "Please complete the poll form.");
-  if (body.visibility !== undefined && body.visibility !== "public")
-    throw new AppError(503, "Link-only publishing is temporarily unavailable. Try again shortly.");
-  const title = publicText(body.title, "Title", 140);
-  const description = publicText(body.description ?? "", "Description", 4000, false);
-  const signature = publicText(body.signature, "Signature", 60);
-  if (!Array.isArray(body.images ?? []) || (body.images?.length ?? 0) > 2) {
+function photoInput(images) {
+  if (!Array.isArray(images) || images.length > 2) {
     throw new AppError(400, "Upload at most 2 images.");
   }
-  const images = (body.images ?? []).map((v) => {
-    // Only creation routes accept bounded upload data. Full decoding and
+  return images.map((v) => {
+    // Image-enabled routes accept bounded upload data. Full decoding and
     // metadata removal happen asynchronously before any document is stored.
     if (typeof v === "string" && v.startsWith("data:")) {
       if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(v) ||
@@ -110,40 +103,74 @@ function baseInput(body) {
     }
     return url.href;
   });
+}
+
+function baseInput(body) {
+  if (!body || typeof body !== "object")
+    throw new AppError(400, "Please complete the poll form.");
+  const title = publicText(body.title, "Title", 140);
+  const description = publicText(body.description ?? "", "Description", 4000, false);
+  const signature = publicText(body.signature, "Signature", 60);
+  const images = photoInput(body.images ?? []);
   if (body.retentionAccepted !== true)
     throw new AppError(400, "Please acknowledge the data retention policy.");
+  const { visibility = "public" } = body;
+  if (!["public", "unlisted"].includes(visibility))
+    throw new AppError(400, "Choose a valid post visibility.");
   return {
     title,
     description,
     signature,
     images,
+    visibility,
     // Existing polls and clients stay off the map unless they explicitly opt in.
-    mapVisible: body.mapVisible === true,
-    location: coordinates(body.location),
+    ...(visibility === "unlisted"
+      ? { mapVisible: false }
+      : { mapVisible: body.mapVisible === true, location: coordinates(body.location) }),
   };
 }
 
-export function pollInput(body) {
-  const common = baseInput(body);
+function pollOptionsInput(values) {
   if (
-    !Array.isArray(body.options) ||
-    body.options.length < 2 ||
-    body.options.length > 12
+    !Array.isArray(values) ||
+    values.length < 2 ||
+    values.length > 12
   ) {
     throw new AppError(400, "Provide between 2 and 12 options.");
   }
-  const options = body.options.map((v) => publicText(v, "Option", 120));
+  const options = values.map((v) => publicText(v, "Option", 120));
   if (
     new Set(options.map((v) => v.toLocaleLowerCase())).size !== options.length
   ) {
     throw new AppError(400, "Options must be unique.");
   }
+  return options;
+}
+
+export function pollInput(body) {
+  const common = baseInput(body);
+  const options = pollOptionsInput(body.options);
   const { votingHours = 168, resultsVisibility = "live" } = body;
   if (!Number.isInteger(votingHours) || votingHours < 1 || votingHours > 168)
     throw new AppError(400, "Voting must last between 1 and 168 whole hours.");
   if (!["live", "after_close"].includes(resultsVisibility))
     throw new AppError(400, "Choose when to publish poll results.");
   return { ...common, options, votingHours, resultsVisibility };
+}
+
+export function ownerEditInput(body, type) {
+  const key = manageKeyInput(body);
+  const changes = {};
+  if (Object.hasOwn(body, "title")) changes.title = publicText(body.title, "Title", 140);
+  if (Object.hasOwn(body, "description"))
+    changes.description = publicText(body.description, "Description", 4000, type !== "poll");
+  if (Object.hasOwn(body, "images")) changes.images = photoInput(body.images);
+  if (type === "poll" && Object.hasOwn(body, "options")) changes.options = pollOptionsInput(body.options);
+  if (type === "task" && Object.hasOwn(body, "reward")) changes.reward = publicText(body.reward, "Reward", 160);
+  if (type === "sale" && Object.hasOwn(body, "pickupLocation"))
+    changes.pickupLocation = publicText(body.pickupLocation, "Pickup location", 300);
+  if (!Object.keys(changes).length) throw new AppError(400, "Choose something to update.");
+  return { key, changes };
 }
 
 export function encryptedPrivateKeyInput(value) {

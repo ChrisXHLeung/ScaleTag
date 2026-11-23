@@ -487,9 +487,10 @@ test("deploy/nginx.conf blocks public/proxied /readyz and /healthz requests whil
   assert.equal(/\bif\s*\([^)]*\|\|[^)]*\)/.test(strippedComments), false, "nginx if does not support ||");
 
   const serverBlock = extractBraceBlock(strippedComments, /\bserver\s*\{/);
-  const probeLocMatch = /location\s+(~\*?)\s+(\S+)\s*\{/.exec(serverBlock.body);
+  const probeLocation = /location\s+(~\*?)\s+(\^\/\(healthz\|readyz\|api\/stats\)\(\/\|\$\))\s*\{/;
+  const probeLocMatch = probeLocation.exec(serverBlock.body);
   assert.ok(probeLocMatch, "Missing probe regex location block inside server {}");
-  const probeBlock = extractBraceBlock(serverBlock.body, /location\s+~\*?\s+\^\/\(healthz\|readyz\|api\/stats\)\(\/\|\$\)\s*\{/);
+  const probeBlock = extractBraceBlock(serverBlock.body, probeLocation);
   const fallbackLocIdx = serverBlock.body.search(/location\s+\/\s*\{/);
   assert.ok(fallbackLocIdx > probeBlock.end, "Probe location block must appear before location /");
 

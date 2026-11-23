@@ -1,7 +1,7 @@
 import { t } from "/locale.js";
 
 const savedKey = "scaletag-saved-posts";
-const postPath = /^(?:\/vote\/[a-f0-9]{24}|\/(?:task|sale)\/[a-f0-9]{24}(?:\/manage)?)$/;
+const postPath = /^\/(?:vote|task|sale)\/[a-f0-9]{24}(?:\/manage)?$/;
 
 function read(key, fallback) {
   try {
@@ -95,7 +95,7 @@ export function bindTextDraft(form, kind, selectors, options) {
     }
     restore(defaults);
     lastSaved = undefined;
-    fields[0].dispatchEvent(new Event("draftreset"));
+    fields[0].dispatchEvent(new Event("draftreset", { bubbles: true }));
     status.textContent = t("Text draft cleared.", "文字草稿已清除。");
     clear.hidden = true;
   };

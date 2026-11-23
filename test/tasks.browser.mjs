@@ -375,6 +375,38 @@ test("private management link changes progress; final states stop replies for ev
   assert.deepEqual(f.errors, []);
 });
 
+test("task assignment pauses public replies and keeps the selected person private", async (t) => {
+  const f = await fixture(t);
+  const task = await f.createTask();
+  const path = `${f.origin}/task/${task.id}`;
+  const visitor = await f.context.newPage();
+  await visitor.goto(path);
+  await visitor.locator("#reply-name").fill("Avery");
+  await visitor.locator("#reply-message").fill("I can help after lunch.");
+  await visitor.locator("#reply-email").fill("avery@example.com");
+  await visitor.locator("#contact-consent").check();
+  await visitor.locator("#send-reply").click();
+  await visitor.locator("#reply-list").getByText("Avery", { exact: true }).waitFor();
+
+  await f.page.goto(`${path}/manage`);
+  await f.page.getByLabel("Management password").fill(task.manageKey);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
+  f.page.once("dialog", (dialog) => dialog.accept());
+  await f.page.getByRole("button", { name: "Choose this person" }).click();
+  await f.page.getByText("Selected to do this task", { exact: true }).waitFor();
+  await visitor.reload();
+  await visitor.getByText("Already assigned", { exact: true }).waitFor();
+  await visitor.locator("#reply-form").waitFor({ state: "hidden" });
+  assert.equal(await visitor.getByText("Selected to do this task", { exact: true }).count(), 0);
+
+  f.page.once("dialog", (dialog) => dialog.accept());
+  await f.page.getByRole("button", { name: "Reopen applications" }).click();
+  await f.page.getByRole("button", { name: "Choose this person" }).waitFor();
+  await visitor.reload();
+  await visitor.locator("#reply-form").waitFor({ state: "visible" });
+  assert.deepEqual(f.errors, []);
+});
+
 test("public link copy fallback on the management page never exposes the private key", async (t) => {
   const f = await fixture(t),
     task = await f.createTask();

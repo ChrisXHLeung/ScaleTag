@@ -6,6 +6,8 @@ import {
   icons,
   date,
   locate,
+  bindPostVisibility,
+  postVisibilityFields,
   notice,
   toast,
   t,
@@ -19,6 +21,7 @@ import {
 import { mountSocial } from "/social.js";
 import { mountPosterActions } from "/poster.js";
 import { bindTextDraft, mountSavedPost } from "/local-posts.js";
+import { mountOwnerEdit, refreshOwnerPreview } from "/owner-edit.js";
 import {
   createTaskCredentials,
   deriveTaskAuthKey,
@@ -29,14 +32,16 @@ import {
 export function createTask() {
   document.title = t("Create a task — ScaleTag", "发布任务 — ScaleTag");
   document.querySelector('[data-nav="create"]').classList.add("active");
-  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("MAKE SOMETHING HAPPEN", "需要帮忙？")}</span><h1>${t("A little help.<br>A local <em>connection.</em>", "需要帮忙？<br><em>让身边的人搭把手。</em>")}</h1><p>${t("Share a task and the reward you offer. People can reply with a way to reach them.", "说说你需要什么帮助，以及愿意提供什么酬谢。感兴趣的人可以回复并留下联系方式。")}</p><div class="rules"><p>${icons.pin} ${t("Location is required to publish.", "发布时需要位置信息。")}</p><p>${icons.clock} ${t("Tasks stay on the website for 30 days.", "任务发布后保留 30 天。")}</p><p>${icons.shield} ${t("No accounts. Contact each other directly.", "无需注册，双方直接联系。")}</p></div></aside><form id="task-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "发布类型")}"><a href="/create">${t("Poll", "投票")}</a><a href="/create/task" aria-current="page">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div><div class="form-heading"><h2>${t("Your new task", "发布新任务")}</h2><span class="pill">${t("LOCAL TASK", "本地任务")}</span></div><label for="task-title">${t("Title", "标题")}</label><input id="task-title" maxlength="140" required placeholder="${t("What could someone help you with?", "你需要什么帮助？")}"><label for="task-description">${t("Description", "描述")}</label><textarea id="task-description" maxlength="4000" rows="6" required placeholder="${t("Describe the task and what you need.", "介绍一下任务，以及你需要什么帮助。")}"></textarea><label for="task-reward">${t("Reward", "酬谢")}</label><input id="task-reward" maxlength="160" required placeholder="${t("e.g. CAD 30, a coffee, or a thank-you", "例如：30 加元、一杯咖啡或一句感谢")}"><p class="field-hint">${t("A description of your offer. ScaleTag does not collect, hold or transfer money.", "说明你愿意提供什么酬谢。ScaleTag 不收取、保管或转账资金。")}</p>${photoFields("task", t("Photos (optional)", "任务照片（选填）"))}<label for="task-name">${t("Your name ", "你的名字 ")}<span class="optional">${t("optional, unverified", "选填，未经验证")}</span></label><input id="task-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}"><div class="location-box"><div><strong>${icons.pin} ${t("Give your task a place", "添加任务位置")}</strong><p id="task-location-status" aria-live="polite">${t("People can discover your task nearby.", "添加位置后，附近的人更容易找到你的任务。")}</p></div><button id="task-locate" class="button secondary small" type="button">${t("Enable location", "获取位置")}</button></div><p class="field-hint">${t("Only a rounded area is shown on the map. It can still reveal your neighbourhood.", "地图只显示大致区域，但仍可能透露你所在的社区。")}</p><label class="checkbox-row"><input id="task-map-consent" type="checkbox" required><span>${t("I agree to show my task’s approximate area publicly on the map. This does not guarantee anonymity.", "我同意在地图上公开显示任务的大致区域。我了解这不能保证匿名。")}</span></label>${notice()}<label class="checkbox-row"><input id="task-retention" type="checkbox" required><span>${t("I understand that this task, its replies and contact details leave the website 30 days after publication. Private daily backups are retained for up to 90 days after creation.", "我了解任务、回复及联系方式会在任务发布 30 天后从网站移除，私有每日备份从创建之日起最多保留 90 天。")}</span></label><p class="field-hint">${t("Task descriptions, rewards and names are unverified and public. Respondents’ names and messages are public; their phone numbers and email addresses are shown only on your private management page, so keep that link safe.", "任务描述、酬谢和姓名会公开显示，且未经验证。回复者的姓名和留言也是公开的；电话和邮箱只显示在私人管理页面，请妥善保管管理链接。")}</p><p class="field-hint" role="note"><strong>${t("Keep your management password safe. If it is lost, encrypted contact details cannot be recovered.", "请务必妥善保存管理密码。密码丢失后，加密的联系方式无法恢复。")}</strong></p><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button id="publish-task" class="button publish-button" type="submit">${t("Publish my task ", "发布任务 ")}${icons.arrow}</button><p id="task-error" class="form-error" role="alert" hidden></p></form></section>`;
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("MAKE SOMETHING HAPPEN", "需要帮忙？")}</span><h1>${t("A little help.<br>A local <em>connection.</em>", "需要帮忙？<br><em>让身边的人搭把手。</em>")}</h1><p>${t("Share a task and the reward you offer. People can reply with a way to reach them.", "说说你需要什么帮助，以及愿意提供什么酬谢。感兴趣的人可以回复并留下联系方式。")}</p><div class="rules"><p>${icons.pin} ${t("Public posts require location.", "公开帖需要位置信息。")}</p><p>${icons.clock} ${t("Tasks stay on the website for 30 days.", "任务发布后保留 30 天。")}</p><p>${icons.shield} ${t("No accounts. Contact each other directly.", "无需注册，双方直接联系。")}</p></div></aside><form id="task-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "发布类型")}"><a href="/create">${t("Poll", "投票")}</a><a href="/create/task" aria-current="page">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div><div class="form-heading"><h2>${t("Your new task", "发布新任务")}</h2><span class="pill">${t("LOCAL TASK", "本地任务")}</span></div><label for="task-title">${t("Title", "标题")}</label><input id="task-title" maxlength="140" required placeholder="${t("What could someone help you with?", "你需要什么帮助？")}"><label for="task-description">${t("Description", "描述")}</label><textarea id="task-description" maxlength="4000" rows="6" required placeholder="${t("Describe the task and what you need.", "介绍一下任务，以及你需要什么帮助。")}"></textarea><label for="task-reward">${t("Reward", "酬谢")}</label><input id="task-reward" maxlength="160" required placeholder="${t("e.g. CAD 30, a coffee, or a thank-you", "例如：30 加元、一杯咖啡或一句感谢")}"><p class="field-hint">${t("A description of your offer. ScaleTag does not collect, hold or transfer money.", "说明你愿意提供什么酬谢。ScaleTag 不收取、保管或转账资金。")}</p>${photoFields("task", t("Photos (optional)", "任务照片（选填）"))}<label for="task-name">${t("Your name ", "你的名字 ")}<span class="optional">${t("optional, unverified", "选填，未经验证")}</span></label><input id="task-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}">${postVisibilityFields()}<fieldset class="post-location-fields"><legend class="sr-only">${t("Post location", "帖子位置")}</legend><div class="location-box"><div><strong>${icons.pin} ${t("Give your task a place", "添加任务位置")}</strong><p id="task-location-status" aria-live="polite">${t("People can discover your task nearby.", "添加位置后，附近的人更容易找到你的任务。")}</p></div><button id="task-locate" class="button secondary small" type="button">${t("Enable location", "获取位置")}</button></div><p class="field-hint">${t("Only a rounded area is shown on the map. It can still reveal your neighbourhood.", "地图只显示大致区域，但仍可能透露你所在的社区。")}</p><label class="checkbox-row"><input id="task-map-consent" type="checkbox" required><span>${t("I agree to show my task’s approximate area publicly on the map. This does not guarantee anonymity.", "我同意在地图上公开显示任务的大致区域。我了解这不能保证匿名。")}</span></label></fieldset>${notice()}<label class="checkbox-row"><input id="task-retention" type="checkbox" required><span>${t("I understand that this task, its replies and contact details leave the website 30 days after publication. Private daily backups are retained for up to 90 days after creation.", "我了解任务、回复及联系方式会在任务发布 30 天后从网站移除，私有每日备份从创建之日起最多保留 90 天。")}</span></label><p class="field-hint">${t("Task descriptions, rewards and names are unverified and public. Respondents’ names and messages are public; their phone numbers and email addresses are shown only on your private management page, so keep that link safe.", "任务描述、酬谢和姓名会公开显示，且未经验证。回复者的姓名和留言也是公开的；电话和邮箱只显示在私人管理页面，请妥善保管管理链接。")}</p><p class="field-hint" role="note"><strong>${t("Keep your management password safe. If it is lost, encrypted contact details cannot be recovered.", "请务必妥善保存管理密码。密码丢失后，加密的联系方式无法恢复。")}</strong></p><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button id="publish-task" class="button publish-button" type="submit">${t("Publish my task ", "发布任务 ")}${icons.arrow}</button><p id="task-error" class="form-error" role="alert" hidden></p></form></section>`;
   let position,
     locatedAt = 0,
     publishing = false;
   const photos = bindPhotoInput(main, "task");
-  const draft = bindTextDraft(main.querySelector("#task-form"), "task", [
-    "#task-title", "#task-description", "#task-reward", "#task-name",
+  const form = main.querySelector("#task-form");
+  const draft = bindTextDraft(form, "task", [
+    "#task-title", "#task-description", "#task-reward", "#task-name", "#post-visibility",
   ]);
+  const visibility = bindPostVisibility(form);
   const locateButton = main.querySelector("#task-locate");
   async function getLocation() {
     position = await locate();
@@ -56,7 +61,7 @@ export function createTask() {
       locateButton.disabled = false;
     }
   };
-  main.querySelector("#task-form").onsubmit = async (event) => {
+  form.onsubmit = async (event) => {
     event.preventDefault();
     if (publishing) return;
     publishing = true;
@@ -66,7 +71,7 @@ export function createTask() {
     button.disabled = true;
     try {
       const images = await photos.readImages();
-      if (!position || Date.now() - locatedAt > 300000) await getLocation();
+      if (!visibility.unlisted && (!position || Date.now() - locatedAt > 300000)) await getLocation();
       const value = (id) => main.querySelector(id).value.trim();
       const { password, authKey, contactPublicKey, encryptedPrivateKey } =
         await createTaskCredentials();
@@ -77,8 +82,7 @@ export function createTask() {
         reward: value("#task-reward"),
         signature: value("#task-name"),
         images,
-        location: position,
-        mapVisible: main.querySelector("#task-map-consent").checked,
+        ...visibility.payload(position),
         retentionAccepted: main.querySelector("#task-retention").checked,
         authKey,
         contactPublicKey,
@@ -171,7 +175,8 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
   main.innerHTML = `<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">${t("← Back to PostList", "← 返回帖子列表")}</a>${created ? `<div class="success-banner" role="status">${t("Your task is live.", "任务已发布。")} ${manage ? t(" Save the management details below before leaving this page.", " 离开页面前请保存下方的管理信息。") : t(" Share its QR code to find a little help.", " 分享二维码，寻找帮助。")}</div>` : ""}<div class="poll-meta"><span class="status-badge">${t("Task", "任务")}</span><span id="task-state" class="status-badge"></span><span>${t("Available until", "有效期至")} ${date(task.deleteAt)}</span></div><h1 class="poll-title">${escape(task.title)}</h1><p class="byline">${t("Posted by", "发布者")} <strong>${escape(task.signature)}</strong><span> · ${date(task.createdAt)}</span></p><p class="poll-description">${escape(task.description)}</p>${uploadedPhotosHtml(task.images, "Task photo", "任务照片")}<section class="task-reward"><span class="eyebrow">${t("REWARD OFFERED", "提供的酬谢")}</span><h2>${escape(task.reward)}</h2><p>${t("Offered by the poster. Arrange details directly. ScaleTag does not handle payments or transactions.", "酬谢由发布者提供，请双方直接商定细节。ScaleTag 不处理付款或交易。")}</p></section>${manageCard}<section id="social" aria-label="${t("Task likes and replies", "任务点赞和回复")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享给邻里")}</span><h2>${t("A small code.<br>A local connection.", "分享二维码，<br>让附近的人看到。") }</h2><div class="qr-frame"><img src="/api/tasks/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this task", "任务二维码")}"></div><p>${t("Scan to read. Save to share.", "扫码查看，保存后分享。")}</p><a class="button" href="/api/tasks/${id}/qr.png?download=1" download="ScaleTag-task-${id}.png">${icons.download}${t(" Save QR image", " 保存二维码")}</a><button class="button secondary" id="copy-task-link">${manage ? t("Copy public task link", "复制公开任务链接") : t("Copy task link", "复制任务链接")}</button><div id="public-link-fallback" hidden><label for="public-task-link">${t("Public task link", "公开任务链接")}</label><input id="public-task-link" readonly></div></section><section class="timeline-card"><div>${icons.clock}<span>${t("Removed with all replies", "任务及所有回复的移除时间")}<strong>${date(task.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   function renderState(state) {
     const badge = main.querySelector("#task-state");
-    badge.textContent = stateLabel(state);
+    badge.textContent = task.taskAssigned && !isFinalState(state)
+      ? t("Already assigned", "已有接单人") : stateLabel(state);
     badge.classList.toggle("closed", isFinalState(state));
     badge.classList.toggle("in-progress", state === "in_progress");
     if (!manage) return;
@@ -179,7 +184,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
       const current = button.dataset.taskState === state;
       button.setAttribute("aria-pressed", String(current));
       button.classList.toggle("selected", current);
-      button.disabled = current || isFinalState(state);
+      button.disabled = current || isFinalState(state) || (task.taskAssigned && button.dataset.taskState === "open");
     });
   }
   renderState(task.taskState);
@@ -188,7 +193,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     path: `/task/${id}${manage && !legacyKey ? "/manage" : ""}`,
     title: task.title,
   });
-  mountPosterActions(shareCard, {
+  const renderPoster = () => mountPosterActions(shareCard, {
     type: "task",
     id,
     title: task.title,
@@ -201,6 +206,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     qrUrl: `/api/tasks/${id}/qr.png`,
     publicUrl: `${location.origin}/task/${id}`,
   });
+  renderPoster();
   main.querySelector("#copy-task-link").onclick = async () => {
     const publicLink = `${location.origin}/task/${id}`;
     try {
@@ -219,6 +225,8 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     }
   };
   let social;
+  let changing = false;
+  let managementVersion = 0;
   // Contacts come only from the authenticated manage response; the status
   // response and public social data never include them.
   let loadingContacts = false;
@@ -226,17 +234,45 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     const list = main.querySelector("#private-reply-list");
     if (!list) return; // The task may have left the website meanwhile.
     list.innerHTML = privateRepliesHtml(privateReplies);
+    const final = isFinalState(task.taskState);
+    for (const [index, card] of [...list.querySelectorAll(".private-reply")].entries()) {
+      const reply = privateReplies[index];
+      if (reply.id === task.assignedReplyId) {
+        const badge = document.createElement("p");
+        badge.className = "field-hint";
+        badge.textContent = t("Selected to do this task", "已选定为接单人");
+        card.append(badge);
+      } else if (!final && !task.taskAssigned && /^[a-f0-9]{24}$/.test(reply.id ?? "")) {
+        addAssignmentButton(card, reply.id, t("Choose this person", "选定此人"));
+      }
+    }
+    if (task.taskAssigned && !final)
+      addAssignmentButton(list, "reopen", t("Reopen applications", "重新开放报名"));
     main.querySelector("#private-reply-count").textContent =
       t(`${privateReplies.length} ${privateReplies.length === 1 ? "reply" : "replies"}`, `${privateReplies.length} 条回复`);
   }
+  function addAssignmentButton(parent, value, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button secondary small";
+    button.dataset.assignReply = value;
+    button.textContent = label;
+    button.disabled = changing;
+    parent.append(button);
+  }
   async function refreshPrivateReplies() {
-    if (!manage || loadingContacts) return;
+    if (!manage || loadingContacts || changing) return;
+    const version = managementVersion;
     loadingContacts = true;
     try {
       const data = await api(`/api/tasks/${id}/manage`, { authKey: requestAuthKey });
-      privateReplies = await decryptManagedTask(id, password, data);
+      const replies = await decryptManagedTask(id, password, data);
+      if (version !== managementVersion) return;
+      privateReplies = replies;
+      task = { ...task, ...data, taskAssigned: Boolean(data.taskAssigned) };
       const error = main.querySelector("#private-replies-error");
       if (error) error.hidden = true;
+      if (main.querySelector("#task-state")) renderState(task.taskState);
       renderPrivateReplies();
     } catch (e) {
       const error = main.querySelector("#private-replies-error");
@@ -250,8 +286,42 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
   }
   if (manage) {
     renderPrivateReplies();
+    main.querySelector("#private-reply-list").onclick = async (event) => {
+      const button = event.target.closest("[data-assign-reply]");
+      if (!button || changing) return;
+      const reopen = button.dataset.assignReply === "reopen";
+      if (!confirm(reopen
+        ? t("Reopen applications and clear the current assignment?", "重新开放报名并取消当前指派？")
+        : t("Choose this person and pause new applications?", "选定此人并暂停接受新报名？"))) return;
+      const replyId = reopen ? null : button.dataset.assignReply;
+      const error = main.querySelector("#manage-error");
+      error.hidden = true;
+      changing = true;
+      managementVersion++;
+      renderPrivateReplies();
+      try {
+        const updated = await api(`/api/tasks/${id}/assignment`, { authKey: requestAuthKey, replyId });
+        task = { ...task, ...updated, taskAssigned: Boolean(updated.taskAssigned) };
+      } catch (e) {
+        error.textContent = e.message;
+        error.hidden = false;
+      } finally {
+        changing = false;
+        if (main.querySelector("#task-state")) renderState(task.taskState);
+        renderPrivateReplies();
+        social?.refresh();
+      }
+    };
     main.querySelector("#refresh-private-replies").onclick =
       refreshPrivateReplies;
+    mountOwnerEdit(main.querySelector(".manage-card"), task, `/api/tasks/${id}/edit`,
+      requestAuthKey, (updated) => {
+        task = { ...task, ...updated };
+        refreshOwnerPreview(main, task);
+        shareCard.querySelector(".poster-actions")?.remove();
+        document.querySelector("#poster-print-root")?.remove();
+        renderPoster();
+      });
     if (!legacyKey) bindManagementCopy(manageUrl, password);
     else main.querySelector("#copy-manage-link").onclick = async () => {
       try {
@@ -262,7 +332,6 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         toast(t("Copy the selected private link and keep it safe.", "请复制选中的私人链接并妥善保管。"));
       }
     };
-    let changing = false;
     main.querySelectorAll("[data-task-state]").forEach((button) => {
       button.onclick = async () => {
         if (changing) return;
@@ -275,13 +344,15 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         )
           return;
         changing = true;
+        managementVersion++;
         const error = main.querySelector("#manage-error");
         error.hidden = true;
         main
           .querySelectorAll("[data-task-state]")
           .forEach((b) => (b.disabled = true));
         try {
-          task = await api(`/api/tasks/${id}/state`, { authKey: requestAuthKey, state });
+          const updated = await api(`/api/tasks/${id}/state`, { authKey: requestAuthKey, state });
+          task = { ...task, ...updated, taskAssigned: Boolean(updated.taskAssigned) };
           toast(t(`Task marked ${stateLabel(task.taskState)}.`, `任务已标记为${stateLabel(task.taskState)}。`));
           social?.refresh();
         } catch (e) {
@@ -290,6 +361,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         } finally {
           changing = false;
           renderState(task.taskState);
+          renderPrivateReplies();
         }
       };
     });
@@ -303,12 +375,14 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         `<section class="empty-page"><h1>${t("This page is unavailable.", "此页面不可用。")}</h1><p>${t("This task and its replies have left the website. Private archives follow the backup retention policy.", "此任务及其回复已从网站移除。私人存档遵循备份保留政策。")}</p><a class="button" href="/PostList">${t("Back to PostList", "返回帖子列表")}</a></section>`;
     },
     (data) => {
-      if (data.taskState && data.taskState !== task.taskState) {
-        task = { ...task, taskState: data.taskState };
+      if (changing || data.serverTime < task.serverTime) return;
+      const assignmentChanged = Boolean(data.taskAssigned) !== Boolean(task.taskAssigned);
+      if (data.taskState && (data.taskState !== task.taskState || assignmentChanged)) {
+        task = { ...task, taskState: data.taskState, taskAssigned: Boolean(data.taskAssigned) };
         renderState(task.taskState);
       }
       // A new public reply means new private contacts may be available.
-      if (manage && data.replies?.length !== privateReplies.length)
+      if (manage && (assignmentChanged || data.replies?.length !== privateReplies.length))
         refreshPrivateReplies();
     },
   );

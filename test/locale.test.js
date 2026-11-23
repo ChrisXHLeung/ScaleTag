@@ -293,6 +293,18 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
     'Voting must last between 1 and 168 whole hours.',
     'Choose when to publish poll results.',
     'This secret cannot be revoked or the code is incorrect.',
+    'Choose a valid task reply.',
+    'Reopen applications from task management.',
+    'This task can no longer change its assignment.',
+    'Reopen applications before selecting another reply.',
+    'Task reply not found.',
+    'This task already has someone assigned.',
+    'Choose a valid post visibility.',
+    'Search must be at most 120 characters.',
+    'This poll has been taken down.',
+    'Choose a valid poll status.',
+    'Choose something to update.',
+    'The poll question and options can change only before the first vote and before voting closes.',
   ]) {
     for (const lang of localizedLanguages) {
       const value = translateError(key, lang);
