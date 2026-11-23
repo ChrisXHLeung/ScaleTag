@@ -123,6 +123,11 @@ function baseInput(body) {
 
 export function pollInput(body) {
   const common = baseInput(body);
+  // A client from the newer release may still be open after a rollback.
+  // Never accept its private-poll settings and silently publish live results.
+  if ((body.votingHours !== undefined && body.votingHours !== 168) ||
+      (body.resultsVisibility !== undefined && body.resultsVisibility !== "live"))
+    throw new AppError(503, "Poll settings are temporarily unavailable. Try again shortly.");
   if (
     !Array.isArray(body.options) ||
     body.options.length < 2 ||

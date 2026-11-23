@@ -39,7 +39,7 @@ const REPORT_FREEZE_THRESHOLD = 6;
 const FROZEN_POST = "This post has been permanently frozen after reports.";
 const isDiscoverable = (p, now) =>
   p.frozenAt == null && p.deleteAt > now &&
-  (p.type !== "sale" || (p.giveawayVersion === 1 && p.saleState !== "closed" && p.endsAt > now));
+  (p.type !== "sale" || (p.giveawayVersion === 1 && !["closed", "claimed"].includes(p.saleState) && p.endsAt > now));
 
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
@@ -68,9 +68,13 @@ const privateReply = (r) => ({
 });
 // Completed/closed tasks count as ended in status filters; retention is unchanged.
 export function postStatus(p, now) {
-  if (p.saleState === "closed" || FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
+  if (["closed", "claimed"].includes(p.saleState) || FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
   return now < p.endsAt ? "open" : "closed";
 }
+function pollResultsHidden(p, now) {
+  return p.resultsVisibility === "after_close" && now < p.endsAt;
+}
+
 const INVALID_MANAGE_LINK = "This management link is invalid for this task.";
 
 export class PollStore {
@@ -133,6 +137,7 @@ export class PollStore {
       createdAt: p.createdAt,
       endsAt: p.endsAt,
       deleteAt: p.deleteAt,
+      resultsVisibility: p.resultsVisibility,
       totalVotes: p.totalVotes,
       options: (p.options ?? []).map((o) => ({ ...o })),
       location: p.location,
@@ -294,12 +299,20 @@ export class PollStore {
       authKey,
       encryptedPrivateKey,
       taskState,
+      pickupLocation,
+      totalVotes,
+      options,
       ...result
     } = p;
     const now = this.clock();
+    const resultsHidden = pollResultsHidden(p, now);
     return {
       ...result,
       type: p.type ?? "poll",
+      ...(p.resultsVisibility === "after_close" ? { resultsHidden } : {}),
+      ...(resultsHidden ? {} : { totalVotes }),
+      options: resultsHidden ? options.map(({ id, label }) => ({ id, label })) : options,
+      ...(pickupLocation !== undefined && p.saleState !== "claimed" ? { pickupLocation } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
@@ -403,7 +416,7 @@ export class PollStore {
         saleState: p.saleState,
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
-        totalVotes: p.totalVotes,
+        ...(pollResultsHidden(p, now) ? { resultsHidden: true } : { totalVotes: p.totalVotes }),
         createdAt: p.createdAt,
         endsAt: p.endsAt,
         deleteAt: p.deleteAt,
@@ -591,6 +604,8 @@ export class PollStore {
 
   async closeSale(id, key) {
     return this.withManagedPost(id, key, "sale", async (db) => {
+      if (db.data.saleState === "claimed")
+        throw new AppError(409, "This giveaway has already been claimed.");
       db.data.saleState = "closed";
       await this.write(db);
       return this.public(db.data);
