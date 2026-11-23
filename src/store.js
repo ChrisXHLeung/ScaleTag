@@ -38,7 +38,7 @@ const reportHash = (token) => voterHash(`report:${token}`);
 const REPORT_FREEZE_THRESHOLD = 6;
 const FROZEN_POST = "This post has been permanently frozen after reports.";
 const isDiscoverable = (p, now) =>
-  p.frozenAt == null && p.deleteAt > now &&
+  p.frozenAt == null && p.withdrawnAt == null && p.visibility !== "unlisted" && p.deleteAt > now &&
   (p.type !== "sale" || (p.giveawayVersion === 1 && (p.saleState ?? "open") === "open" && p.endsAt > now));
 
 const onMapGrid = ({ latitude, longitude }) => ({
@@ -156,6 +156,8 @@ export class PollStore {
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
       frozenAt: p.frozenAt,
+      withdrawnAt: p.withdrawnAt,
+      visibility: p.visibility,
       ...(p.contactPublicKey ? { contactPublicKey: p.contactPublicKey } : {}),
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
@@ -219,7 +221,7 @@ export class PollStore {
 
   async live(id) {
     const db = await this.read(id);
-    if (!db.data)
+    if (!db.data || db.data.withdrawnAt != null)
       throw new AppError(
         404,
         "This poll does not exist or has been removed from the website.",
@@ -323,6 +325,8 @@ export class PollStore {
       replyAuthors,
       reportHashes,
       frozenAt,
+      withdrawnAt,
+      assignedReplyId,
       manageKeyHash,
       manageKey,
       authKey,
@@ -533,6 +537,8 @@ export class PollStore {
           409,
           `This task is ${taskStateOf(p)} and no longer accepts replies.`,
         );
+      if (p.type === "task" && p.assignedReplyId)
+        throw new AppError(409, "This task already has someone assigned.");
       if (!hasManageKey(p))
         throw new AppError(409, LEGACY_TASK_NO_REPLIES);
       if (p.type === "task" && (!p.contactPublicKey || !p.encryptedPrivateKey))
@@ -614,6 +620,8 @@ export class PollStore {
         throw new AppError(400, "Choose a valid task status.");
       const current = taskStateOf(p);
       if (current === state) return this.public(p);
+      if (p.assignedReplyId && state === "open")
+        throw new AppError(409, "Reopen applications from task management.");
       if (FINAL_TASK_STATES.includes(current))
         throw new AppError(
           409,

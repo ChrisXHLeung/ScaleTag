@@ -78,6 +78,8 @@ export function coordinates(value) {
 function baseInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the poll form.");
+  if (body.visibility !== undefined && body.visibility !== "public")
+    throw new AppError(503, "Link-only publishing is temporarily unavailable. Try again shortly.");
   const title = publicText(body.title, "Title", 140);
   const description = publicText(body.description ?? "", "Description", 4000, false);
   const signature = publicText(body.signature, "Signature", 60);

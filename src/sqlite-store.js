@@ -89,6 +89,8 @@ export class SQLiteStore extends PollStore {
   count() {
     return this.db.prepare(`SELECT count(*) AS count FROM posts
       WHERE delete_at>? AND json_extract(document,'$.frozenAt') IS NULL
+      AND json_extract(document,'$.withdrawnAt') IS NULL
+      AND coalesce(json_extract(document,'$.visibility'),'public') <> 'unlisted'
       AND (coalesce(json_extract(document,'$.type'),'poll') <> 'sale'
         OR (json_extract(document,'$.giveawayVersion') = 1
           AND coalesce(json_extract(document,'$.saleState'),'open') = 'open' AND ends_at>?))`)

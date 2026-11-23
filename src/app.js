@@ -107,7 +107,8 @@ export function createApp(
   const visitTypes = new Map([["poll", "poll"], ["task", "task"], ["giveaway", "sale"]]);
   async function visiblePost(type, id) {
     const post = await store.get(id);
-    if ((post.type ?? "poll") !== type) throw new AppError(404, "Post not found.");
+    if ((post.type ?? "poll") !== type || post.visibility === "unlisted")
+      throw new AppError(404, "Post not found.");
     return post;
   }
 
@@ -519,21 +520,24 @@ export function createApp(
   app.get("/vote/:id", async (req, res) => {
     const poll = await store.get(req.params.id);
     if (["task", "sale"].includes(poll.type)) throw new AppError(404, "Poll not found.");
-    sendPublicPage(req, res, "index.html", req.params.id);
+    if (poll.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
+    sendPublicPage(req, res, "index.html", poll.visibility === "unlisted" ? undefined : req.params.id);
   });
   app.get(["/task/:id", "/task/:id/manage"], async (req, res) => {
     const task = await store.get(req.params.id);
     if (task.type !== "task") throw new AppError(404, "Task not found.");
+    if (task.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
     if (/\/manage\/?$/i.test(req.path))
       res.sendFile(join(publicDir, "index.html"));
-    else sendPublicPage(req, res, "index.html", req.params.id);
+    else sendPublicPage(req, res, "index.html", task.visibility === "unlisted" ? undefined : req.params.id);
   });
   app.get(["/sale/:id", "/sale/:id/manage"], async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
+    if (sale.visibility === "unlisted") res.set("X-Robots-Tag", "noindex, nofollow");
     if (/\/manage\/?$/i.test(req.path))
       res.sendFile(join(publicDir, "index.html"));
-    else sendPublicPage(req, res, "index.html", req.params.id);
+    else sendPublicPage(req, res, "index.html", sale.visibility === "unlisted" ? undefined : req.params.id);
   });
   app.use((req, res, next) => next(new AppError(404, "Page not found.")));
   app.use((err, req, res, next) => {
