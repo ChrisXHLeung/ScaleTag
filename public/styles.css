@@ -1,5 +1,28 @@
 @import url("/base.css");
 
+.local-post-controls,
+.saved-posts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.saved-posts {
+  padding: 0;
+  list-style: none;
+}
+
+.saved-posts li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.saved-posts li a {
+  overflow-wrap: anywhere;
+}
+
 /* The map is optional; the list stays available without WebGL or map hosting. */
 .view-switch {
   display: inline-flex;
@@ -207,6 +230,19 @@
   background: white;
   color: var(--ink);
   font: inherit;
+}
+.nearby-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-block: 14px;
+}
+.nearby-controls .content-filter {
+  margin: 0;
+}
+.nearby-controls [hidden] {
+  display: none;
 }
 .task-reward,
 .social-card {

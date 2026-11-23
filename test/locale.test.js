@@ -153,6 +153,7 @@ test('translate handles static and dynamic strings across supported languages', 
   assert.equal(translate('it', 'Create a poll', '创建投票'), 'Crea un sondaggio');
 
   const dynamicSamples = [
+    ['Within 10 km', '10 公里内', { ja: '10 km以内', ko: '10 km 이내', fr: 'Dans un rayon de 10 km' }],
     ['Option 3', '选项 3', { ja: '選択肢 3', ko: '선택지 3', fr: 'Option 3' }],
     ['Remove option 2', '删除选项 2', { ja: '選択肢 2 を削除', ko: '선택지 2 삭제', fr: 'Supprimer l’option 2' }],
     ['Show 1 external image', '显示 1 张外部图片', { ja: '1 件の外部画像を表示', ko: '외부 이미지 1장 표시', fr: 'Afficher 1 image externe' }],
@@ -281,6 +282,22 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
       assert.ok(value.trim().length > 0, `Empty ${lang} error translation for ${JSON.stringify(key)}`);
       assert.notEqual(value, key, `${lang} error translation matches English for ${JSON.stringify(key)}`);
       assert.equal(translateError(key, lang), value);
+    }
+  }
+
+  for (const key of [
+    'Choose a valid nearby search radius.',
+    'Choose a valid post sort order.',
+    'Choose a valid giveaway status.',
+    'This giveaway has already been claimed.',
+    'Voting must last between 1 and 168 whole hours.',
+    'Choose when to publish poll results.',
+    'This secret cannot be revoked or the code is incorrect.',
+  ]) {
+    for (const lang of localizedLanguages) {
+      const value = translateError(key, lang);
+      assert.equal(value, SERVER_ERRORS[key][lang]);
+      assert.notEqual(value, key);
     }
   }
 

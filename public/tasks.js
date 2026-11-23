@@ -18,6 +18,7 @@ import {
 } from "/common.js";
 import { mountSocial } from "/social.js";
 import { mountPosterActions } from "/poster.js";
+import { bindTextDraft, mountSavedPost } from "/local-posts.js";
 import {
   createTaskCredentials,
   deriveTaskAuthKey,
@@ -33,6 +34,9 @@ export function createTask() {
     locatedAt = 0,
     publishing = false;
   const photos = bindPhotoInput(main, "task");
+  const draft = bindTextDraft(main.querySelector("#task-form"), "task", [
+    "#task-title", "#task-description", "#task-reward", "#task-name",
+  ]);
   const locateButton = main.querySelector("#task-locate");
   async function getLocation() {
     position = await locate();
@@ -66,6 +70,7 @@ export function createTask() {
       const value = (id) => main.querySelector(id).value.trim();
       const { password, authKey, contactPublicKey, encryptedPrivateKey } =
         await createTaskCredentials();
+      const submittedDraft = draft.snapshot();
       const task = await api("/api/tasks", {
         title: value("#task-title"),
         description: value("#task-description"),
@@ -79,6 +84,7 @@ export function createTask() {
         contactPublicKey,
         encryptedPrivateKey,
       });
+      draft.published(submittedDraft);
       history.replaceState(null, "", localizedPath(`/task/${task.id}/manage?created=1`));
       await taskPage(task.id, {
         manage: true,
@@ -177,7 +183,12 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     });
   }
   renderState(task.taskState);
-  mountPosterActions(main.querySelector(".share-card"), {
+  const shareCard = main.querySelector(".share-card");
+  mountSavedPost(shareCard, {
+    path: `/task/${id}${manage && !legacyKey ? "/manage" : ""}`,
+    title: task.title,
+  });
+  mountPosterActions(shareCard, {
     type: "task",
     id,
     title: task.title,

@@ -224,6 +224,14 @@ export function createApp(
       throw new AppError(400, "Invalid content type.");
     return data.type;
   }
+  function nearbyOptions(data, location) {
+    const { radiusKm, sort } = data;
+    if (radiusKm !== undefined && (!location || ![2, 10, 50, 100].includes(radiusKm)))
+      throw new AppError(400, "Choose a valid nearby search radius.");
+    if (sort !== undefined && sort !== "newest" && (sort !== "nearest" || !location))
+      throw new AppError(400, "Choose a valid post sort order.");
+    return { location, radiusKm, sort };
+  }
   function list(req, res) {
     const data = req.method === "POST" ? (req.body ?? {}) : req.query;
     if (data.status && !["all", "open", "closed"].includes(data.status))
@@ -239,7 +247,7 @@ export function createApp(
         : undefined;
     res.json(
       store.list({
-        location,
+        ...nearbyOptions(data, location),
         status: data.status,
         cursor: data.cursor,
         type: contentType(data),
@@ -256,9 +264,9 @@ export function createApp(
       throw new AppError(400, "Invalid filter.");
     res.json(
       store.map({
+        ...nearbyOptions(data, data.location ? coordinates(data.location) : undefined),
         status: data.status,
         type: contentType(data),
-        location: data.location ? coordinates(data.location) : undefined,
       }),
     );
   });
@@ -342,8 +350,7 @@ export function createApp(
   });
   app.post("/api/sales/:id/state", async (req, res) => {
     const key = manageKeyInput(req.body);
-    if (req.body.state !== "closed") throw new AppError(400, "A sale listing can only be closed. No sale or reservation is recorded.");
-    res.json(await store.closeSale(req.params.id, key));
+    res.json(await store.setSaleState(req.params.id, key, req.body.state));
   });
   app.get("/api/sales/:id/qr.png", async (req, res) => {
     const sale = await store.get(req.params.id);
@@ -498,6 +505,7 @@ export function createApp(
   app.get("/VoteList", (req, res) =>
     res.redirect(308, "/PostList" + req.originalUrl.slice(req.path.length)),
   );
+  app.get("/saved", (_req, res) => res.sendFile(join(publicDir, "index.html")));
   app.get(
     ["/", "/create", "/create/task", "/create/sale", "/PostList", "/privacy", "/install"],
     (req, res) => sendPublicPage(req, res, "index.html"),

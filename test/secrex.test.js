@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -30,17 +30,25 @@ async function fixture(t) {
   });
   const origin = `http://127.0.0.1:${server.address().port}`;
   app = createApp(store, { origin, secrex });
-  function post(path, body) {
+  function post(path, body, headers = {}) {
     return fetch(origin + "/api/secrex" + path, {
       method: "POST",
-      headers: { Origin: origin, "Content-Type": "application/json" },
+      headers: { Origin: origin, "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
   }
-  async function create() {
+  async function create(revoke) {
     const envelope = { id: token(16), claim: token(32), body: token(100),
       bodyNonce: token(12), wrapped: token(48), wrapNonce: token(12) };
-    assert.equal((await post("/", envelope)).status, 201);
+    const verifier = revoke && createHash("sha256")
+      .update(`scaletag:secrex:revoke:v1:${envelope.id}:${revoke}`)
+      .digest("base64url");
+    const response = await post("/", envelope, verifier ? { "X-Secrex-Revoke-Verifier": verifier } : {});
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), {
+      id: envelope.id,
+      ...(verifier ? { revocable: true } : {}),
+    });
     return envelope;
   }
   return { origin, post, create, advance: ms => { now += ms; }, secrex };
@@ -75,6 +83,52 @@ test("Secrex preview and wrong credential preserve the secret; one session wins 
   const history = f.secrex.db.prepare("SELECT state, created_at, finished_at FROM secrex_history WHERE id=?").get(id);
   assert.equal(history.state, "destroyed");
   assert.ok(history.finished_at >= history.created_at);
+});
+
+test("only the independent sender code revokes an unopened Secrex", async (t) => {
+  const f = await fixture(t);
+  const revoke = token(32);
+  const { id, claim } = await f.create(revoke);
+  const route = `/${id}`;
+  const wrongCredential = await f.post(route + "/revoke", { revoke: claim });
+  assert.equal(wrongCredential.status, 404);
+  assert.deepEqual(await wrongCredential.json(), { error: "This secret cannot be revoked or the code is incorrect." });
+  assert.equal((await f.post(route + "/revoke", { revoke })).status, 204);
+  assert.equal((await f.post(route + "/revoke", { revoke })).status, 404);
+  assert.equal((await f.post(route + "/claim", { claim, session: token(32) })).status, 404);
+  assert.equal(f.secrex.db.prepare("SELECT 1 FROM secrex_payload WHERE id=?").get(id), undefined);
+  assert.equal(f.secrex.db.prepare("SELECT 1 FROM secrex_revocation WHERE id=?").get(id), undefined);
+  assert.equal(f.secrex.db.prepare("SELECT state FROM secrex_history WHERE id=?").get(id).state, "revoked");
+  assert.equal(f.secrex.createdCount(0, Number.MAX_SAFE_INTEGER), 1);
+});
+
+test("Secrex claim and revoke compete across database connections, and legacy shares still open", async (t) => {
+  const f = await fixture(t);
+  const other = new SecrexStore(f.secrex.directory, { clock: f.secrex.clock });
+  await other.init();
+  t.after(() => other.close());
+  const revoke = token(32);
+  const sample = await f.create(revoke);
+  const attempts = await Promise.allSettled([
+    f.secrex.claim(sample.id, sample.claim, token(32)),
+    Promise.resolve().then(() => other.revoke(sample.id, revoke)),
+  ]);
+  assert.equal(attempts.filter(result => result.status === "fulfilled").length, 1);
+
+  const reading = await f.create(revoke);
+  await f.secrex.claim(reading.id, reading.claim, token(32));
+  assert.equal((await f.post(`/${reading.id}/revoke`, { revoke })).status, 404);
+  assert.equal(other.db.prepare("SELECT 1 FROM secrex_revocation WHERE id=?").get(reading.id), undefined);
+
+  const legacy = await f.create();
+  assert.equal((await f.post(`/${legacy.id}/revoke`, { revoke })).status, 404);
+  assert.equal((await f.post(`/${legacy.id}/claim`, { claim: legacy.claim, session: token(32) })).status, 200);
+
+  const expiring = await f.create(revoke);
+  f.advance(7 * 24 * 60 * 60 * 1000);
+  other.sweep();
+  assert.equal((await f.post(`/${expiring.id}/revoke`, { revoke })).status, 404);
+  assert.equal(other.db.prepare("SELECT 1 FROM secrex_revocation WHERE id=?").get(expiring.id), undefined);
 });
 
 test("Secrex rejects late claims, including sessions with a valid token", async (t) => {

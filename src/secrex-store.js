@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -45,6 +45,10 @@ export class SecrexStore {
           pending_until INTEGER NOT NULL, session_hash TEXT,
           session_until INTEGER
         );
+        CREATE TABLE IF NOT EXISTS secrex_revocation (
+          id TEXT PRIMARY KEY REFERENCES secrex_payload(id) ON DELETE CASCADE,
+          verifier TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS secrex_creation ON secrex_history(created_at);
         CREATE INDEX IF NOT EXISTS secrex_pending ON secrex_payload(pending_until);
         CREATE INDEX IF NOT EXISTS secrex_sessions ON secrex_payload(session_until);
@@ -72,7 +76,7 @@ export class SecrexStore {
     }
   }
 
-  async create({ id, claim, ...envelope }) {
+  async create({ id, claim, ...envelope }, revokeVerifier) {
     const verifier = await this.argon(() => hash(claim, { ...ARGON, salt: randomBytes(16) }));
     this.db.transaction(() => {
       if (this.db.prepare("SELECT 1 FROM secrex_history WHERE id=?").get(id))
@@ -83,6 +87,8 @@ export class SecrexStore {
       this.db.prepare("INSERT INTO secrex_history VALUES (?, ?, 'pending', NULL)").run(id, now);
       this.db.prepare("INSERT INTO secrex_payload VALUES (?, ?, ?, ?, NULL, NULL)")
         .run(id, JSON.stringify(envelope), verifier, now + this.pendingMs);
+      if (revokeVerifier)
+        this.db.prepare("INSERT INTO secrex_revocation VALUES (?, ?)").run(id, revokeVerifier);
     }).immediate();
   }
 
@@ -124,12 +130,29 @@ export class SecrexStore {
       if (!row.session_hash) {
         this.db.prepare("UPDATE secrex_payload SET session_hash=?, session_until=? WHERE id=?")
           .run(digest, expiresAt, id);
+        this.db.prepare("DELETE FROM secrex_revocation WHERE id=?").run(id);
         this.db.prepare("UPDATE secrex_history SET state='reading' WHERE id=?").run(id);
       }
       return { ...JSON.parse(row.envelope), expiresAt, remainingMs: expiresAt - now };
     }).immediate();
     if (!result) throw unavailable();
     return result;
+  }
+
+  revoke(id, code) {
+    const digest = createHash("sha256").update(`scaletag:secrex:revoke:v1:${id}:${code}`).digest();
+    const revoked = this.db.transaction(() => {
+      const now = this.clock();
+      const row = this.live(id, now);
+      if (!row || row.session_hash) return false;
+      const record = this.db.prepare("SELECT verifier FROM secrex_revocation WHERE id=?").get(id);
+      if (!record) return false;
+      const expected = Buffer.from(record.verifier, "base64url");
+      if (expected.length !== digest.length || !timingSafeEqual(expected, digest)) return false;
+      this.finish(id, now, "revoked");
+      return true;
+    }).immediate();
+    if (!revoked) throw new AppError(404, "This secret cannot be revoked or the code is incorrect.");
   }
 
   end(id, session) {

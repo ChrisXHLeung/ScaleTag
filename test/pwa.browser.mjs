@@ -251,6 +251,53 @@ test(
   },
 );
 
+test("the browser restores public draft text and keeps saved post links locally", { timeout: 40000 }, async (t) => {
+  const { page, origin } = await fixture(t);
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("Neighborhood draft");
+  await page.getByLabel("Option 1", { exact: true }).fill("Morning");
+  await page.getByLabel("Option 2", { exact: true }).fill("Evening");
+  await page.getByLabel("Your signature").fill("Test");
+  await page.getByLabel("Voting duration").selectOption("6");
+  await page.getByLabel("Show results").selectOption("after_close");
+  await page.locator("#map-consent").check();
+  await page.reload();
+  assert.equal(await page.getByLabel("The question").inputValue(), "Neighborhood draft");
+  assert.equal(await page.getByLabel("Option 2", { exact: true }).inputValue(), "Evening");
+  assert.equal(await page.getByLabel("Voting duration").inputValue(), "6");
+  assert.equal(await page.getByLabel("Show results").inputValue(), "after_close");
+  assert.equal(await page.locator("#map-consent").isChecked(), false);
+  await page.locator("#map-consent").check();
+  await page.locator("#retention").check();
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  await page.waitForURL(/\/vote\/[a-f0-9]{24}/);
+  await page.locator("#results-updated").getByText("Results will appear when voting closes.").waitFor();
+  assert.equal(await page.locator("#results progress").count(), 0);
+  const path = new URL(page.url()).pathname;
+  await page.getByRole("button", { name: "Save post" }).click();
+  await page.goto(`${origin}/saved`);
+  assert.equal(await page.getByRole("link", { name: "Neighborhood draft" }).getAttribute("href"), path);
+  await page.getByRole("button", { name: "Remove" }).click();
+  assert.equal(await page.getByRole("link", { name: "Neighborhood draft" }).count(), 0);
+  await page.goto(`${origin}/create`);
+  assert.equal(await page.getByLabel("The question").inputValue(), "");
+
+  await page.getByLabel("The question").fill("Draft being published");
+  await page.getByLabel("Option 1", { exact: true }).fill("Morning");
+  await page.getByLabel("Option 2", { exact: true }).fill("Evening");
+  await page.getByLabel("Your signature").fill("Test");
+  await page.locator("#map-consent").check();
+  await page.locator("#retention").check();
+  await page.route(`${origin}/api/polls`, async (route) => {
+    await page.getByLabel("The question").fill("Newer edit before the response");
+    await route.continue();
+  }, { times: 1 });
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  await page.getByRole("heading", { name: "Draft being published" }).waitFor();
+  await page.goto(`${origin}/create`);
+  assert.equal(await page.getByLabel("The question").inputValue(), "Newer edit before the response");
+});
+
 test("manual retry restores the original page once the public route responds", { timeout: 40000 }, async (t) => {
   const { context, errors, origin, page, setUnavailablePath } = await fixture(t);
   const path = "/vote/000000000000000000000000";
@@ -367,7 +414,7 @@ test(
       await page.getByLabel("The question").inputValue(),
       "Keep this unsent draft",
     );
-    // Navigating back to a draft is not needed: a fresh visit can show the waiting update.
+    // A fresh visit can still show the waiting update and restore the local text.
     await page.reload();
     await page.locator("#app-update").waitFor({ state: "visible" });
     await page.getByLabel("The question").fill("Explicitly reload this draft");
@@ -380,7 +427,7 @@ test(
         !document.querySelector("#app-update")?.offsetHeight
       );
     }, originalCache);
-    assert.equal(await page.getByLabel("The question").inputValue(), "");
+    assert.equal(await page.getByLabel("The question").inputValue(), "Explicitly reload this draft");
     assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
     assert.deepEqual(f.errors, []);
   },

@@ -3,6 +3,7 @@ import {
   decryptSecret,
   deriveClaim,
   encryptSecret,
+  generateRevokeCredentials,
   generateSessionToken,
   isValidId,
   isValidPassword,
@@ -10,10 +11,10 @@ import {
 
 const main = document.querySelector("main");
 
-async function post(path, payload) {
+async function post(path, payload, headers = {}) {
   const result = await fetch("/api/secrex" + path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(payload),
     cache: "no-store",
     credentials: "omit",
@@ -147,8 +148,27 @@ function createView() {
           "The link expires after 7 days if nobody opens it. Once opened, it locks to that single reading session and is destroyed right after.",
           "如果 7 天内无人打开，链接将自动过期失效。一旦有人打开，其他会话将被拒绝，阅读结束即销毁。",
         )}</p>
+        <div id="secrex-revoke-details" class="secrex-fields" hidden>
+          <label for="secrex-generated-revoke-code">${t("Private revoke code", "私人撤回码")}</label>
+          <input id="secrex-generated-revoke-code" type="text" readonly autocomplete="off"
+            spellcheck="false" autocapitalize="off" aria-describedby="secrex-revoke-hint">
+          <p id="secrex-revoke-hint" class="secrex-note">${t(
+            "Save this code privately. It can revoke the secret before anyone opens it.",
+            "请私下保存此码。它可以在任何人打开密信前撤回密信。",
+          )}</p>
+        </div>
         <a class="secrex-new text-link" href="/secrex">${t("Create another secret", "再创建一条密信")}</a>
       </div>
+      <details class="secrex-new">
+        <summary>${t("Revoke a previously created secret", "撤回已创建的密信")}</summary>
+        <form id="secrex-revoke-form" class="secrex-fields" method="post" autocomplete="off">
+          <label for="secrex-revoke-code">${t("Enter your private revoke code", "输入你的私人撤回码")}</label>
+          <input id="secrex-revoke-code" type="password" maxlength="66" required
+            spellcheck="false" autocapitalize="off" autocomplete="off">
+          <button class="button secondary" type="submit">${t("Revoke unopened secret", "撤回未打开的密信")}</button>
+          <p class="secrex-note" role="status"></p>
+        </form>
+      </details>
       <p class="secrex-status" role="status" aria-live="polite"></p>
     </div>
   </section>`;
@@ -160,10 +180,31 @@ function createView() {
   const share = document.querySelector("#secrex-share");
   const link = document.querySelector("#secrex-link");
   const password = document.querySelector("#secrex-generated-password");
+  const revokeDetails = document.querySelector("#secrex-revoke-details");
+  const revokeCode = document.querySelector("#secrex-generated-revoke-code");
+  const revokeForm = document.querySelector("#secrex-revoke-form");
   const qr = document.querySelector("#secrex-qr");
+  let activeShareId;
   let leaving = false;
   copy(document.querySelector("#secrex-copy-link"), link, status);
   copy(document.querySelector("#secrex-copy-password"), password, status);
+  function clearShare() {
+    activeShareId = undefined;
+    password.value = "";
+    link.value = "";
+    revokeCode.value = "";
+    revokeDetails.hidden = true;
+    qr.removeAttribute("src");
+  }
+
+  const clearRevokeForm = bindRevokeForm(revokeForm, (id) => {
+    if (id !== activeShareId) return;
+    clearShare();
+    status.textContent = "";
+    share.hidden = true;
+    compose.hidden = false;
+  });
+
   button.addEventListener("click", async () => {
     if (!text.value.trim()) {
       status.textContent = t(
@@ -185,18 +226,25 @@ function createView() {
     status.textContent = t("Encrypting…", "正在本地加密…");
     try {
       const sealed = await encryptSecret(text.value);
-      await post("/", sealed.payload);
+      const revocation = await generateRevokeCredentials(sealed.id);
+      const created = await post("/", sealed.payload, {
+        "X-Secrex-Revoke-Verifier": revocation.verifier,
+      });
       if (leaving) return;
+      activeShareId = sealed.id;
       text.value = "";
       link.value = new URL(`/secrex/${sealed.id}`, location.origin).href;
       password.value = sealed.password;
+      if (created.revocable === true) {
+        revokeCode.value = revocation.code;
+        revokeDetails.hidden = false;
+      }
       qr.src = `/api/secrex/${sealed.id}/qr.png`;
       compose.hidden = true;
       share.hidden = false;
-      status.textContent = t(
-        "Your secret is ready to share.",
-        "加密信息已生成，可以分享。",
-      );
+      status.textContent = created.revocable === true
+        ? t("Your secret is ready to share.", "加密信息已生成，可以分享。")
+        : t("Your secret is ready to share. Sender revocation is unavailable.", "加密信息已生成，可以分享。当前无法由发送者撤回。");
       link.focus();
     } catch (error) {
       if (!leaving)
@@ -220,15 +268,53 @@ function createView() {
     () => {
       leaving = true;
       text.value = "";
-      password.value = "";
-      link.value = "";
-      qr.removeAttribute("src");
+      clearShare();
+      clearRevokeForm();
     },
     { once: true },
   );
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) location.reload();
   });
+}
+
+function bindRevokeForm(form, onRevoke) {
+  const input = form.querySelector("input");
+  const button = form.querySelector("button");
+  const status = form.querySelector("[role=status]");
+  let leaving = false;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const parts = input.value.trim().split(".");
+    const [id, revoke] = parts;
+    if (parts.length !== 2 || !isValidId(id) || !isValidPassword(revoke)) {
+      status.textContent = t("Enter the complete private revoke code.", "请输入完整的私人撤回码。");
+      return;
+    }
+    input.readOnly = true;
+    button.disabled = true;
+    status.textContent = "";
+    try {
+      await post(`/${id}/revoke`, { revoke });
+      if (!leaving) {
+        input.value = "";
+        status.textContent = t("Secret revoked.", "密信已撤回。");
+        onRevoke(id);
+      }
+    } catch (error) {
+      if (!leaving)
+        status.textContent = error.message === "UNAVAILABLE"
+          ? t("This secret cannot be revoked or the code is incorrect.", "这条密信已无法撤回，或撤回码不正确。")
+          : t("Could not confirm revocation. Try again.", "未能确认撤回，请重试。");
+    } finally {
+      input.readOnly = false;
+      button.disabled = false;
+    }
+  });
+  return () => {
+    leaving = true;
+    input.value = "";
+  };
 }
 
 function readView(id) {

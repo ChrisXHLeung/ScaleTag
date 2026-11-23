@@ -262,7 +262,7 @@ export function translateError(message, targetLanguage = language) {
   if (targetLanguage === 'zh' && Object.hasOwn(serverErrors, message)) {
     return serverErrors[message];
   }
-  if (targetLanguage !== 'zh' && Object.hasOwn(SERVER_ERRORS, message)) {
+  if (Object.hasOwn(SERVER_ERRORS, message)) {
     return SERVER_ERRORS[message][targetLanguage] ?? message;
   }
   const format = ERROR_FORMATS[targetLanguage];

@@ -132,3 +132,47 @@ test('Chinese giveaway form',async t=>{
   await f.page.getByLabel('领取地点（公开）').waitFor();
   assert.deepEqual(f.errors,[]);
 });
+
+test("claim a giveaway and keep its shared address without the pickup location", async t => {
+  const f = await fixture(t);
+  const pickup = "Behind the west library entrance";
+  const sale = await f.store.create({
+    type: "sale",
+    title: "Free garden chair",
+    description: "Good condition",
+    signature: "Neighbour",
+    options: [],
+    images: [],
+    location: f.input.location,
+    pickupLocation: pickup,
+    mapVisible: true,
+    giveawayVersion: 1,
+  });
+  const publicUrl = `${f.origin}/sale/${sale.id}`;
+  await f.page.goto(`${publicUrl}/manage`);
+  await f.page.getByLabel("Management password").fill(sale.manageKey);
+  await f.page.getByRole("button", { name: "Unlock" }).click();
+  await f.page.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+  await f.page.getByText(pickup, { exact: true }).waitFor();
+
+  const visitor = await f.context.newPage();
+  await visitor.goto(publicUrl);
+  await visitor.getByText(pickup, { exact: true }).waitFor();
+  f.page.once("dialog", dialog => dialog.accept());
+  await f.page.getByRole("button", { name: "Mark as claimed" }).click();
+  await f.page.getByText("Claimed", { exact: true }).waitFor();
+  assert.equal(await f.page.getByText(pickup, { exact: true }).count(), 0);
+  assert.equal(await f.page.getByRole("button", { name: "Print A4 poster" }).count(), 0);
+  await f.page.getByRole("button", { name: "Copy URL and password" }).waitFor();
+
+  assert.equal((await visitor.reload()).status(), 200);
+  await visitor.getByText("Claimed", { exact: true }).waitFor();
+  assert.equal(await visitor.getByText(pickup, { exact: true }).count(), 0);
+  const qr = visitor.getByAltText("Public giveaway QR code");
+  await qr.waitFor();
+  await visitor.waitForFunction(() => document.querySelector(".qr-frame img").naturalWidth > 0);
+
+  f.advance(3 * DAY);
+  assert.equal((await visitor.reload()).status(), 404);
+  assert.deepEqual(f.errors, []);
+});

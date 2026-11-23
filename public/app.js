@@ -22,6 +22,7 @@ import { mountSocial } from "/social.js";
 import { mountPosterActions } from "/poster.js";
 import { createTask, taskPage, stateLabel, isFinalState } from "/tasks.js";
 import { createSale, salePage, saleStateLabel } from "/sales.js";
+import { bindTextDraft, mountSavedPost, renderSavedPosts } from "/local-posts.js";
 function showError(error) {
   document.title = t("Post unavailable — ScaleTag", "帖子不可用 — ScaleTag");
   main.innerHTML = `<section class="empty-page"><span class="eyebrow">${t("NOT HERE ANYMORE", "此页面已不可用")}</span><h1>${t("This page is unavailable.", "此页面不可用。")}</h1><p>${escape(error.message)}</p><p>${t("This link no longer provides access. Private backup copies may remain for disaster recovery.", "此链接已无法访问。私有备份可能保留用于灾难恢复。")}</p><a class="button" href="/PostList">${t("Explore PostList", "浏览帖子列表")} ${icons.arrow}</a></section>`;
@@ -34,7 +35,7 @@ function home() {
     <div class="home-hero-copy"><p class="home-kicker">${t("Small questions. Local voices.", "身边大小事，听听大家怎么说。")}</p><h1 id="home-title">${t("Local questions.", "关心身边事，")}<br><span>${t("Real conversations.", "一起聊一聊。")}</span></h1><p class="home-lede">${t("Create a poll, post a local task, give away an item, or send a one-time encrypted secret. Share a code and connect with people nearby. No account needed.", "发起投票、发布任务、发布闲置赠予，或通过 Secrex 发送阅后即焚加密信息。分享二维码，就能和附近的人交流。无需注册。")}</p><div class="home-actions"><a class="button home-primary" href="/create">${t("Create a poll", "创建投票")} ${icons.arrow}</a><a class="button secondary home-secondary" href="/create/task">${t("Create a task", "创建任务")} ${icons.arrow}</a><a class="button secondary home-secondary" href="/create/sale">${t("Give away", "发布闲置赠予")} ${icons.arrow}</a><a class="button secondary home-secondary" href="/secrex">${t("Secrex", "Secrex 阅后即焚")} ${icons.arrow}</a></div><a class="home-explore" href="/PostList">${t("Explore PostList", "浏览帖子列表")} ${icons.arrow}</a></div>
     <div class="home-map"><img src="/neighborhood.png" alt="" fetchpriority="high"><span class="home-map-caption">${t("A question can start right here.", "好问题，从身边开始。")}</span></div>
   </section>
-  <section class="home-facts" aria-label="${t("How ScaleTag works", "ScaleTag 的使用方式")}"><div>${icons.pin}<span><strong>${t("Rooted in a place", "从身边开始")}</strong><small>${t("Posts start with a real location.", "发布时选择位置，让附近的人找到你。")}</small></span></div><div>${icons.clock}<span><strong>${t("Time to have your say", "说出你的想法")}</strong><small>${t("Polls stay open for seven days.", "投票开放七天。")}</small></span></div><div>${icons.shield}<span><strong>${t("No account needed", "无需账号")}</strong><small>${t("Join in without signing up.", "无需注册即可参与。")}</small></span></div></section>
+  <section class="home-facts" aria-label="${t("How ScaleTag works", "ScaleTag 的使用方式")}"><div>${icons.pin}<span><strong>${t("Rooted in a place", "从身边开始")}</strong><small>${t("Posts start with a real location.", "发布时选择位置，让附近的人找到你。")}</small></span></div><div>${icons.clock}<span><strong>${t("Time to have your say", "说出你的想法")}</strong><small>${t("Choose how long your poll stays open.", "自行选择投票开放时长。")}</small></span></div><div>${icons.shield}<span><strong>${t("No account needed", "无需账号")}</strong><small>${t("Join in without signing up.", "无需注册即可参与。")}</small></span></div></section>
   <section class="home-story" aria-labelledby="home-story-title"><div class="home-story-image" aria-hidden="true"></div><div class="home-story-copy"><p class="home-kicker">${t("On the map, in real life", "从线上走到身边")}</p><h2 id="home-story-title">${t("A neighborhood idea.", "邻里的一个想法，")}<br><span>${t("A real conversation.", "可以聊出更多可能。")}</span></h2><p>${t("From small questions to local tasks, ScaleTag gives ideas a place to start.", "无论是征求意见，还是寻找帮手，都可以从这里开始。")}</p><div class="home-story-links"><a href="/create"><strong>${t("Create a poll", "创建投票")}</strong><span>${t("Ask a question and hear what people think.", "提出问题，听听大家的想法。")}</span>${icons.arrow}</a><a href="/create/task"><strong>${t("Create a task", "创建任务")}</strong><span>${t("Post a task and an offer for help.", "说说需要什么帮助，以及你能提供什么酬谢。")}</span>${icons.arrow}</a><a href="/secrex"><strong>${t("Secrex", "Secrex 阅后即焚")}</strong><span>${t("Send a browser-encrypted secret that self-destructs after one reading.", "浏览器端加密传递私密信息，单次阅读后即刻销毁。")}</span>${icons.arrow}</a><a href="/PostList"><strong>${t("Explore PostList", "浏览帖子列表")}</strong><span>${t("Find polls, tasks and free giveaways in the list or map.", "在列表或地图中查找投票、任务和闲置赠予。")}</span>${icons.arrow}</a></div></div></section>
   <section class="home-install" aria-labelledby="home-install-title"><div class="home-install-copy"><p class="home-kicker">${t("Take ScaleTag with you", "把 ScaleTag 带在身边")}</p><h2 id="home-install-title">${t("Install the app.", "添加到手机，")}<br>${t("Explore locally.", "随时看看身边的新鲜事。")}</h2><p>${t("Scan with your phone for installation steps made for your device.", "用手机扫码，查看适合你设备的安装方法。")}</p><a class="home-install-link" href="/install">${t("Open the installation guide", "打开安装指南")} ${icons.arrow}</a></div><a href="/install" class="home-install-qr"><img src="/install/qr.png" alt="${t("QR code for the ScaleTag installation guide", "ScaleTag 安装指南二维码")}" width="140" height="140"></a></section>
   </div>`;
@@ -56,17 +57,19 @@ function installPage() {
 function createPoll() {
   document.title = t("Create a poll — ScaleTag", "创建投票 — ScaleTag");
   document.querySelector('[data-nav="create"]').classList.add("active");
-  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br>${t("your mind?", "想听听大家的意见？")}</h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br>${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p><div class="intro-note"><span class="tiny-label">${t("KEEP IT SIMPLE", "简单就好")}</span><p>${t("One question, a few options,", "提出一个问题，给出几个选项，")}<br>${t("and room for a different perspective.", "听听不同的声音。")}</p></div><div class="rules"><p>${icons.pin} ${t("Location is required to publish.", "发布时需要获取位置。")}</p><p>${icons.clock} ${t("Voting stays open for exactly 7 days.", "投票开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br>${t("your mind?", "想听听大家的意见？")}</h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br>${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p><div class="intro-note"><span class="tiny-label">${t("KEEP IT SIMPLE", "简单就好")}</span><p>${t("One question, a few options,", "提出一个问题，给出几个选项，")}<br>${t("and room for a different perspective.", "听听不同的声音。")}</p></div><div class="rules"><p>${icons.pin} ${t("Location is required to publish.", "发布时需要获取位置。")}</p><p>${icons.clock} ${t("Voting stays open for up to 7 days.", "投票最多开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
   <form id="create-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}"><a href="/create" aria-current="page">${t("Poll", "投票")}</a><a href="/create/task">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div>
     <div class="form-heading"><h2>${t("Your new poll", "创建投票")}</h2><span class="pill">${t("SINGLE CHOICE", "单选")}</span></div>
     <label for="title">${t("The question", "问题")} <span class="required">*</span></label><input id="title" name="title" maxlength="140" placeholder="${t("What should we make happen next?", "接下来做什么好？")}" required><div class="field-hint"><span>${t("Keep it clear and open to everyone.", "把问题说清楚，让大家都能参与。")}</span><span id="title-count">0 / 140</span></div>
     <label for="description">${t("A little context", "补充说明")} <span class="optional">${t("optional", "可选")}</span></label><textarea id="description" name="description" maxlength="4000" rows="4" placeholder="${t("Tell people a bit more about your question\u2026", "补充一些背景，让大家更了解这个问题…")}"></textarea>
     ${photoFields("poll", t("Photos (optional)", "投票照片（选填）"))}
     <fieldset class="options-fieldset"><legend>${t("The options", "选项")} <span class="required">*</span></legend><p class="field-hint">${t("Add 2–12 choices. Each person selects one.", "添加 2 至 12 个选项，每人可选择一项。")}</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} ${t("Add an option", "添加选项")}</button></fieldset>
+    <label for="voting-hours">${t("Voting duration", "投票时长")}</label><select id="voting-hours" name="votingHours"><option value="1">${t("1 hour", "1 小时")}</option><option value="6">${t("6 hours", "6 小时")}</option><option value="24">${t("1 day", "1 天")}</option><option value="72">${t("3 days", "3 天")}</option><option value="168" selected>${t("7 days", "7 天")}</option></select>
+    <label for="results-visibility">${t("Show results", "公布结果")}</label><select id="results-visibility" name="resultsVisibility"><option value="live">${t("As votes come in", "实时公布")}</option><option value="after_close">${t("After voting closes", "截止后公布")}</option></select>
     <label for="signature">${t("Your signature", "署名")} <span class="required">*</span></label><input id="signature" name="signature" maxlength="60" placeholder="${t("A name, a nickname, or a little mystery", "姓名、昵称或其他署名")}" required><p class="field-hint">${t("Pick any name. No account or identity verification.", "可以使用姓名或昵称，无需注册或验证身份。")}</p>
     <div class="location-box"><div><strong>${icons.pin} ${t("Give your poll a place", "添加投票位置")}</strong><p id="location-status" aria-live="polite">${t("Your location helps people discover nearby polls.", "添加位置后，附近的人更容易找到这个投票。")}</p></div><button class="button secondary small" type="button" id="locate">${t("Enable location", "启用定位")}</button></div><p class="field-hint">${t("We store the poll’s coordinates, not your movement. Exact coordinates are not shown publicly. The map shows a rounded area on a 0.01° grid (about 1 km north–south, narrower east–west).", "我们存储投票的坐标，不记录你的移动轨迹，也不公开精确坐标。地图按 0.01° 网格显示大致区域（南北约 1 公里，东西更窄）。")}</p>
     <label class="checkbox-row"><input type="checkbox" id="map-consent" required><span>${t("I agree to show my poll’s approximate area publicly on the map. This does not guarantee anonymity.", "我同意在地图上公开显示投票的大致区域。这不能保证匿名。")}</span></label>${notice()}<label class="checkbox-row"><input type="checkbox" id="retention" required><span>${t("I understand that my poll leaves the website after 30 days and that private daily backups are retained for up to 90 days after each backup is created.", "我了解投票会在发布 30 天后从网站移除，私有每日备份从创建之日起最多保留 90 天。")}</span></label>
-    <p id="form-error" class="form-error" role="alert" hidden></p><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button class="button publish-button" type="submit" id="publish">${t("Publish my poll", "发布投票")} ${icons.arrow}</button><p class="publish-note">${t("Starts immediately · Closes in 7 days · Removed in 30 days", "立即开始 · 7 天后截止 · 30 天后移除")}</p>
+    <p id="form-error" class="form-error" role="alert" hidden></p><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button class="button publish-button" type="submit" id="publish">${t("Publish my poll", "发布投票")} ${icons.arrow}</button><p class="publish-note">${t("Starts immediately · Removed in 30 days", "立即开始 · 30 天后移除")}</p>
   </form></section>`;
   let location;
   let locatedAt = 0;
@@ -98,6 +101,7 @@ function createPoll() {
     row.querySelector("button").onclick = () => {
       row.remove();
       renumber();
+      draft.save();
     };
     inputs.append(row);
     renumber();
@@ -105,11 +109,31 @@ function createPoll() {
   }
   addOption();
   addOption();
-  document.querySelector("#add-option").onclick = () => addOption(true);
-  document.querySelector("#title").oninput = (e) => {
-    document.querySelector("#title-count").textContent =
-      `${e.target.value.length} / 140`;
+  const choices = () => [...inputs.querySelectorAll("input")].map((el) => el.value);
+  const draft = bindTextDraft(form, "poll", ["#title", "#description", "#signature", "#voting-hours", "#results-visibility"], {
+    read: choices,
+    contains: (target) => inputs.contains(target),
+    restore(values) {
+      const labels = Array.isArray(values) && values.length >= 2 ? values.slice(0, 12) : ["", ""];
+      inputs.replaceChildren();
+      for (const label of labels) {
+        addOption();
+        if (typeof label === "string") inputs.lastElementChild.querySelector("input").value = label.slice(0, 120);
+      }
+    },
+  });
+  document.querySelector("#add-option").onclick = () => {
+    addOption(true);
+    draft.save();
   };
+  const titleField = document.querySelector("#title");
+  function countTitle() {
+    document.querySelector("#title-count").textContent =
+      `${titleField.value.length} / 140`;
+  }
+  titleField.addEventListener("input", countTitle);
+  titleField.addEventListener("draftreset", countTitle);
+  countTitle();
   const locateButton = document.querySelector("#locate");
   locateButton.onclick = async () => {
     locateButton.disabled = true;
@@ -142,16 +166,20 @@ function createPoll() {
         location = await locate();
         locatedAt = Date.now();
       }
+      const submittedDraft = draft.snapshot();
       const poll = await api("/api/polls", {
         title: form.elements.namedItem("title").value,
         description: form.elements.namedItem("description").value,
         signature: form.elements.namedItem("signature").value,
-        options: [...inputs.querySelectorAll("input")].map((el) => el.value),
+        options: choices(),
+        votingHours: Number(form.elements.votingHours.value),
+        resultsVisibility: form.elements.resultsVisibility.value,
         images,
         location,
         retentionAccepted: document.querySelector("#retention").checked,
         mapVisible: document.querySelector("#map-consent").checked,
       });
+      draft.published(submittedDraft);
       window.location.assign(localizedPath(`/vote/${poll.id}?created=1`));
     } catch (e) {
       error.textContent = e.message;
@@ -224,6 +252,7 @@ async function votePage(id) {
     qrUrl: `/api/polls/${id}/qr.png`,
     publicUrl: `${location.origin}/vote/${id}`,
   });
+  mountSavedPost(main.querySelector(".share-card"), { path: `/vote/${id}`, title: poll.title });
   function render() {
     const closed = poll.status === "closed";
     const badge = document.querySelector("#poll-status");
@@ -234,8 +263,8 @@ async function votePage(id) {
       poll.serverTime,
     );
     document.querySelector("#total-votes").textContent =
-      t(`${count(poll.totalVotes)} ${poll.totalVotes === 1 ? "vote" : "votes"}`, `${count(poll.totalVotes)} 票`);
-    document.querySelector("#results").innerHTML = poll.options
+      poll.resultsHidden ? "" : t(`${count(poll.totalVotes)} ${poll.totalVotes === 1 ? "vote" : "votes"}`, `${count(poll.totalVotes)} 票`);
+    document.querySelector("#results").innerHTML = poll.resultsHidden ? "" : poll.options
       .map(
         (o) =>
           `<div class="result-row"><div><span>${escape(o.label)}</span><strong>${percent(o.votes, poll.totalVotes)}% <small>${t(`${count(o.votes)} ${o.votes === 1 ? "vote" : "votes"}`, `${count(o.votes)} 票`)}</small></strong></div><progress value="${o.votes}" max="${poll.totalVotes || 1}" aria-label="${escape(o.label)}: ${percent(o.votes, poll.totalVotes)} percent"></progress></div>`,
@@ -252,7 +281,12 @@ async function votePage(id) {
       ? t("This poll has ended. You can still view the results and share its QR code until deletion.", "投票已结束。在投票被移除前，你仍可查看结果和分享二维码。")
       : poll.hasVoted
         ? t("Thanks for adding your voice. This browser has already voted.", "这个浏览器已经投过票，感谢参与。")
-        : t("Results are visible to everyone, before and after voting.", "投票前后所有人均可查看结果。");
+        : poll.resultsHidden
+          ? t("Results will appear when voting closes.", "投票截止后公布结果。")
+          : t("Results are visible to everyone, before and after voting.", "投票前后所有人均可查看结果。");
+    if (poll.resultsHidden)
+      document.querySelector("#results-updated").textContent =
+        t("Results will appear when voting closes.", "投票截止后公布结果。");
     if (closed)
       document.querySelector("#results-updated").textContent =
         t("Final results. This poll is no longer accepting votes.", "投票已结束，以下是最终结果。");
@@ -314,13 +348,26 @@ async function votePage(id) {
 function postList() {
   document.title = t("PostList — ScaleTag", "帖子列表 — ScaleTag");
   document.querySelector('[data-nav="list"]').classList.add("active");
-  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">${t("THE PUBLIC NOTICEBOARD", "发现身边事")}</span><h1>${t("Every post<br>starts <em>somewhere.</em>", "看看附近<br><em>大家都在聊什么</em>")}</h1><p>${t("Explore polls, local tasks and free giveaways nearby.", "浏览附近的投票、任务和闲置赠予，看看有什么新鲜事。")}</p></div><a href="/create" class="button">${t("Create a post", "创建帖子")} ${icons.plus}</a></div><label class="content-filter" for="content-type">${t("Show", "显示")} <select id="content-type"><option value="all">${t("All post types", "全部类型")}</option><option value="poll">${t("Polls", "投票")}</option><option value="task">${t("Tasks", "任务")}</option><option value="sale">${t("Free Giveaways", "闲置赠予")}</option></select></label><div class="view-switch" role="group" aria-label="${t("PostList view", "帖子列表视图")}"><button type="button" class="selected" data-view="list" aria-pressed="true">${t("List", "列表")}</button><button type="button" data-view="map" aria-pressed="false">${t("Map", "地图")}</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="${t("Post status", "帖子状态")}"><button class="selected" data-filter="all" aria-pressed="true">${t("All posts", "全部帖子")}</button><button data-filter="open" aria-pressed="false">${t("Open", "进行中")}</button><button data-filter="closed" aria-pressed="false">${t("Ended", "已结束")}</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} ${t("Within 100 km", "100 公里内")} <span class="toggle" aria-hidden="true"></span></button></div><div class="list-caption"><span id="list-caption">${t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异")}</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>${t("Your location is used only for this search and is not saved.", "你的位置仅用于本次搜索，不会保存。")}</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="${t("Post map", "帖子地图")}" hidden><div class="map-intro"><strong>${t("Posts on the map", "地图上的帖子")}</strong><p>${t("Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Post content stays on ScaleTag.", "地图只显示大致区域。打开地图时会连接 OpenFreeMap，该服务会收到你的 IP 地址和查看的地图区域；帖子内容仍保留在 ScaleTag。")}</p></div><p id="map-message" class="map-message" role="status">${t("Loading the map…", "正在加载地图…")}</p><div id="poll-map" class="poll-map" role="region" aria-label="${t("Interactive map of approximate post locations", "帖子大致位置的互动地图")}"></div><div class="map-legend"><span><i class="legend-dot"></i> ${t("Open", "进行中")}</span><span><i class="legend-dot ended"></i> ${t("Ended", "已结束")}</span><button class="text-link" id="map-fit" type="button">${t("Fit all markers ↗", "显示所有标记 ↗")}</button></div><p id="map-count" class="map-count" aria-live="polite"></p><p class="map-footnote">${t("Only posts published with map consent appear here. Older posts remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.", "仅显示发布时同意上地图的帖子。较早的帖子仍可在列表中查看。位置按 0.01° 网格显示，南北约 1 公里，东西更窄。")}</p><details class="mapped-polls"><summary>${t("Browse mapped posts without the map", "不用地图，直接浏览已标记的帖子")}</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>${t("Load more posts", "加载更多帖子")}</button><p class="list-retention">${t("Polls and tasks leave the website after 30 days; giveaways after 72 hours. Private daily backups are retained for up to 90 days after backup creation.", "投票和任务在 30 天后从网站移除；闲置赠予在 72 小时后移除。每日私有备份自创建起最多保留 90 天。")}</p></section>`;
+  const nearbyPicker = `<div class="nearby-controls">
+    <label class="content-filter" for="nearby-radius">${t("Search radius", "搜索范围")} <select id="nearby-radius">
+      ${[2, 10, 50, 100].map(radius => `<option value="${radius}"${radius === 100 ? " selected" : ""}>${t(`${radius} km`, `${radius} 公里`)}</option>`).join("")}
+    </select></label>
+    <label class="content-filter" for="nearby-sort">${t("Sort posts", "帖子排序")} <select id="nearby-sort">
+      <option value="newest">${t("Newest first", "最新发布优先")}</option>
+      <option value="nearest" disabled>${t("Nearest first", "距离最近优先")}</option>
+    </select></label>
+    <button id="choose-map-area" class="button secondary small" type="button">${t("Choose area on map", "在地图上选区")}</button>
+  </div>`;
+  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">${t("THE PUBLIC NOTICEBOARD", "发现身边事")}</span><h1>${t("Every post<br>starts <em>somewhere.</em>", "看看附近<br><em>大家都在聊什么</em>")}</h1><p>${t("Explore polls, local tasks and free giveaways nearby.", "浏览附近的投票、任务和闲置赠予，看看有什么新鲜事。")}</p></div><a href="/create" class="button">${t("Create a post", "创建帖子")} ${icons.plus}</a></div><label class="content-filter" for="content-type">${t("Show", "显示")} <select id="content-type"><option value="all">${t("All post types", "全部类型")}</option><option value="poll">${t("Polls", "投票")}</option><option value="task">${t("Tasks", "任务")}</option><option value="sale">${t("Free Giveaways", "闲置赠予")}</option></select></label><div class="view-switch" role="group" aria-label="${t("PostList view", "帖子列表视图")}"><button type="button" class="selected" data-view="list" aria-pressed="true">${t("List", "列表")}</button><button type="button" data-view="map" aria-pressed="false">${t("Map", "地图")}</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="${t("Post status", "帖子状态")}"><button class="selected" data-filter="all" aria-pressed="true">${t("All posts", "全部帖子")}</button><button data-filter="open" aria-pressed="false">${t("Open", "进行中")}</button><button data-filter="closed" aria-pressed="false">${t("Ended", "已结束")}</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} <span id="nearby-label">${t("Within 100 km", "100 公里内")}</span> <span class="toggle" aria-hidden="true"></span></button></div>${nearbyPicker}<div class="list-caption"><span id="list-caption">${t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异")}</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>${t("Your location is used only for this search and is not saved.", "你的位置仅用于本次搜索，不会保存。")}</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="${t("Post map", "帖子地图")}" hidden><div class="map-intro"><strong>${t("Posts on the map", "地图上的帖子")}</strong><p>${t("Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Post content stays on ScaleTag.", "地图只显示大致区域。打开地图时会连接 OpenFreeMap，该服务会收到你的 IP 地址和查看的地图区域；帖子内容仍保留在 ScaleTag。")}</p></div><div class="nearby-controls"><button id="search-map-center" class="button secondary small" type="button">${t("Search this area", "搜索此区域")}</button><span>${t("Search near the center of this map.", "以地图中心为起点搜索。")}</span></div><p id="map-message" class="map-message" role="status">${t("Loading the map…", "正在加载地图…")}</p><div id="poll-map" class="poll-map" role="region" aria-label="${t("Interactive map of approximate post locations", "帖子大致位置的互动地图")}"></div><div class="map-legend"><span><i class="legend-dot"></i> ${t("Open", "进行中")}</span><span><i class="legend-dot ended"></i> ${t("Ended", "已结束")}</span><button class="text-link" id="map-fit" type="button">${t("Fit all markers ↗", "显示所有标记 ↗")}</button></div><p id="map-count" class="map-count" aria-live="polite"></p><p class="map-footnote">${t("Only posts published with map consent appear here. Older posts remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.", "仅显示发布时同意上地图的帖子。较早的帖子仍可在列表中查看。位置按 0.01° 网格显示，南北约 1 公里，东西更窄。")}</p><details class="mapped-polls"><summary>${t("Browse mapped posts without the map", "不用地图，直接浏览已标记的帖子")}</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>${t("Load more posts", "加载更多帖子")}</button><p class="list-retention">${t("Polls and tasks leave the website after 30 days; giveaways after 72 hours. Private daily backups are retained for up to 90 days after backup creation.", "投票和任务在 30 天后从网站移除；闲置赠予在 72 小时后移除。每日私有备份自创建起最多保留 90 天。")}</p></section>`;
   let status = "all",
     location,
+    radiusKm = 100,
+    sort = "newest",
     cursor,
     loaded = 0,
     request = 0,
     locating = false,
+    locationRequest = 0,
     mode = "list",
     contentType = "all",
     mapView,
@@ -328,6 +375,32 @@ function postList() {
     mapGeneration = 0,
     mapRequest = 0,
     mapTimer;
+  const nearbyButton = document.querySelector("#nearby");
+  const radiusSelect = document.querySelector("#nearby-radius");
+  const sortSelect = document.querySelector("#nearby-sort");
+  const chooseArea = document.querySelector("#choose-map-area");
+  const searchMap = document.querySelector("#search-map-center");
+  const nearbyOptions = () => location ? { location, radiusKm, sort } : {};
+
+  function updateListCaption() {
+    document.querySelector("#list-caption").textContent = mode === "map"
+      ? t("Approximate areas · Availability varies by post type", "大致区域 · 有效期因帖子类型而异")
+      : sort === "nearest"
+        ? t("Nearest first · Approximate distance", "距离最近优先 · 距离为估算值")
+        : t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异");
+  }
+
+  function setNearbyLocation(next) {
+    ++locationRequest;
+    location = next;
+    sort = location ? "nearest" : "newest";
+    sortSelect.options[1].disabled = !location;
+    sortSelect.value = sort;
+    nearbyButton.classList.toggle("enabled", Boolean(location));
+    nearbyButton.setAttribute("aria-pressed", String(Boolean(location)));
+    document.querySelector("#location-privacy").hidden = !location;
+    updateListCaption();
+  }
   function getMap() {
     if (mapView) return Promise.resolve(mapView);
     const generation = mapGeneration;
@@ -339,6 +412,7 @@ function postList() {
           return null;
         }
         mapView = view;
+        searchMap.disabled = false;
         return view;
       })
       .catch((error) => {
@@ -360,7 +434,7 @@ function postList() {
       const data = await api("/api/map/search", {
         status,
         type: contentType,
-        ...(location ? { location } : {}),
+        ...nearbyOptions(),
       });
       if (current !== mapRequest || mode !== "map") return;
       const view = await getMap();
@@ -371,7 +445,7 @@ function postList() {
       view.setData(data.polls, fit);
       view.resize();
       document.querySelector("#map-count").textContent = data.total
-        ? t(`${count(data.polls.length)} of ${count(data.total)} matching mapped posts${data.total > data.polls.length ? " · Newest 1,000 only" : ""}`, `显示 ${count(data.polls.length)} / ${count(data.total)} 条符合条件的地图帖子${data.total > data.polls.length ? " · 仅显示最新 1,000 条" : ""}`)
+        ? t(`${count(data.polls.length)} of ${count(data.total)} matching mapped posts`, `显示 ${count(data.polls.length)} / ${count(data.total)} 条符合条件的地图帖子`) + (data.total > data.polls.length ? ` · ${t("First 1,000 results", "前 1,000 条结果")}` : "")
         : t("No mapped posts match these filters. Try List to see all posts.", "没有符合条件的地图帖子，请使用列表查看全部帖子。");
       for (const p of data.polls) {
         const li = document.createElement("li");
@@ -418,20 +492,27 @@ function postList() {
       document.querySelector("#poll-list").hidden = mode === "map";
       document.querySelector("#load-more").hidden = true;
       document.querySelector("#list-count").hidden = mode === "map";
-      document.querySelector("#list-caption").textContent =
-        mode === "map"
-          ? t("Approximate areas · Availability varies by post type", "大致区域 · 有效期因帖子类型而异")
-          : t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异");
+      chooseArea.hidden = mode === "map";
+      updateListCaption();
       if (mode === "list" || previousMode === "map") {
         ++mapGeneration;
         mapView?.destroy();
         mapView = undefined;
         mapLoading = undefined;
+        searchMap.disabled = true;
         document.querySelector("#poll-map").replaceChildren();
       }
       load();
     };
   });
+  searchMap.disabled = true;
+  chooseArea.onclick = () => {
+    document.querySelector('[data-view="map"]').click();
+  };
+  searchMap.onclick = () => {
+    setNearbyLocation(mapView.searchCenter());
+    loadMap(false);
+  };
   document.querySelector("#map-fit").onclick = () => loadMap();
   window.addEventListener(
     "pagehide",
@@ -471,7 +552,7 @@ function postList() {
       return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${p.saleState === "closed" ? "closed" : ""}">${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
     if (p.type === "task")
       return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${t("Task", "任务")}</span><span class="status-badge ${isFinalState(p.taskState) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${stateLabel(p.taskState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div><div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
-    return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${p.options
+    return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${p.resultsHidden ? t("Results will appear when voting closes.", "投票截止后公布结果。") : p.options
       .slice(0, 2)
       .map(
         (o) =>
@@ -479,7 +560,7 @@ function postList() {
       )
       .join(
         "",
-      )}${p.options.length > 3 ? `<small>+ ${p.options.length - 3} ${t("more options", "个其他选项")}</small>` : ""}</div><div class="card-bottom"><span>${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> ♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
+      )}${!p.resultsHidden && p.options.length > 3 ? `<small>+ ${p.options.length - 3} ${t("more options", "个其他选项")}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
   }
   async function load(reset = true) {
     if (mode === "map") return loadMap();
@@ -499,7 +580,7 @@ function postList() {
       const data = await api("/api/posts/search", {
         status,
         type: contentType,
-        ...(location ? { location } : {}),
+        ...nearbyOptions(),
         ...(cursor ? { cursor } : {}),
       });
       if (current !== request) return;
@@ -508,7 +589,7 @@ function postList() {
       loaded += data.polls.length;
       cursor = data.nextCursor;
       if (!loaded)
-        list.innerHTML = `<div class="list-empty"><span class="empty-symbol">${icons.pin}</span><h2>${location ? t("A little quiet around here.", "附近暂时还没有相关帖子。") : t("The first post could be yours.", "来发布第一条帖子吧！")}</h2><p>${location ? t("No matching posts within 100 km. Try all locations, or start a conversation nearby.", "100 公里内没有符合条件的帖子。试试查看全部地点，或发起一个新话题。") : t("No posts match this filter yet. Share a poll or task with your neighbourhood.", "暂无符合条件的帖子。来发起投票或发布任务吧。")}</p><a class="text-link" href="/create">${t("Create a post ↗", "创建帖子 ↗")}</a></div>`;
+        list.innerHTML = `<div class="list-empty"><span class="empty-symbol">${icons.pin}</span><h2>${location ? t("A little quiet around here.", "附近暂时还没有相关帖子。") : t("The first post could be yours.", "来发布第一条帖子吧！")}</h2><p>${location ? t("No matching posts in this area. Try a wider search or view all locations.", "该区域没有符合条件的帖子。可扩大搜索范围或查看全部地点。") : t("No posts match this filter yet. Share a poll or task with your neighbourhood.", "暂无符合条件的帖子。来发起投票或发布任务吧。")}</p><a class="text-link" href="/create">${t("Create a post ↗", "创建帖子 ↗")}</a></div>`;
       document.querySelector("#list-count").textContent =
         t(`${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`, `显示 ${count(loaded)} 条帖子`);
       more.hidden = !cursor;
@@ -534,33 +615,40 @@ function postList() {
       load();
     };
   });
-  document.querySelector("#nearby").onclick = async (e) => {
+  radiusSelect.onchange = () => {
+    radiusKm = Number(radiusSelect.value);
+    document.querySelector("#nearby-label").textContent = t(`Within ${radiusKm} km`, `${radiusKm} 公里内`);
+    if (location) load();
+  };
+  sortSelect.onchange = () => {
+    sort = sortSelect.value;
+    updateListCaption();
+    load();
+  };
+  nearbyButton.onclick = async () => {
     if (locating) return;
-    const button = e.currentTarget;
     if (location) {
-      location = undefined;
-      button.classList.remove("enabled");
-      button.setAttribute("aria-pressed", "false");
-      document.querySelector("#location-privacy").hidden = true;
+      setNearbyLocation(undefined);
       load();
       return;
     }
     locating = true;
-    button.disabled = true;
+    const current = ++locationRequest;
+    nearbyButton.disabled = true;
     document.querySelector("#list-error").hidden = true;
     try {
-      location = await locate();
-      button.classList.add("enabled");
-      button.setAttribute("aria-pressed", "true");
-      document.querySelector("#location-privacy").hidden = false;
+      const coordinates = await locate();
+      if (current !== locationRequest) return;
+      setNearbyLocation(coordinates);
       await load();
     } catch (e) {
+      if (current !== locationRequest) return;
       const error = document.querySelector("#list-error");
       error.textContent = e.message;
       error.hidden = false;
     } finally {
       locating = false;
-      button.disabled = false;
+      nearbyButton.disabled = false;
     }
   };
   document.querySelector("#load-more").onclick = () => load(false);
@@ -580,9 +668,9 @@ function privacy() {
 
     <h2>${t("What other people can see", "其他人能看到什么")}</h2>
     <ul>
-      <li>${t("Polls: Anyone can see the question, options and results. Voting ends after seven days. Results stay visible until day 30.", "投票：任何人都能看到问题、选项和结果。投票在七天后结束，结果保留至发布后第 30 天。")}</li>
+      <li>${t("Polls: Questions and options are public. The publisher sets the deadline and can hide results until voting closes. Results remain until day 30.", "投票：问题和选项公开。发布者设置截止时间，可以选择截止后公布结果。结果保留至发布后第 30 天。")}</li>
       <li>${t("Tasks: The task, reward, reply names and reply messages are public. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。标为已完成或已关闭的任务停止接收回复。")}</li>
-      <li>${t("Giveaways: The pickup location you write is public. Visitors can like the post. Giveaways are visible for up to 72 hours, or until the publisher takes them down. ScaleTag does not collect contact details for giveaways.", "闲置赠予：你填写的领取地点会公开。访客可以点赞。帖子公开最多 72 小时，发布者也可以提前下架。ScaleTag 不会收集赠予参与者的联系方式。")}</li>
+      <li>${t("Giveaways: The pickup location is public while the item is available. After the publisher marks it claimed, it leaves discovery and the original link shows the claimed status until expiry.", "闲置赠予：物品可领取时，领取地点会公开。发布者标记已领取后，帖子不再出现在列表和地图，原链接仍显示已领取状态，直到到期。")}</li>
     </ul>
     <p>${t("Names are self-reported. Keep private contact details out of public text, pickup directions and photos.", "名字由用户自行填写，未经身份验证。请勿在公开文字、领取说明或照片中留下私人联系方式。")}</p>
 
@@ -641,6 +729,7 @@ function privacy() {
       "If you install ScaleTag, the app may cache interface files and a generic offline page. It does not cache private management data or queue votes, likes, replies, reports or posts while offline. Your browser can remember your language choice.",
       "安装 ScaleTag 后，浏览器可能缓存界面文件和通用离线页。私人管理数据不会进入离线缓存，离线时提交的投票、点赞、回复、举报或帖子也不会排队发送。浏览器可以记住你的语言选择。",
     )}</p>
+    <p>${t("Text drafts and saved links stay in this browser. Photos, management passwords and private reply contacts are excluded.", "文字草稿和已保存的链接仅保存在当前浏览器，不包含照片、管理密码或私人回复联系方式。")}</p>
     <p>${t("Visit counts use a random browser cookie. Active storage keeps separate hashes for the site and each post for up to 30 days after the last visit. Visit statistics do not record IP addresses or Secrex share links.", "访问统计使用随机浏览器 Cookie。站点和各帖子分别保存其哈希，活跃数据自上次访问起最多保留 30 天。访问统计不记录 IP 地址或 Secrex 分享链接。")}</p>
     <a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">${t("Read the architecture and source on GitHub ↗", "在 GitHub 查看架构与源代码 ↗")}</a>
   </article>`;
@@ -669,6 +758,8 @@ async function showVisitCounts(path, title) {
 }
 
 const route = window.location.pathname;
+const savedNav = document.querySelector('[data-nav="saved"]');
+if (savedNav) savedNav.textContent = t("Saved links", "已保存链接");
 try {
   if (route === "/" && location.hash === "#create")
     window.location.replace(localizedPath("/create"));
@@ -680,6 +771,11 @@ try {
   else if (route === "/create/sale") createSale();
   else if (route === "/install") installPage();
   else if (route === "/PostList") postList();
+  else if (route === "/saved") {
+    document.title = t("Saved links — ScaleTag", "已保存链接 — ScaleTag");
+    savedNav?.setAttribute("aria-current", "page");
+    renderSavedPosts(main);
+  }
   else if (route === "/privacy") privacy();
   else if (/^\/vote\/[a-f0-9]{24}$/.test(route)) {
     const id = route.split("/")[2];

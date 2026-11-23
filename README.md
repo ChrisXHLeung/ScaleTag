@@ -1,6 +1,6 @@
 # ScaleTag
 
-ScaleTag is an installable, bilingual web app for local polls, tasks, free giveaways, and one-time encrypted secrets (Secrex). No account is required. Publish a post, share its link or QR code, and find nearby posts in PostList, or send a burn-after-reading secret via Secrex.
+ScaleTag is an installable web app for local polls, tasks, free giveaways, and one-time encrypted secrets (Secrex). No account is required. Publish a post, share its link or QR code, and find nearby posts in PostList, or send a burn-after-reading secret via Secrex.
 
 [Open ScaleTag](https://risinfo.cn/) · [Privacy and retention](https://risinfo.cn/privacy) · [Architecture case study](https://www.chriscn.cn/scaletag/)
 
@@ -8,12 +8,14 @@ ScaleTag is an installable, bilingual web app for local polls, tasks, free givea
 
 | Type | What people can do | Public lifetime |
 | --- | --- | --- |
-| Poll | Vote, see results and like the post | Voting closes after seven days. Results remain available until day 30. |
+| Poll | Vote, see results and like the post | Voting lasts up to seven days. Publishers can delay results until voting closes. Results remain available until day 30. |
 | Task | Offer a reward, receive replies and update progress | Available for 30 days. Completed and Closed tasks stop accepting new replies. |
-| Free giveaway | Share a public pickup location and receive likes | Public for up to 72 hours. The publisher can take it down sooner. Active storage retains the record until day 30. |
-| Secrex | Encrypt sensitive text locally for one-time reading with a link and separate password | Never listed in PostList. Expires after 24 hours if unopened, or is destroyed after a single reading session (up to 5 minutes). |
+| Free giveaway | Share a pickup location and mark the item claimed | Public for up to 72 hours. Marking it claimed hides pickup details and removes it from discovery while the original link shows the status. Active storage retains the record until day 30. |
+| Secrex | Encrypt text for one-time reading and optionally revoke it before it is opened | Never listed in PostList. Expires after seven days if unopened, or is destroyed after a single reading session (up to 5 minutes). |
 
-Each post has a unique ID. PostList combines polls, tasks and giveaways in one list and an optional map. Publishing a poll, task or giveaway requires a location. Public map pins use a rounded 0.01° grid, and posts appear there only with explicit consent. A giveaway’s written pickup location is public. Search coordinates are used for that request and are not stored.
+Each post has a unique ID. PostList combines polls, tasks and giveaways in one list and an optional map. Nearby search supports GPS or a manually chosen map area, with 2, 10, 50 and 100 km radii and a nearest-first sort. Nearby search and public map pins use a rounded 0.01° grid for post locations. Posts appear on the map only with explicit consent. Search coordinates are used for that request and are not stored.
+
+Text drafts and saved links stay in the current browser. Drafts cover public post fields. Images, location permissions, management credentials and private replies are excluded. Saved management URLs still require their separate passwords.
 
 Public task replies show the submitted name and message. The reply form encrypts the separate phone and email fields in the sender’s browser. The task publisher’s browser uses the management password to decrypt them. Giveaways use likes and a public pickup location, without an offer or contact form. Secrex one-time secrets are encrypted end-to-end in the sender’s browser, never listed publicly, and deliberately excluded from the ScaleTag post archive. The app does not process payments.
 
@@ -21,6 +23,7 @@ Public task replies show the submitted name and message. The reply form encrypts
 | --- | --- |
 | Publish | [Poll](https://risinfo.cn/create), [task](https://risinfo.cn/create/task), [giveaway](https://risinfo.cn/create/sale), [Secrex](https://risinfo.cn/secrex) (also `/create/secrex`) |
 | Discover | [PostList](https://risinfo.cn/PostList) and its optional map |
+| Saved links | `/saved` |
 | View a post or secret | `/vote/<id>`, `/task/<id>`, `/sale/<id>`, `/secrex/<id>` |
 | Manage a post | `/task/<id>/manage`, `/sale/<id>/manage` |
 | Install and learn about data | [Install](https://risinfo.cn/install), [privacy](https://risinfo.cn/privacy) |
@@ -83,7 +86,9 @@ Secrex ([`/secrex`](https://risinfo.cn/secrex), [`/create/secrex`](https://risin
    - A 256-bit AES-GCM wrapping key (`secrex-v1-wrap`) that stays in the browser.
    The browser encrypts the plaintext with the DEK (`AES-256-GCM`, 12-byte random nonce) and wraps the DEK with the wrapping key (`AES-256-GCM`, 12-byte random nonce). Both ciphertexts authenticate length-prefixed AAD binding `secrex-v1`, the secret ID, and the purpose (`body` or `wrap`).
 2. **Split delivery.** The browser displays `/secrex/<id>`, a QR code (`/api/secrex/<id>/qr.png`), and the generated share password. Neither the URL nor the QR code carries the password or wrapping key; senders should transmit the link/QR code and the password through separate channels.
-3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), rejecting competing devices or tabs. Clicking **End and destroy** (`POST /api/secrex/:id/end`), closing/expiring the 5-minute reading window, or reaching the 24-hour unopened TTL (`pendingMs = 86400000`) deletes the payload row and leaves only minimal metadata (`created_at`, `state`, `finished_at`) in `secrex_history`.
+3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), rejecting competing devices or tabs. Clicking **End and destroy** (`POST /api/secrex/:id/end`), closing/expiring the 5-minute reading window, or reaching the seven-day unopened TTL (`pendingMs = 604800000`) deletes the payload row and leaves only minimal metadata (`created_at`, `state`, `finished_at`) in `secrex_history`.
+
+4. **Sender revocation.** A private code lets the sender revoke an unopened secret. The server stores a verifier for the independently generated random code. Revocation competes with the first valid claim in a database transaction and cannot retrieve or decrypt a payload. Keep the code separate from the recipient link and password.
 
 ## Argon2id management passwords
 

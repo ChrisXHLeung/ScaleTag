@@ -215,6 +215,31 @@ test("map handles failure, offline and expiry without retaining markers in PWA c
   assert.deepEqual(f.errors, []);
 });
 
+test("visitors can search a chosen map area without geolocation permission", async (t) => {
+  const f = await fixture(t);
+  await f.context.clearPermissions();
+  await f.page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = () => { throw new Error("Geolocation must not be called"); };
+  });
+  await f.store.create(f.input);
+  await f.store.create({
+    ...f.input,
+    title: "Far away",
+    location: { latitude: 49.28, longitude: -123.12 },
+    mapVisible: false,
+  });
+  await f.page.goto(f.origin + "/PostList");
+  await f.page.getByRole("button", { name: "Choose area on map" }).click();
+  await f.page.locator("#map-message").filter({ hasText: "Select a dot" }).waitFor();
+  await f.page.getByLabel("Search radius").selectOption("2");
+  await f.page.getByRole("button", { name: "Search this area" }).click();
+  await f.page.getByRole("button", { name: "List", exact: true }).click();
+  await f.page.getByRole("link", { name: /Trees for our street/ }).waitFor();
+  assert.equal(await f.page.getByRole("link", { name: /Far away/ }).count(), 0);
+  assert.equal(await f.page.getByLabel("Sort posts").inputValue(), "nearest");
+  assert.deepEqual(f.errors, []);
+});
+
 test("mobile layout, explicit publishing consent and rapid view changes", async (t) => {
   const f = await fixture(t);
   await f.store.create({

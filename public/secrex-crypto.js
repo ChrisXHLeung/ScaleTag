@@ -101,6 +101,22 @@ export function generateSessionToken() {
   }
 }
 
+export async function generateRevokeCredentials(id) {
+  const bytes = randomBytes(PASSWORD_BYTES);
+  try {
+    const secret = encodeBase64Url(bytes);
+    const input = encoder.encode(`scaletag:secrex:revoke:v1:${id}:${secret}`);
+    try {
+      const hash = await requireSubtle().digest("SHA-256", input);
+      return { code: `${id}.${secret}`, verifier: encodeBase64Url(new Uint8Array(hash)) };
+    } finally {
+      wipe(input);
+    }
+  } finally {
+    wipe(bytes);
+  }
+}
+
 // Length-prefixed AAD uniquely binds protocol version, secret ID, and AES-GCM purpose.
 function buildAad(id, purpose) {
   const parts = [

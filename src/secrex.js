@@ -31,6 +31,10 @@ export function createSecrexRouter(store) {
     const input = readFields(req.body, {
       id: [16], claim: [32], body: [17, 12016], bodyNonce: [12], wrapped: [48], wrapNonce: [12],
     });
+    // The legacy request body works with either slot during a rolling release.
+    const revokeVerifier = req.get("X-Secrex-Revoke-Verifier");
+    if (revokeVerifier !== undefined && !canonical(revokeVerifier, 32))
+      throw new AppError(400, "Invalid Secrex request.");
     const now = Date.now();
     if (now - windowStart >= 60000) {
       windowStart = now;
@@ -41,8 +45,8 @@ export function createSecrexRouter(store) {
       throw new AppError(429, "Too many secrets are being created. Try again shortly.");
     }
     creations++;
-    await store.create(input);
-    res.status(201).json({ id: input.id });
+    await store.create(input, revokeVerifier);
+    res.status(201).json({ id: input.id, ...(revokeVerifier ? { revocable: true } : {}) });
   });
   router.post("/:id/claim", async (req, res) => {
     const { claim, session } = readFields(req.body, { claim: [32], session: [32] });
@@ -51,6 +55,11 @@ export function createSecrexRouter(store) {
   router.post("/:id/end", (req, res) => {
     const { session } = readFields(req.body, { session: [32] });
     store.end(req.params.id, session);
+    res.sendStatus(204);
+  });
+  router.post("/:id/revoke", (req, res) => {
+    const { revoke } = readFields(req.body, { revoke: [32] });
+    store.revoke(req.params.id, revoke);
     res.sendStatus(204);
   });
   return router;

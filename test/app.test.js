@@ -234,6 +234,39 @@ test("voting ends at exactly 168 hours; results and QR remain; identifiers are c
   assert.equal(disk.totalVotes, 1);
 });
 
+test("short polls can hide all public counts until their chosen deadline", async (t) => {
+  const f = await fixture(t);
+  for (const overrides of [
+    { votingHours: 0 }, { votingHours: 169 }, { votingHours: 1.5 },
+    { votingHours: "6" }, { resultsVisibility: "invalid" },
+  ]) {
+    assert.equal((await f.request("/api/polls", input(overrides))).status, 400);
+  }
+  const p = await f.create({ votingHours: 6, resultsVisibility: "after_close", mapVisible: true });
+  assert.equal(p.endsAt - p.createdAt, 6 * 3600000);
+  assert.equal(p.deleteAt - p.createdAt, 30 * DAY);
+  const cookie = await f.session(p.id);
+  const cast = await f.request(`/api/polls/${p.id}/votes`, { optionId: 1 }, cookie);
+  assert.equal(cast.status, 200);
+  const vote = await cast.json();
+  assert.equal(vote.hasVoted, true);
+  const detail = await (await f.request(`/api/polls/${p.id}`)).json();
+  const list = await (await f.request("/api/posts")).json();
+  const map = await (await f.request("/api/map/search", {})).json();
+  for (const view of [p, vote, detail, list.polls[0], map.polls[0]]) {
+    assert.equal(view.resultsHidden, true);
+    assert.equal(Object.hasOwn(view, "totalVotes"), false);
+    for (const option of view.options ?? []) assert.equal(Object.hasOwn(option, "votes"), false);
+  }
+  f.advance(6 * 3600000);
+  assert.equal((await f.request(`/api/polls/${p.id}/votes`, { optionId: 2 }, cookie)).status, 409);
+  const final = await (await f.request(`/api/polls/${p.id}`)).json();
+  assert.equal(final.status, "closed");
+  assert.equal(final.resultsHidden, false);
+  assert.equal(final.totalVotes, 1);
+  assert.equal(final.options[0].votes, 1);
+});
+
 test("30-day deletion removes JSON, list entry, original page, QR and crash leftovers", async (t) => {
   const f = await fixture(t);
   const p = await f.create();
@@ -260,19 +293,19 @@ test("startup clears expired records and abandoned atomic-write files", async (t
   assert.deepEqual(await readdir(f.directory), []);
 });
 
-test("PostList sorts newest first; nearby is exactly 100 km; coordinates stay private", async (t) => {
+test("PostList sorts newest first; nearby defaults to an approximate 100 km; coordinates stay private", async (t) => {
   const f = await fixture(t);
   const base = { latitude: 0, longitude: 0 };
   const latitude = (km) => ((km / 6371.0088) * 180) / Math.PI;
   const a = await f.create({ location: base, title: "Oldest" });
   f.advance(1000);
   const b = await f.create({
-    location: { latitude: latitude(99.99), longitude: 0 },
+    location: { latitude: latitude(99), longitude: 0 },
     title: "Within",
   });
   f.advance(1000);
   const c = await f.create({
-    location: { latitude: latitude(100.01), longitude: 0 },
+    location: { latitude: latitude(101), longitude: 0 },
     title: "Outside",
   });
   assert.deepEqual(
@@ -294,6 +327,43 @@ test("PostList sorts newest first; nearby is exactly 100 km; coordinates stay pr
       { latitude: 0, longitude: -179.9 },
     ) < 25,
   );
+});
+
+test("nearby radius and nearest sort use coarse locations and paginate without duplicates", async (t) => {
+  const f = await fixture(t);
+  const location = { latitude: 0, longitude: 0 };
+  const near = await f.create({ title: "Closest", location });
+  f.advance(1000);
+  const next = await f.create({ title: "Next closest", location: { latitude: 0, longitude: 0.01 } });
+  const middle = [];
+  for (let i = 0; i < 21; i++) {
+    f.advance(1000);
+    middle.push((await f.create({
+      title: `Same grid ${i}`,
+      location: { latitude: 0.0149, longitude: 0.0149 },
+      mapVisible: true,
+    })).id);
+  }
+  f.advance(1000);
+  const far = await f.create({ title: "Further", location: { latitude: 0.06, longitude: 0 }, mapVisible: true });
+  const search = { location, radiusKm: 2, sort: "nearest" };
+  const first = await (await f.request("/api/posts/search", search)).json();
+  assert.equal(first.polls.length, 20);
+  const second = await (await f.request("/api/posts/search", { ...search, cursor: first.nextCursor })).json();
+  const all = [...first.polls, ...second.polls];
+  assert.deepEqual(all.map(p => p.id), [near.id, next.id, ...middle.slice().reverse()]);
+  assert.equal(second.nextCursor, null);
+  assert.ok(all.every(p => !("location" in p) && !("distance" in p)));
+
+  const newest = await (await f.request("/api/posts/search", { location, radiusKm: 10 })).json();
+  assert.equal(newest.polls[0].id, far.id);
+  const map = await (await f.request("/api/map/search", search)).json();
+  assert.deepEqual(map.polls.map(p => p.id), middle.slice().reverse());
+  assert.ok(map.polls.every(p => p.position[0] === 0.01 && p.position[1] === 0.01));
+  for (const invalid of [{ location, radiusKm: 20 }, { sort: "nearest" }]) {
+    assert.equal((await f.request("/api/posts/search", invalid)).status, 400);
+    assert.equal((await f.request("/api/map/search", invalid)).status, 400);
+  }
 });
 
 test("pagination has no duplicates at equal timestamps and rejects malformed cursors", async (t) => {
@@ -507,7 +577,7 @@ test("map publishes only opted-in coarse locations; search stays private and exp
   assert.equal((await f.request(`/api/polls/${distant.id}`)).status, 404);
 });
 
-test("map radius uses original GPS, caps payload and handles poles and the date line", async (t) => {
+test("map radius uses the same coarse grid as pins and caps the polar payload", async (t) => {
   const f = await fixture(t);
   const make = (id, location, createdAt = f.now()) => ({
     id: id.toString(16).padStart(24, "0"),
@@ -528,13 +598,18 @@ test("map radius uses original GPS, caps payload and handles poles and the date 
     "outside",
     make(2, { latitude: latitude(100.01), longitude: 0 }),
   );
+  f.store.index.set(
+    "clearly-inside",
+    make(3, { latitude: latitude(99.3), longitude: 0 }),
+  );
+  // The two GPS positions straddling 100 km share a grid cell just outside the radius.
   assert.deepEqual(
     f.store
       .map({ location: { latitude: 0, longitude: 0 } })
       .polls.map((p) => p.id),
-    [make(1, {}).id],
+    [make(3, {}).id],
   );
-  for (let n = 3; n <= 1105; n++)
+  for (let n = 4; n <= 1105; n++)
     f.store.index.set(
       String(n),
       make(n, { latitude: 90, longitude: 180 }, f.now() + n),

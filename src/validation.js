@@ -123,11 +123,6 @@ function baseInput(body) {
 
 export function pollInput(body) {
   const common = baseInput(body);
-  // A client from the newer release may still be open after a rollback.
-  // Never accept its private-poll settings and silently publish live results.
-  if ((body.votingHours !== undefined && body.votingHours !== 168) ||
-      (body.resultsVisibility !== undefined && body.resultsVisibility !== "live"))
-    throw new AppError(503, "Poll settings are temporarily unavailable. Try again shortly.");
   if (
     !Array.isArray(body.options) ||
     body.options.length < 2 ||
@@ -141,7 +136,12 @@ export function pollInput(body) {
   ) {
     throw new AppError(400, "Options must be unique.");
   }
-  return { ...common, options };
+  const { votingHours = 168, resultsVisibility = "live" } = body;
+  if (!Number.isInteger(votingHours) || votingHours < 1 || votingHours > 168)
+    throw new AppError(400, "Voting must last between 1 and 168 whole hours.");
+  if (!["live", "after_close"].includes(resultsVisibility))
+    throw new AppError(400, "Choose when to publish poll results.");
+  return { ...common, options, votingHours, resultsVisibility };
 }
 
 export function encryptedPrivateKeyInput(value) {

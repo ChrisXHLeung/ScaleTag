@@ -39,7 +39,53 @@ for (const Store of [PollStore, SQLiteStore]) test(`${Store.name}: free giveaway
  assert.equal((await req(`/api/sales/${post.id}/state`,{key:post.manageKey,state:'closed'})).status,200);
  for (const path of [`/api/sales/${post.id}`,`/sale/${post.id}`,`/api/sales/${post.id}/qr.png`,`/api/posts/${post.id}/social`]) assert.equal((await req(path)).status,404,path);
  for (const [path,body] of [['/api/posts/search',{type:'sale'}],['/api/map/search',{type:'sale'}]]) assert.equal((await (await req(path,body)).json()).polls.length,0);
- const again=await (await req('/api/sales',input)).json(); now+=3*DAY-1; assert.equal((await req(`/api/sales/${again.id}`)).status,200); now++; assert.equal((await req(`/api/sales/${again.id}`)).status,404); assert.equal((await req(`/api/sales/${again.id}/qr.png`)).status,404); for (const [path,body] of [['/api/posts/search',{type:'sale'}],['/api/map/search',{type:'sale'}]]) assert.equal((await (await req(path,body)).json()).polls.length,0); await store.sweep(); assert.ok((await store.read(again.id)).data, 'expired giveaway stays stored'); assert.equal((await store.read(legacy.id)).data, null, 'legacy sale removed'); now+=27*DAY; await store.sweep(); assert.equal((await store.read(again.id)).data,null, 'new giveaway is removed after 30 days'); assert.equal((await store.read(legacy.id)).data, null, 'legacy sale removed');
+ const claimed = await (await req('/api/sales', input)).json();
+ const statePath = `/api/sales/${claimed.id}/state`;
+ assert.equal((await req(statePath, { key: 'a'.repeat(64), state: 'claimed' })).status, 403);
+ const claims = await Promise.all(Array.from({ length: 2 }, () =>
+   req(statePath, { key: claimed.manageKey, state: 'claimed' })));
+ assert.ok(claims.every(response => response.status === 200));
+ assert.equal((await req(statePath, { key: claimed.manageKey, state: 'closed' })).status, 409);
+ const details = await req(`/api/sales/${claimed.id}`);
+ assert.equal(details.status, 200);
+ assert.match(details.headers.get('cache-control'), /no-store/);
+ const claimedDetails = await details.json();
+ assert.equal(claimedDetails.saleState, 'claimed');
+ assert.equal(claimedDetails.endsAt, claimed.endsAt);
+ assert.equal(claimedDetails.title, input.title);
+ assert.equal(Object.hasOwn(claimedDetails, 'pickupLocation'), false);
+ for (const path of [`/sale/${claimed.id}`, `/api/sales/${claimed.id}/qr.png`]) {
+   const response = await req(path);
+   assert.equal(response.status, 200, path);
+   assert.ok(!(await response.text()).includes(input.pickupLocation));
+ }
+ assert.equal(await store.count(), 1, 'only the poll remains discoverable');
+ for (const path of ['/api/posts/search', '/api/map/search']) {
+   const results = await (await req(path, { type: 'sale' })).json();
+   assert.equal(results.polls.length, 0, path);
+ }
+ const again = await (await req('/api/sales', input)).json();
+ now += 3 * DAY - 1;
+ assert.equal((await req(`/api/sales/${again.id}`)).status, 200);
+ assert.equal((await req(`/sale/${claimed.id}`)).status, 200);
+ now++;
+ for (const id of [again.id, claimed.id]) {
+   for (const path of [`/api/sales/${id}`, `/api/sales/${id}/qr.png`, `/sale/${id}`]) {
+     assert.equal((await req(path)).status, 404, path);
+   }
+ }
+ for (const path of ['/api/posts/search', '/api/map/search']) {
+   assert.equal((await (await req(path, { type: 'sale' })).json()).polls.length, 0);
+ }
+ await store.sweep();
+ assert.ok((await store.read(again.id)).data, 'expired giveaway stays stored');
+ assert.ok((await store.read(claimed.id)).data, 'claimed giveaway stays stored');
+ assert.equal((await store.read(legacy.id)).data, null, 'legacy sale removed');
+ now += 27 * DAY;
+ await store.sweep();
+ for (const id of [again.id, claimed.id]) {
+   assert.equal((await store.read(id)).data, null, 'new giveaway is removed after 30 days');
+ }
 });
 for (const Store of [PollStore,SQLiteStore]) test(`${Store.name}: restart removes legacy and expired giveaways`, async t => {
  const dir=await mkdtemp(join(tmpdir(),'giveaway-restart-')); let now=1000000000000;

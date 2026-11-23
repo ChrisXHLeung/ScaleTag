@@ -39,7 +39,34 @@ const REPORT_FREEZE_THRESHOLD = 6;
 const FROZEN_POST = "This post has been permanently frozen after reports.";
 const isDiscoverable = (p, now) =>
   p.frozenAt == null && p.deleteAt > now &&
-  (p.type !== "sale" || (p.giveawayVersion === 1 && !["closed", "claimed"].includes(p.saleState) && p.endsAt > now));
+  (p.type !== "sale" || (p.giveawayVersion === 1 && (p.saleState ?? "open") === "open" && p.endsAt > now));
+
+const onMapGrid = ({ latitude, longitude }) => ({
+  latitude: Math.round(latitude * 100) / 100 || 0,
+  longitude: Math.round(longitude * 100) / 100 || 0,
+});
+const DISTANCE_BANDS_PER_KM = 10;
+
+function nearbyRows(posts, location, radiusKm, sort) {
+  if (!location) return posts.map(post => ({ post, distanceBand: 0 }));
+  return posts.flatMap(post => {
+    const distance = distanceKm(location, onMapGrid(post.location));
+    // Group by 100 m from the coarse grid center, with newest first for ties.
+    return distance <= radiusKm
+      ? [{ post, distanceBand: sort === "nearest" ? Math.floor(distance * DISTANCE_BANDS_PER_KM) : 0 }]
+      : [];
+  });
+}
+
+function compareNearbyRows(a, b) {
+  return a.distanceBand - b.distanceBand ||
+    b.post.createdAt - a.post.createdAt || b.post.id.localeCompare(a.post.id);
+}
+
+function mapPosition(location) {
+  const { latitude, longitude } = onMapGrid(location);
+  return [longitude, latitude];
+}
 
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
@@ -68,7 +95,7 @@ const privateReply = (r) => ({
 });
 // Completed/closed tasks count as ended in status filters; retention is unchanged.
 export function postStatus(p, now) {
-  if (["closed", "claimed"].includes(p.saleState) || FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
+  if (["claimed", "closed"].includes(p.saleState) || FINAL_TASK_STATES.includes(taskStateOf(p))) return "closed";
   return now < p.endsAt ? "open" : "closed";
 }
 function pollResultsHidden(p, now) {
@@ -225,13 +252,15 @@ export class PollStore {
         );
       const now = this.clock();
       const id = randomBytes(12).toString("hex");
-      const { authKey, ...postInput } = input;
+      const { authKey, votingHours = 168, ...postInput } = input;
+      const lifetime = input.type === "sale" ? 3 * DAY :
+        input.type === "task" ? 30 * DAY : votingHours * 3600000;
       const p = {
         version: 1,
         ...postInput,
         id,
         createdAt: now,
-        endsAt: now + (input.type === "sale" ? 3 : input.type === "task" ? 30 : 7) * DAY,
+        endsAt: now + lifetime,
         deleteAt: now + 30 * DAY,
         options: input.options.map((label, n) => ({
           id: n + 1,
@@ -358,12 +387,18 @@ export class PollStore {
     });
   }
 
-  list({ location, status = "all", cursor, type = "all" } = {}) {
+  list({ location, radiusKm = 100, sort = "newest", status = "all", cursor, type = "all" } = {}) {
     let before;
     if (cursor) {
       try {
         before = JSON.parse(Buffer.from(cursor, "base64url").toString());
-        if (!Number.isFinite(before.createdAt) || !ID_PATTERN.test(before.id))
+        if (
+          !Number.isFinite(before.createdAt) || !ID_PATTERN.test(before.id) ||
+          (sort === "nearest" && (
+            !Number.isInteger(before.distanceBand) || before.distanceBand < 0 ||
+            before.distanceBand > radiusKm * DISTANCE_BANDS_PER_KM
+          ))
+        )
           throw Error();
       } catch {
         throw new AppError(400, "Invalid page cursor. Please reload the list.");
@@ -374,41 +409,41 @@ export class PollStore {
     if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
     if (status !== "all")
       rows = rows.filter((p) => postStatus(p, now) === status);
-    if (before)
-      rows = rows.filter(
-        (p) =>
-          p.createdAt < before.createdAt ||
-          (p.createdAt === before.createdAt && p.id < before.id),
-      );
-    if (location)
-      rows = rows.filter((p) => distanceKm(location, p.location) <= 100);
-    rows.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
-    const page = rows.slice(0, 20);
+    let ordered = nearbyRows(rows, location, radiusKm, sort);
+    if (before) {
+      const boundary = { post: before, distanceBand: sort === "nearest" ? before.distanceBand : 0 };
+      ordered = ordered.filter(row => compareNearbyRows(row, boundary) > 0);
+    }
+    ordered.sort(compareNearbyRows);
+    const page = ordered.slice(0, 20);
     const last = page.at(-1);
     return {
-      polls: page.map((p) => this.public(p)),
+      polls: page.map(({ post }) => this.public(post)),
       nextCursor:
-        rows.length > 20
+        ordered.length > 20
           ? Buffer.from(
-              JSON.stringify({ createdAt: last.createdAt, id: last.id }),
+              JSON.stringify({
+                createdAt: last.post.createdAt,
+                id: last.post.id,
+                ...(sort === "nearest" ? { distanceBand: last.distanceBand } : {}),
+              }),
             ).toString("base64url")
           : null,
     };
   }
 
-  map({ location, status = "all", type = "all" } = {}) {
+  map({ location, radiusKm = 100, sort = "newest", status = "all", type = "all" } = {}) {
     const now = this.clock();
-    const rows = [...this.index.values()]
+    const posts = [...this.index.values()]
       .filter((p) => p.mapVisible && isDiscoverable(p, now))
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
-      .filter((p) => status === "all" || postStatus(p, now) === status)
-      .filter((p) => !location || distanceKm(location, p.location) <= 100)
-      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+      .filter((p) => status === "all" || postStatus(p, now) === status);
+    const rows = nearbyRows(posts, location, radiusKm, sort).sort(compareNearbyRows);
     return {
       serverTime: now,
       total: rows.length,
-      // Bound response size; the UI explicitly identifies the newest 1,000 limit.
-      polls: rows.slice(0, 1000).map((p) => ({
+      // Bound response size; the UI identifies the 1,000 result limit.
+      polls: rows.slice(0, 1000).map(({ post: p }) => ({
         id: p.id,
         type: p.type ?? "poll",
         reward: p.reward,
@@ -423,10 +458,7 @@ export class PollStore {
         status: postStatus(p, now),
         // One stable grid prevents averaging multiple requests to recover GPS.
         // Rounding is a coarse public position, not an anonymity guarantee.
-        position: [
-          Number((Math.round(p.location.longitude * 100) / 100).toFixed(2)),
-          Number((Math.round(p.location.latitude * 100) / 100).toFixed(2)),
-        ],
+        position: mapPosition(p.location),
       })),
     };
   }
@@ -603,12 +635,20 @@ export class PollStore {
   }
 
   async closeSale(id, key) {
+    return this.setSaleState(id, key, "closed");
+  }
+
+  async setSaleState(id, key, state) {
+    if (!["claimed", "closed"].includes(state))
+      throw new AppError(400, "Choose a valid giveaway status.");
     return this.withManagedPost(id, key, "sale", async (db) => {
-      if (db.data.saleState === "claimed")
+      const post = db.data;
+      if (post.saleState === state) return this.public(post);
+      if (post.saleState === "claimed")
         throw new AppError(409, "This giveaway has already been claimed.");
-      db.data.saleState = "closed";
+      post.saleState = state;
       await this.write(db);
-      return this.public(db.data);
+      return this.public(post);
     });
   }
 

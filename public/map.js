@@ -86,7 +86,9 @@ export async function createPollMap() {
           ? t(`Free Giveaway · View item ↗`, `闲置赠予 · 查看物品 ↗`)
           : p.type === "task"
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
-          : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
+          : p.resultsHidden
+            ? t("Results will appear when voting closes.", "投票截止后公布结果。")
+            : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
       link.append(title, detail);
       content.append(link);
     }
@@ -204,6 +206,10 @@ export async function createPollMap() {
     },
     resize() {
       map.resize();
+    },
+    searchCenter() {
+      const { lat, lng } = map.getCenter().wrap();
+      return { latitude: lat, longitude: lng };
     },
     destroy() {
       clearTimeout(timeout);
