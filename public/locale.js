@@ -107,6 +107,13 @@ if (typeof document !== 'undefined') {
       const hasDraft = [...document.querySelectorAll('form input, form textarea, form select')].some(field => {
         if (field.type === 'hidden' || field.type === 'submit' || field.type === 'button') return false;
         if (field.type === 'checkbox' || field.type === 'radio') return field.checked !== field.defaultChecked;
+        if (field instanceof HTMLSelectElement) {
+          const options = [...field.options];
+          if (field.multiple) return options.some(option => option.selected !== option.defaultSelected);
+          const marked = options.findLastIndex(option => option.defaultSelected);
+          const initial = marked >= 0 ? marked : options.findIndex(option => !option.disabled);
+          return field.selectedIndex !== initial;
+        }
         return field.value !== field.defaultValue && field.value !== '';
       });
       if (hasDraft && !window.confirm(t('Changing language reloads this page and discards your unsent draft. Continue?', '切换语言将重新加载此页面，并丢弃尚未提交的草稿。是否继续？'))) {
