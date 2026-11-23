@@ -2,7 +2,7 @@
 
 ScaleTag is an installable web app for local polls, tasks, free giveaways, and one-time encrypted secrets (Secrex). No account is required. Publish a post, share its link or QR code, and find nearby posts in PostList, or send a burn-after-reading secret via Secrex.
 
-[Open ScaleTag](https://risinfo.cn/) · [Privacy and retention](https://risinfo.cn/privacy) · [Architecture case study](https://www.chriscn.cn/scaletag/)
+[Canada](https://www.scaletag.top/) · [Japan](https://asia.scaletag.top/) · [Privacy and retention](https://www.scaletag.top/privacy) · [Architecture case study](https://www.chriscn.cn/scaletag/)
 
 ## Posts and their lifetimes
 
@@ -21,12 +21,12 @@ Public task replies show the submitted name and message. The reply form encrypts
 
 | Page | Path |
 | --- | --- |
-| Publish | [Poll](https://risinfo.cn/create), [task](https://risinfo.cn/create/task), [giveaway](https://risinfo.cn/create/sale), [Secrex](https://risinfo.cn/secrex) (also `/create/secrex`) |
-| Discover | [PostList](https://risinfo.cn/PostList) and its optional map |
+| Publish | [Poll](https://www.scaletag.top/create), [task](https://www.scaletag.top/create/task), [giveaway](https://www.scaletag.top/create/sale), [Secrex](https://www.scaletag.top/secrex) (also `/create/secrex`) |
+| Discover | [PostList](https://www.scaletag.top/PostList) and its optional map |
 | Saved links | `/saved` |
 | View a post or secret | `/vote/<id>`, `/task/<id>`, `/sale/<id>`, `/secrex/<id>` |
 | Manage a post | `/task/<id>/manage`, `/sale/<id>/manage` |
-| Install and learn about data | [Install](https://risinfo.cn/install), [privacy](https://risinfo.cn/privacy) |
+| Install and learn about data | [Install](https://www.scaletag.top/install), [privacy](https://www.scaletag.top/privacy) |
 
 ## Production architecture
 
@@ -79,7 +79,7 @@ Access to stored records or storage encryption keys alone leaves the new contact
 
 ## Secrex one-time encrypted secrets
 
-Secrex ([`/secrex`](https://risinfo.cn/secrex), [`/create/secrex`](https://risinfo.cn/create/secrex)) lets users share sensitive text (up to 12,000 bytes plaintext) for a single reading session without creating an account or appearing in `PostList`. See [`public/secrex-crypto.js`](public/secrex-crypto.js), [`public/secrex.js`](public/secrex.js), [`src/secrex.js`](src/secrex.js), and [`src/secrex-store.js`](src/secrex-store.js).
+Secrex ([`/secrex`](https://www.scaletag.top/secrex), [`/create/secrex`](https://www.scaletag.top/create/secrex)) lets users share sensitive text (up to 12,000 bytes plaintext) for a single reading session without creating an account or appearing in `PostList`. See [`public/secrex-crypto.js`](public/secrex-crypto.js), [`public/secrex.js`](public/secrex.js), [`src/secrex.js`](src/secrex.js), and [`src/secrex-store.js`](src/secrex-store.js).
 
 1. **Client-side encryption and key separation (`secrex-v1`).** In a secure browser context, Web Crypto generates a 16-byte random ID (22 base64url characters), a 32-byte random share password (43 base64url characters), and a fresh 256-bit data encryption key (DEK). Using HKDF-SHA-256 with the raw ID bytes as salt, the browser derives two separate keys from the password:
    - A 32-byte claim credential (`secrex-v1-claim`) sent to the server for access verification.

@@ -23,6 +23,7 @@ import { saleImages } from "./sale-images.js";
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
 const VISITOR_COOKIE = "st_visit";
+const CANADIAN_ORIGINS = new Set(["https://scaletag.top", "https://www.scaletag.top"]);
 
 function cookieToken(req, name) {
   const prefix = `${name}=`;
@@ -41,6 +42,7 @@ export function createApp(
   if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin)
     throw Error("PUBLIC_ORIGIN must be an origin without a trailing slash");
   const secure = url.protocol === "https:";
+  const canadianDeployment = CANADIAN_ORIGINS.has(origin);
   const app = express();
   app.disable("x-powered-by");
   app.disable("etag");
@@ -59,10 +61,14 @@ export function createApp(
     next();
   });
   app.use("/api", (req, res, next) => {
-    if (
-      req.method === "POST" &&
-      (req.get("origin") !== origin || !req.is("application/json"))
-    ) {
+    if (req.method !== "POST") return next();
+    // Canada's two public hostnames serve the same deployment. Each can write
+    // only from its own origin; other deployments retain a single origin.
+    const requestOrigin = req.get("origin");
+    const validOrigin = canadianDeployment
+      ? CANADIAN_ORIGINS.has(requestOrigin) && requestOrigin === `https://${req.get("host")?.toLowerCase()}`
+      : requestOrigin === origin;
+    if (!validOrigin || !req.is("application/json")) {
       return next(
         new AppError(
           403,

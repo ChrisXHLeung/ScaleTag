@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
+import { request as httpRequest } from "node:http";
 import { PollStore, DAY, voterHash } from "../src/store.js";
 import { createApp } from "../src/app.js";
 import { pollInput, distanceKm } from "../src/validation.js";
@@ -33,7 +34,7 @@ async function fixture(t, options = {}) {
   const store = new PollStore(directory, { clock: () => now, ...options });
   await store.init();
   const server = createApp(store, {
-    origin,
+    origin: options.origin ?? origin,
     createLimit: options.createLimit ?? 1000,
   }).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -64,6 +65,7 @@ async function fixture(t, options = {}) {
     return r.headers.get("set-cookie").split(";")[0];
   }
   return {
+    url,
     store,
     directory,
     request,
@@ -75,6 +77,28 @@ async function fixture(t, options = {}) {
     },
   };
 }
+
+test("the Canadian public domains accept only matching trusted POST origins", async (t) => {
+  const f = await fixture(t, { origin: "https://scaletag.top" });
+  function create(host, origin) {
+    return new Promise((resolve, reject) => {
+      const request = httpRequest(f.url + "/api/polls", {
+        method: "POST",
+        headers: { host, origin, "content-type": "application/json" },
+      }, (response) => {
+        response.resume();
+        response.on("end", () => resolve(response.statusCode));
+      });
+      request.on("error", reject);
+      request.end(JSON.stringify(input()));
+    });
+  }
+  assert.equal(await create("www.scaletag.top", "https://www.scaletag.top"), 201);
+  assert.equal(await create("scaletag.top", "https://scaletag.top"), 201);
+  assert.equal(await create("www.scaletag.top", "https://scaletag.top"), 403);
+  assert.equal(await create("scaletag.top", "https://www.scaletag.top"), 403);
+  assert.equal(await create("asia.scaletag.top", "https://asia.scaletag.top"), 403);
+});
 
 test("server controls duration; only validated fields are persisted; data is private", async (t) => {
   const f = await fixture(t);
