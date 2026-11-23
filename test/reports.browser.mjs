@@ -8,11 +8,12 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import { createApp } from "../src/app.js";
 import { PollStore } from "../src/store.js";
+import { SQLiteStore } from "../src/sqlite-store.js";
 import { createTaskCredentials } from "../public/task-crypto.js";
 
-test("the sixth browser report blocks new requests and clears open post and management views on refresh", async (t) => {
+async function fixture(t, reportReviewEnabled = false) {
   const directory = await mkdtemp(join(tmpdir(), "scaletag-reports-browser-"));
-  const store = new PollStore(directory);
+  const store = reportReviewEnabled ? new SQLiteStore(directory, { reportReviewEnabled }) : new PollStore(directory);
   await store.init();
   let app;
   const server = createServer((req, res) => app(req, res)).listen(0, "127.0.0.1");
@@ -23,9 +24,15 @@ test("the sixth browser report blocks new requests and clears open post and mana
   t.after(async () => {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));
+    store.close?.();
     await rm(directory, { recursive: true, force: true });
   });
   browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+  return { browser, store, origin };
+}
+
+test("the sixth browser report blocks new requests and clears open post and management views on refresh", async (t) => {
+  const { browser, store, origin } = await fixture(t);
 
   for (const [type, path, locale, reportLabel, reportedLabel] of [
     ["poll", "vote", "en-US", "Report this post", "Report submitted."],
@@ -53,6 +60,7 @@ test("the sixth browser report blocks new requests and clears open post and mana
     assert.equal((await page.goto(url)).status(), 200);
     await page.getByRole("heading", { name: post.title }).waitFor();
     const report = page.getByRole("button", { name: reportLabel });
+    assert.equal(await page.locator("#report-reason").isHidden(), true);
     page.once("dialog", dialog => dialog.dismiss());
     await report.click();
     assert.equal(await report.isEnabled(), true, "canceling preserves the report action");
@@ -102,4 +110,21 @@ test("the sixth browser report blocks new requests and clears open post and mana
     await sixth.close();
     await context.close();
   }
+});
+
+test("enabled report review asks for an allowed reason and submits it with the report", async (t) => {
+  const { browser, store, origin } = await fixture(t, true);
+  const post = await store.create({ title: "Report reason test", options: ["One", "Two"], location: { latitude: 1, longitude: 1 } });
+  const page = await browser.newPage({ locale: "en-US" });
+  await page.goto(`${origin}/vote/${post.id}`);
+  const reason = page.getByLabel("Report reason");
+  await reason.waitFor();
+  await page.getByRole("button", { name: "Report this post" }).click();
+  await page.locator("#report-error").getByText("Choose a valid report reason.").waitFor();
+  await reason.selectOption("privacy");
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Report this post" }).click();
+  await page.getByText("Report submitted.", { exact: true }).waitFor();
+  assert.equal(await reason.isDisabled(), true);
+  assert.deepEqual(store.db.prepare("SELECT reason, count FROM post_report_reasons WHERE post_id=?").all(post.id), [{ reason: "privacy", count: 1 }]);
 });

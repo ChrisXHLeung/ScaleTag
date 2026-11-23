@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { createApp } from "../src/app.js";
 import { PollStore, DAY } from "../src/store.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "../src/pwa.js";
+import { createTaskCredentials } from "../public/task-crypto.js";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "scaletag-pwa-"));
@@ -296,6 +297,159 @@ test("the browser restores public draft text and keeps saved post links locally"
   await page.getByRole("heading", { name: "Draft being published" }).waitFor();
   await page.goto(`${origin}/create`);
   assert.equal(await page.getByLabel("The question").inputValue(), "Newer edit before the response");
+});
+
+test("owners can copy public text to a new draft without copying publication details", { timeout: 40000 }, async (t) => {
+  const { page, origin, store, errors, context } = await fixture(t);
+  const poll = await store.create({
+    title: "Neighborhood meetup", description: "Bring a book.", signature: "Jules",
+    options: ["Morning", "Afternoon"], visibility: "unlisted", votingHours: 6,
+    resultsVisibility: "after_close", images: ["https://example.test/old-picture.jpg"],
+    location: { latitude: 12.3456, longitude: 78.9123 },
+  });
+  const copy = page.getByRole("button", { name: "Copy to new draft" });
+  const management = `${origin}/vote/${poll.id}/manage`;
+  await page.goto(`${origin}/vote/${poll.id}`);
+  await page.getByRole("heading", { name: poll.title }).waitFor();
+  assert.equal(await copy.count(), 0);
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("My existing draft");
+  const draftKey = "scaletag-text-draft-poll";
+  let before = await page.evaluate((key) => localStorage.getItem(key), draftKey);
+  await page.goto(management);
+  assert.equal(await copy.count(), 0);
+  await page.getByLabel("Management password").fill(poll.manageKey);
+  await page.getByRole("button", { name: "Unlock" }).click();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await copy.click();
+  assert.equal(page.url(), management);
+  assert.equal(await page.evaluate((key) => localStorage.getItem(key), draftKey), before);
+
+  const other = await context.newPage();
+  await other.goto(`${origin}/create`);
+  const nextDialog = page.waitForEvent("dialog");
+  const copying = copy.click();
+  const dialog = await nextDialog;
+  await other.getByLabel("The question").fill("Newer draft from another tab");
+  await dialog.accept();
+  await copying;
+  await page.getByText("The draft changed in another tab. Try again.").waitFor();
+  assert.equal(page.url(), management);
+  before = await page.evaluate((key) => localStorage.getItem(key), draftKey);
+  assert.match(before, /Newer draft from another tab/);
+  await other.close();
+
+  await page.evaluate(() => {
+    window.restoreDraftStorage = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, ...args) {
+      if (key.startsWith("scaletag-text-draft-")) throw new DOMException("Disabled", "QuotaExceededError");
+      return window.restoreDraftStorage.call(this, key, ...args);
+    };
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await copy.click();
+  await page.getByText("This browser cannot store this item.").waitFor();
+  assert.equal(page.url(), management);
+  assert.equal(await page.evaluate((key) => localStorage.getItem(key), draftKey), before);
+  await page.evaluate(() => { Storage.prototype.setItem = window.restoreDraftStorage; });
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await copy.click();
+  await page.waitForURL(`${origin}/create`);
+  assert.equal(await page.getByLabel("The question").inputValue(), poll.title);
+  assert.equal(await page.locator("#description").inputValue(), "Bring a book.");
+  assert.equal(await page.getByLabel("Option 2", { exact: true }).inputValue(), "Afternoon");
+  assert.equal(await page.getByLabel("Your signature").inputValue(), "Jules");
+  assert.equal(await page.getByLabel("Voting duration").inputValue(), "168");
+  assert.equal(await page.getByLabel("Show results").inputValue(), "live");
+  assert.equal(await page.getByLabel("Post visibility").inputValue(), "public");
+  assert.equal(await page.locator("#map-consent").isChecked(), false);
+  assert.equal(await page.locator("#retention").isChecked(), false);
+  const snapshot = await page.evaluate((key) => localStorage.getItem(key), draftKey);
+  for (const value of [poll.manageKey, poll.id, "old-picture.jpg", "12.3456", "78.9123", "after_close", "unlisted"]) {
+    assert.equal(snapshot.includes(value), false);
+  }
+  assert.equal(store.storedCount(), 1);
+  await page.locator("#map-consent").check();
+  await page.locator("#retention").check();
+  const response = page.waitForResponse((res) => res.url() === `${origin}/api/polls` && res.request().method() === "POST");
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  const published = await (await response).json();
+  await page.getByRole("heading", { name: "Manage this poll" }).waitFor();
+  assert.notEqual(published.id, poll.id);
+  assert.notEqual(published.manageKey, poll.manageKey);
+  assert.equal(store.storedCount(), 2);
+
+  const { password, ...credentials } = await createTaskCredentials();
+  const task = await store.create({
+    ...credentials, type: "task", title: "Help with books", description: "Sort books by author.",
+    signature: "Jules", reward: "Coffee", options: [], visibility: "unlisted",
+  });
+  await page.goto(`${origin}/task/${task.id}/manage`);
+  await page.getByLabel("Management password").fill(password);
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await copy.click();
+  await page.waitForURL(`${origin}/create/task`);
+  assert.equal(await page.locator("#task-title").inputValue(), task.title);
+  assert.equal(await page.locator("#task-description").inputValue(), task.description);
+  assert.equal(await page.locator("#task-reward").inputValue(), task.reward);
+  assert.equal(await page.locator("#task-name").inputValue(), task.signature);
+  assert.equal(await page.getByLabel("Post visibility").inputValue(), "public");
+
+  const giveaway = await store.create({
+    type: "sale", giveawayVersion: 1, title: "Free books", description: "Two used books.",
+    signature: "Jules", pickupLocation: "Old pickup address", options: [], visibility: "unlisted",
+    pickupWindow: { startsAt: Date.now() + 3600000, endsAt: Date.now() + 7200000 },
+  });
+  await page.goto(`${origin}/sale/${giveaway.id}/manage`);
+  await page.getByLabel("Management password").fill(giveaway.manageKey);
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await copy.click();
+  await page.waitForURL(`${origin}/create/sale`);
+  assert.equal(await page.locator("#sale-title").inputValue(), giveaway.title);
+  assert.equal(await page.locator("#sale-description").inputValue(), giveaway.description);
+  assert.equal(await page.locator("#sale-name").inputValue(), giveaway.signature);
+  assert.equal(await page.locator("#pickup-location").inputValue(), "");
+  assert.equal(await page.locator("#sale-pickup-start").inputValue(), "");
+  assert.equal(await page.locator("#sale-pickup-end").inputValue(), "");
+  assert.deepEqual(errors, []);
+});
+
+test("saved links show current public status and stay usable if status checks fail", async (t) => {
+  const { store, page, origin, context, setUnavailablePath } = await fixture(t);
+  const poll = await store.create({ title: "Only for the group", signature: "Test", visibility: "unlisted", options: ["A", "B"] });
+  const managePath = `/vote/${poll.id}/manage`;
+  const gonePath = `/task/${"0".repeat(24)}`;
+  const saved = [{ path: managePath, title: poll.title }, { path: gonePath, title: "Old task" }];
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), saved);
+  const lookup = page.waitForRequest(`${origin}/api/posts/statuses`, { timeout: 5000 });
+  await page.goto(`${origin}/saved`);
+  assert.deepEqual((await lookup).postDataJSON(), {
+    posts: [{ type: "poll", id: poll.id }, { type: "task", id: "0".repeat(24) }],
+  });
+  const rows = page.locator(".saved-posts li");
+  await rows.filter({ hasText: poll.title }).getByText("Open for votes", { exact: true }).waitFor();
+  await rows.filter({ hasText: "Old task" }).getByText("Post link unavailable", { exact: true }).waitFor();
+  assert.equal(await rows.first().locator("a").getAttribute("href"), managePath);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
+
+  setUnavailablePath("/api/posts/statuses");
+  await page.reload();
+  await rows.first().getByText("Could not check post status.", { exact: true }).waitFor();
+  assert.equal(await rows.first().locator("a").getAttribute("href"), managePath);
+  setUnavailablePath(undefined);
+  await page.evaluate(() => dispatchEvent(new Event("online")));
+  await rows.first().getByText("Open for votes", { exact: true }).waitFor();
+  await rows.last().getByRole("button", { name: "Remove" }).click();
+  assert.equal(await rows.count(), 1);
+
+  const other = await context.newPage();
+  await other.goto(origin);
+  await store.setPollState(poll.id, poll.manageKey, "closed");
+  await other.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), saved.slice().reverse());
+  await page.bringToFront();
+  await rows.last().getByText("Final results", { exact: true }).waitFor();
+  assert.equal(await rows.last().locator("a").getAttribute("href"), managePath);
 });
 
 test("new poll owner can copy management details, edit photos, end and take down", { timeout: 60000 }, async (t) => {

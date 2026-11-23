@@ -83,7 +83,9 @@ export async function createPollMap() {
       const detail = document.createElement("span");
       detail.textContent =
         p.type === "sale"
-          ? t(`Free Giveaway · View item ↗`, `闲置赠予 · 查看物品 ↗`)
+          ? p.saleState === "reserved"
+            ? t("Reserved giveaway · View item ↗", "已保留的赠予 · 查看物品 ↗")
+            : t("Free Giveaway · View item ↗", "闲置赠予 · 查看物品 ↗")
           : p.type === "task"
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : p.resultsHidden

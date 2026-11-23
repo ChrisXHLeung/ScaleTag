@@ -133,6 +133,52 @@ test('Chinese giveaway form',async t=>{
   assert.deepEqual(f.errors,[]);
 });
 
+test("set a pickup window and hold a giveaway until it becomes available again", async (t) => {
+  const f = await fixture(t);
+  const publisher = f.page;
+  await publisher.goto(`${f.origin}/create/sale`);
+  await publisher.getByLabel("Item title").fill("Pickup test chair");
+  await publisher.getByLabel("Description and condition").fill("Good condition");
+  await publisher.getByLabel("Pickup location (public)").fill("North library entrance");
+  const [starts, ends] = await publisher.evaluate(() => {
+    const minute = Math.floor(Date.now() / 60000) * 60000;
+    return [6, 10].map(offset => {
+      const d = new Date(minute + offset * 60000);
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    });
+  });
+  await publisher.getByLabel("Pickup starts").fill(starts);
+  await publisher.getByLabel("Pickup ends").fill(ends);
+  await publisher.locator("#sale-map-consent").check();
+  await publisher.locator("#sale-retention").check();
+  await publisher.getByRole("button", { name: "Publish giveaway" }).click();
+  await publisher.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+  const id = new URL(publisher.url()).pathname.split("/")[2];
+  const visitor = await f.context.newPage();
+  await visitor.goto(`${f.origin}/sale/${id}`);
+  await visitor.locator("#sale-pickup-window", { hasText: "Pickup window" }).waitFor();
+  await publisher.getByLabel("Hold until").fill(starts);
+  await publisher.getByRole("button", { name: "Hold item" }).click();
+  await publisher.getByText("Reserved", { exact: true }).waitFor();
+  assert.ok((await f.store.get(id)).reservedUntil);
+  await visitor.goto(`${f.origin}/PostList`);
+  await visitor.getByRole("link", { name: /Reserved.*Pickup test chair/ }).waitFor();
+  await visitor.clock.install({ time: new Date() });
+  await visitor.goto(`${f.origin}/sale/${id}`);
+  await visitor.getByText("Reserved", { exact: true }).waitFor();
+  f.advance(7 * 60000);
+  await visitor.clock.fastForward(7 * 60000);
+  await visitor.getByText("Available", { exact: true }).waitFor();
+  assert.equal(await visitor.getByText("Reserved", { exact: true }).isVisible(), false);
+  await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+  publisher.once("dialog", dialog => dialog.accept());
+  await publisher.getByRole("button", { name: "Mark as claimed" }).click();
+  await publisher.getByText("Claimed", { exact: true }).waitFor();
+  await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await visitor.getByText("Claimed", { exact: true }).waitFor({ timeout: 4500 });
+  assert.deepEqual(f.errors, []);
+});
+
 test("claim a giveaway and keep its shared address without the pickup location", async t => {
   const f = await fixture(t);
   const pickup = "Behind the west library entrance";

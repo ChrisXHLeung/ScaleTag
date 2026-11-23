@@ -24,6 +24,7 @@ const directory = resolve(process.env.DATA_DIR ?? "./data");
 const store = new Store(directory, {
   maxPolls: positive("MAX_POLLS", 10000),
   maxVotes: positive("MAX_VOTES_PER_POLL", 50000),
+  reportReviewEnabled: process.env.SCALETAG_REPORT_REVIEW === "1",
 });
 await store.init();
 let trafficDb;

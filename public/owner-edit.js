@@ -1,10 +1,13 @@
 import {
   api, bindPhotoInput, escape, photoFields, t, uploadedPhotosHtml,
 } from "/common.js";
+import { mountDraftCopy } from "/local-posts.js";
+import { pickupWindowFields, readPickupWindow } from "/pickup.js";
 
 export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
+  const controls = document.createElement("div");
+  controls.className = "owner-edit";
   const details = document.createElement("details");
-  details.className = "owner-edit";
   const canEditOptions = post.type === "poll" && post.canEditOptions;
   details.innerHTML = `<summary>${t("Edit public details", "修改公开内容")}</summary>
     <form class="form-card" id="owner-edit-form">
@@ -15,7 +18,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       ${post.type === "task" ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
         <input id="owner-reward" name="reward" value="${escape(post.reward)}" maxlength="160" required>` : ""}
       ${post.type === "sale" ? `<label for="owner-pickup">${t("Pickup location (public)", "领取地点（公开）")}</label>
-        <input id="owner-pickup" name="pickupLocation" value="${escape(post.pickupLocation)}" maxlength="300" required>` : ""}
+        <input id="owner-pickup" name="pickupLocation" value="${escape(post.pickupLocation)}" maxlength="300" required>
+        ${pickupWindowFields("owner", post.pickupWindow)}` : ""}
       ${post.type === "poll" ? canEditOptions ? `<fieldset class="options-fieldset">
         <legend>${t("The options", "选项")}</legend>
         <div id="owner-options"></div>
@@ -30,7 +34,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       <p class="form-error" role="alert" hidden></p>
       <p class="field-hint" role="status"></p>
     </form>`;
-  host.append(details);
+  controls.append(details);
+  host.append(controls);
   const form = details.querySelector("form");
   const photos = bindPhotoInput(form, "owner");
   const submit = form.querySelector("[type=submit]");
@@ -41,7 +46,10 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   const photoRemoval = form.querySelector("#owner-photo-removal");
   const optionList = form.querySelector("#owner-options");
   const addOption = form.querySelector("#owner-add-option");
+  const pickupStart = form.querySelector("#owner-pickup-start");
+  const pickupEnd = form.querySelector("#owner-pickup-end");
   let current = post;
+  mountDraftCopy(controls, () => current);
   let optionLabels = post.options?.map(({ label }) => label);
   if (canEditOptions) {
     function renumber() {
@@ -90,10 +98,16 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         const options = Array.from(optionList.querySelectorAll("input"), field => field.value.trim());
         if (JSON.stringify(options) !== JSON.stringify(optionLabels)) changes.options = options;
       }
+      if (pickupStart && (pickupStart.value !== pickupStart.defaultValue || pickupEnd.value !== pickupEnd.defaultValue))
+        changes.pickupWindow = readPickupWindow(pickupStart, pickupEnd);
       if (replacement.files.length || removePhotos.checked) changes.images = await photos.readImages();
       const updated = await api(endpoint, changes);
       current = updated;
       optionLabels = updated.options?.map(({ label }) => label);
+      if (pickupStart) {
+        pickupStart.defaultValue = pickupStart.value;
+        pickupEnd.defaultValue = pickupEnd.value;
+      }
       replacement.value = "";
       replacement.dispatchEvent(new Event("change"));
       removePhotos.checked = false;

@@ -9,6 +9,87 @@ import { PollStore, DAY } from '../src/store.js';
 import { SQLiteStore } from '../src/sqlite-store.js';
 import { createApp } from '../src/app.js';
 const origin='https://scaletag.test';
+
+for (const Store of [PollStore, SQLiteStore]) {
+  test(`${Store.name}: pickup windows and temporary holds respect the original giveaway expiry`, async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'giveaway-hold-'));
+    let now = 1000000000000;
+    const store = new Store(dir, { clock: () => now, diskReserveBytes: 0 });
+    await store.init();
+    const server = createApp(store, { origin }).listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(async () => {
+      await new Promise((resolve) => server.close(resolve));
+      store.close?.();
+      await rm(dir, { recursive: true, force: true });
+    });
+    const request = (path, body) => fetch(`http://127.0.0.1:${server.address().port}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { origin, 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const input = {
+      title: 'Reading chair', description: 'Good condition', pickupLocation: 'Library',
+      location: { latitude: 43, longitude: -79 }, mapVisible: true, retentionAccepted: true,
+    };
+    for (const pickupWindow of [
+      { startsAt: now + 1000 },
+      { startsAt: now + 4000, endsAt: now + 3000 },
+      { startsAt: now - 2000, endsAt: now - 1000 },
+      { startsAt: now - DAY, endsAt: now + 1000 },
+      { startsAt: now + 1000, endsAt: now + 3 * DAY + 1 },
+    ]) {
+      assert.equal((await request('/api/sales', { ...input, pickupWindow })).status, 400);
+    }
+    const pickupWindow = { startsAt: now + 1000, endsAt: now + 2000 };
+    const creation = await request('/api/sales', { ...input, pickupWindow });
+    assert.equal(creation.status, 201);
+    const { id, endsAt, manageKey: key } = await creation.json();
+    const detail = `/api/sales/${id}`;
+    const state = (state, fields) => request(`${detail}/state`, { key, state, ...fields });
+    assert.deepEqual((await (await request(detail)).json()).pickupWindow, pickupWindow);
+    assert.equal((await state('reserved', { reservedUntil: now + 1000, key: '0'.repeat(64) })).status, 403);
+    for (const reservedUntil of [now, endsAt + 1, '1000000001000']) {
+      assert.equal((await state('reserved', { reservedUntil })).status, 400);
+    }
+    const reservedUntil = now + 1000;
+    for (let retry = 0; retry < 2; retry++) {
+      const response = await state('reserved', { reservedUntil });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).saleState, 'reserved');
+    }
+    const stored = (await store.read(id)).data;
+    assert.equal(stored.saleState, 'open', 'legacy state remains compatible');
+    assert.equal(stored.endsAt, endsAt);
+    for (const path of [detail, `/api/posts/${id}/social`]) {
+      const status = await (await request(path)).json();
+      assert.equal(status.saleState, 'reserved');
+      assert.equal(status.reservedUntil, reservedUntil);
+    }
+    for (const path of ['/api/posts/search', '/api/map/search']) {
+      const results = await (await request(path, { type: 'sale' })).json();
+      assert.equal(results.polls[0].saleState, 'reserved');
+    }
+    now = reservedUntil;
+    assert.equal((await (await request(detail)).json()).saleState, 'open');
+    assert.equal((await state('reserved', { reservedUntil: now + 1000 })).status, 200);
+    for (let retry = 0; retry < 2; retry++) assert.equal((await state('open')).status, 200);
+    assert.equal((await (await request(detail)).json()).saleState, 'open');
+    const replacement = { startsAt: now, endsAt: now + 5000 };
+    const edited = await request(`${detail}/edit`, { key, pickupWindow: replacement });
+    assert.equal(edited.status, 200);
+    assert.deepEqual((await edited.json()).pickupWindow, replacement);
+    const cleared = await request(`${detail}/edit`, { key, pickupWindow: null });
+    assert.equal(cleared.status, 200);
+    assert.equal((await cleared.json()).pickupWindow, undefined);
+    assert.equal((await state('reserved', { reservedUntil: now + 1000 })).status, 200);
+    const claim = await state('claimed');
+    assert.equal(claim.status, 200);
+    assert.equal((await claim.json()).reservedUntil, undefined);
+    assert.equal((await state('open')).status, 409);
+  });
+}
+
 for (const Store of [PollStore, SQLiteStore]) test(`${Store.name}: free giveaway lifecycle`, async t => {
  const dir=await mkdtemp(join(tmpdir(),'giveaway-')); let now=1000000000000;
  const store=new Store(dir,{clock:()=>now,diskReserveBytes:0}); await store.init();

@@ -305,6 +305,12 @@ test('100% of serverErrors and dynamic error patterns translate across all suppo
     'Choose a valid poll status.',
     'Choose something to update.',
     'The poll question and options can change only before the first vote and before voting closes.',
+    'Send between 1 and 20 valid post references.',
+    'Choose a valid report reason.',
+    'This post is hidden after reports.',
+    'Choose a pickup start and end time in order.',
+    'Choose a pickup window within the giveaway lifetime that has not ended.',
+    'Choose a future hold time within the giveaway lifetime.',
   ]) {
     for (const lang of localizedLanguages) {
       const value = translateError(key, lang);

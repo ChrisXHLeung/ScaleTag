@@ -26,6 +26,7 @@ export class SQLiteStore extends PollStore {
       PRAGMA busy_timeout=3000;
       PRAGMA journal_mode=DELETE;
       PRAGMA synchronous=FULL;
+      PRAGMA foreign_keys=ON;
       PRAGMA cache_size=-2048;
       CREATE TABLE IF NOT EXISTS posts (
         id TEXT PRIMARY KEY CHECK(length(id)=24),
@@ -37,6 +38,14 @@ export class SQLiteStore extends PollStore {
       CREATE INDEX IF NOT EXISTS posts_creation ON posts(created_at);
       CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, start INTEGER NOT NULL, count INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS post_report_reasons (
+        post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        reason TEXT NOT NULL CHECK(reason IN ('spam','privacy','inappropriate','other')),
+        count INTEGER NOT NULL CHECK(count > 0),
+        PRIMARY KEY (post_id, reason)
+      );
+      DELETE FROM post_report_reasons
+        WHERE NOT EXISTS (SELECT 1 FROM posts WHERE posts.id=post_report_reasons.post_id);
     `);
     const imported = this.db.prepare("SELECT 1 FROM metadata WHERE key='json-import'").get();
     if (!allowImport && !imported && legacy) {
@@ -86,6 +95,11 @@ export class SQLiteStore extends PollStore {
 
   remove(id) { this.db.prepare("DELETE FROM posts WHERE id=?").run(id); }
 
+  recordReportReason(id, reason) {
+    this.db.prepare(`INSERT INTO post_report_reasons(post_id, reason, count)
+      VALUES(?, ?, 1) ON CONFLICT(post_id, reason) DO UPDATE SET count=count+1`).run(id, reason);
+  }
+
   count() {
     return this.db.prepare(`SELECT count(*) AS count FROM posts
       WHERE delete_at>? AND json_extract(document,'$.frozenAt') IS NULL
@@ -108,6 +122,19 @@ export class SQLiteStore extends PollStore {
 
   storedCount() {
     return this.db.prepare("SELECT count(*) AS count FROM posts").get().count;
+  }
+
+  savedStatusRows(ids) {
+    return this.db.prepare(`SELECT id, ends_at AS endsAt, delete_at AS deleteAt,
+      json_extract(document,'$.type') AS type,
+      json_extract(document,'$.frozenAt') AS frozenAt,
+      json_extract(document,'$.withdrawnAt') AS withdrawnAt,
+      json_extract(document,'$.taskState') AS taskState,
+      json_extract(document,'$.assignedReplyId') IS NOT NULL AS taskAssigned,
+      json_extract(document,'$.saleState') AS saleState,
+      json_extract(document,'$.giveawayVersion') AS giveawayVersion,
+      json_extract(document,'$.reservedUntil') AS reservedUntil
+      FROM posts WHERE id IN (SELECT value FROM json_each(?))`).all(JSON.stringify(ids));
   }
 
   refreshIndex() {

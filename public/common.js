@@ -85,7 +85,7 @@ function toast(message) {
     element.hidden = true;
   }, 4500);
 }
-async function api(path, body) {
+async function api(path, body, { signal } = {}) {
   if (!navigator.onLine)
     throw new Error(
       t("You’re offline. Reconnect to publish, vote or load current results.", "当前离线。请重新连接后发布、投票或查看最新结果。"),
@@ -95,6 +95,7 @@ async function api(path, body) {
     response = await fetch(path, {
       credentials: "same-origin",
       cache: "no-store",
+      signal,
       ...(body === undefined
         ? {}
         : {

@@ -278,6 +278,16 @@ export function createApp(
   }
   app.get("/api/posts", list);
   app.post("/api/posts/search", list);
+  app.post("/api/posts/statuses", (req, res) => {
+    const posts = req.body?.posts;
+    if (!Array.isArray(posts) || posts.length < 1 || posts.length > 20 || posts.some(post =>
+      !["poll", "task", "sale"].includes(post?.type) ||
+      typeof post.id !== "string" || !ID_PATTERN.test(post.id))) {
+      throw new AppError(400, "Send between 1 and 20 valid post references.");
+    }
+    res.set("X-Robots-Tag", "noindex");
+    res.json({ statuses: store.savedStatuses(posts) });
+  });
   app.get("/api/polls", list);
   app.post("/api/polls/search", list);
   app.post("/api/map/search", (req, res) => {
@@ -402,7 +412,7 @@ export function createApp(
   });
   app.post("/api/sales/:id/state", async (req, res) => {
     const key = manageKeyInput(req.body);
-    res.json(await store.setSaleState(req.params.id, key, req.body.state));
+    res.json(await store.setSaleState(req.params.id, key, req.body.state, req.body.reservedUntil));
   });
   app.get("/api/sales/:id/qr.png", async (req, res) => {
     const sale = await store.get(req.params.id);
@@ -492,7 +502,7 @@ export function createApp(
     const token = tokenFor(req, id, "ss");
     if (!token)
       throw new AppError(403, "Please allow this post’s anonymous cookie and reload before reporting.");
-    res.json(await store.report(id, token));
+    res.json(await store.report(id, token, req.body?.reason));
   });
   let replyWindow = store.clock(),
     replyRequests = 0;

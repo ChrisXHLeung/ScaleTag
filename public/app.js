@@ -28,6 +28,7 @@ import { mountSocial } from "/social.js";
 import { mountPosterActions, mountResultCard } from "/poster.js";
 import { createTask, taskPage, stateLabel, isFinalState } from "/tasks.js";
 import { createSale, salePage, saleStateLabel } from "/sales.js";
+import { pickupWindowText } from "/pickup.js";
 import { bindTextDraft, mountSavedPost, renderSavedPosts } from "/local-posts.js";
 function showError(error) {
   document.title = t("Post unavailable — ScaleTag", "帖子不可用 — ScaleTag");
@@ -489,7 +490,8 @@ function postList() {
     mapLoading,
     mapGeneration = 0,
     mapRequest = 0,
-    mapTimer;
+    mapTimer,
+    listHoldTimer;
   const nearbyButton = document.querySelector("#nearby");
   const radiusSelect = document.querySelector("#nearby-radius");
   const sortSelect = document.querySelector("#nearby-sort");
@@ -577,6 +579,7 @@ function postList() {
             time,
             p.deleteAt,
             ...(p.endsAt > data.serverTime ? [p.endsAt] : []),
+            ...(p.reservedUntil > data.serverTime ? [p.reservedUntil] : []),
           ),
         data.serverTime + 30000,
       );
@@ -634,6 +637,7 @@ function postList() {
     "pagehide",
     () => {
       clearTimeout(mapTimer);
+      clearTimeout(listHoldTimer);
       mapView?.destroy();
     },
     { once: true },
@@ -678,8 +682,11 @@ function postList() {
     search.requestSubmit();
   };
   function card(p) {
-    if (p.type === "sale")
-      return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${p.saleState === "closed" ? "closed" : ""}">${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
+    if (p.type === "sale") {
+      const hold = p.saleState === "reserved"
+        ? `data-hold-deadline="${Date.now() + p.reservedUntil - p.serverTime}"` : "";
+      return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${hold ? "in-progress" : ""}" ${hold}>${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${p.pickupWindow ? pickupWindowText(p.pickupWindow) : t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
+    }
     if (p.type === "task")
       return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${t("Task", "任务")}</span><span class="status-badge ${isFinalState(p.taskState) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${stateLabel(p.taskState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div><div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
     return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${p.resultsHidden ? t("Results will appear when voting closes.", "投票截止后公布结果。") : p.options
@@ -691,6 +698,21 @@ function postList() {
       .join(
         "",
       )}${!p.resultsHidden && p.options.length > 3 ? `<small>+ ${p.options.length - 3} ${t("more options", "个其他选项")}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
+  }
+  function refreshHoldBadges(list) {
+    clearTimeout(listHoldTimer);
+    const now = Date.now();
+    let earliest = Infinity;
+    for (const badge of list.querySelectorAll("[data-hold-deadline]")) {
+      const end = Number(badge.dataset.holdDeadline);
+      if (end > now) earliest = Math.min(end, earliest);
+      else {
+        delete badge.dataset.holdDeadline;
+        badge.classList.remove("in-progress");
+        badge.textContent = saleStateLabel("open");
+      }
+    }
+    if (Number.isFinite(earliest)) listHoldTimer = setTimeout(() => refreshHoldBadges(list), earliest - now);
   }
   async function load(reset = true) {
     if (mode === "map") return loadMap();
@@ -717,6 +739,7 @@ function postList() {
       if (current !== request) return;
       if (reset) list.innerHTML = "";
       list.insertAdjacentHTML("beforeend", data.polls.map(card).join(""));
+      refreshHoldBadges(list);
       loaded += data.polls.length;
       cursor = data.nextCursor;
       if (!loaded && query)
@@ -859,8 +882,8 @@ function privacy() {
 
     <h2>${t("Deletion, backups and offline use", "删除、备份与离线使用")}</h2>
     <p>${t(
-      "Active records are removed 30 days after publication. A giveaway can stop being public sooner. Six reports from different browser cookies permanently freeze a post and make it unavailable. Production stores records in encrypted SQLite and keeps encrypted daily backups for up to 90 days from the date each backup was made. A post’s last backup copy may therefore remain for about 120 days from publication. Cleanup can be delayed by outages. We cannot remove screenshots or copies other people have saved.",
-      "帖子发布 30 天后会从当前存储中删除。闲置赠予可更早停止公开。同一帖子收到来自六个不同浏览器 Cookie 的举报后，会被永久冻结，无法访问。线上数据保存在加密的 SQLite 数据库中，每日加密备份从生成之日起最多保留 90 天，因此帖子的最后一份备份可能保留到发布后约 120 天。服务中断可能延迟清理。我们无法收回他人保存的截图或副本。",
+      "Active records are removed 30 days after publication. A giveaway can stop being public sooner. Six reports from different browser cookies automatically freeze a post and make it unavailable. Production stores records in encrypted SQLite and keeps encrypted daily backups for up to 90 days from the date each backup was made. A post’s last backup copy may therefore remain for about 120 days from publication. Cleanup can be delayed by outages. We cannot remove screenshots or copies other people have saved.",
+      "帖子发布 30 天后会从当前存储中删除。闲置赠予可更早停止公开。同一帖子收到来自六个不同浏览器 Cookie 的举报后，会自动冻结，无法访问。线上数据保存在加密的 SQLite 数据库中，每日加密备份从生成之日起最多保留 90 天，因此帖子的最后一份备份可能保留到发布后约 120 天。服务中断可能延迟清理。我们无法收回他人保存的截图或副本。",
     )}</p>
     <p>${t(
       "If you install ScaleTag, the app may cache interface files and a generic offline page. It does not cache private management data or queue votes, likes, replies, reports or posts while offline. Your browser can remember your language choice.",

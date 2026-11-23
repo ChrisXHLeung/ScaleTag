@@ -36,6 +36,15 @@
   overflow-wrap: anywhere;
 }
 
+.saved-post-details {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.saved-post-status {
+  display: block;
+}
+
 /* The map is optional; the list stays available without WebGL or map hosting. */
 .view-switch {
   display: inline-flex;
@@ -516,6 +525,33 @@
   font-family: ui-monospace, monospace;
   font-size: 0.85rem;
   width: 100%;
+}
+#sale-form {
+  min-width: 0;
+}
+[data-pickup-window] label,
+#sale-hold-form label {
+  display: block;
+  margin: 10px 0 5px;
+  font-weight: 700;
+}
+[data-pickup-window] input[type="datetime-local"],
+#sale-hold-form input[type="datetime-local"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid #b9c6ce;
+  border-radius: 5px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+[data-pickup-window] > .field-hint {
+  margin-top: 8px;
+}
+#sale-hold-form {
+  margin-bottom: 12px;
 }
 .state-buttons {
   border: 0;

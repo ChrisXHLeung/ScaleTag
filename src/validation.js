@@ -169,6 +169,8 @@ export function ownerEditInput(body, type) {
   if (type === "task" && Object.hasOwn(body, "reward")) changes.reward = publicText(body.reward, "Reward", 160);
   if (type === "sale" && Object.hasOwn(body, "pickupLocation"))
     changes.pickupLocation = publicText(body.pickupLocation, "Pickup location", 300);
+  if (type === "sale" && Object.hasOwn(body, "pickupWindow"))
+    changes.pickupWindow = pickupWindowInput(body.pickupWindow);
   if (!Object.keys(changes).length) throw new AppError(400, "Choose something to update.");
   return { key, changes };
 }
@@ -350,11 +352,21 @@ export function distanceKm(a, b) {
 }
 
 
+function pickupWindowInput(value) {
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value?.startsAt) || !Number.isSafeInteger(value?.endsAt) ||
+      value.startsAt >= value.endsAt)
+    throw new AppError(400, "Choose a pickup start and end time in order.");
+  return { startsAt: value.startsAt, endsAt: value.endsAt };
+}
+
 export function saleInput(body) {
   const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
   return { ...common, type: "sale", options: [],
     description: publicText(body.description, "Description", 4000),
-    pickupLocation: publicText(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1 };
+    pickupLocation: publicText(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1,
+    ...(Object.hasOwn(body, "pickupWindow") ? { pickupWindow: pickupWindowInput(body.pickupWindow) } : {}),
+  };
 }
 export function offerInput(body) {
   if (!body || typeof body !== "object")

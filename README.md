@@ -10,14 +10,14 @@ ScaleTag is an installable web app for local polls, tasks, free giveaways, and o
 | --- | --- | --- |
 | Poll | Vote, see results and download a result card | Voting lasts up to seven days. Publishers can end voting early, delay results until voting closes, or take down the poll. Results remain available until day 30 unless withdrawn. |
 | Task | Offer a reward, receive replies and privately choose a respondent | Available for 30 days. Selecting a respondent pauses applications. The publisher can reopen them before the task reaches a final state. |
-| Free giveaway | Share a pickup location and mark the item claimed | Public for up to 72 hours. Marking it claimed hides pickup details and removes it from discovery while the original link shows the status. Active storage retains the record until day 30. |
+| Free giveaway | Share a pickup location and optional pickup window, hold an item, or mark it claimed | Public for up to 72 hours. A temporary hold ends at the scheduled time or when the publisher releases it. Marking an item claimed hides pickup details and removes it from discovery while the original link shows the status. Active storage retains the record until day 30. |
 | Secrex | Encrypt text for one-time reading and optionally revoke it before it is opened | Never listed in PostList. Expires after seven days if unopened, or is destroyed after a single reading session (up to 5 minutes). |
 
 Each post has a unique ID. PostList combines publicly discoverable polls, tasks and giveaways in one list and an optional map. Keyword search matches titles and descriptions and works alongside post type, status, distance and sorting. Nearby search supports GPS or a manually chosen map area, with 2, 10, 50 and 100 km radii and a nearest-first sort. Nearby search and public map pins use a rounded 0.01° grid for post locations. Posts appear on the map only with explicit consent. Search coordinates are used for that request and are not stored.
 
 Polls, tasks and giveaways can also be published as link-only. Anyone with the direct link or QR code can open them. Link-only posts skip GPS, stay out of PostList and the map, and are excluded from visit counters.
 
-Text drafts and saved links stay in the current browser. Drafts cover public post fields. Images, location permissions, management credentials and private replies are excluded. Saved management URLs still require their separate passwords.
+Text drafts and saved links stay in the current browser. Drafts cover public post fields. Images, location permissions, management credentials and private replies are excluded. Saved links show the current public status when the list is viewed. Saved management URLs still require their separate passwords. A publisher can copy public text and voting options from an existing managed post into a new local draft. Location, pickup times, photos and management credentials are left out.
 
 Public task replies show the submitted name and message. The reply form encrypts the separate phone and email fields in the sender’s browser. The task publisher’s browser uses the management password to decrypt them. Giveaways use likes and a public pickup location, without an offer or contact form. Secrex one-time secrets are encrypted end-to-end in the sender’s browser, never listed publicly, and deliberately excluded from the ScaleTag post archive. The app does not process payments.
 
@@ -120,10 +120,25 @@ The server also supports older management links with SHA-256 verifiers. SQLCiphe
 ## Data and retention
 
 - Poll votes use a per-poll random cookie. Likes, replies and reports share a separate per-post random cookie. Server-side deduplication uses hashes. Vote hashes are cleared after voting ends. The application has no account or fingerprinting system and does not keep HTTP access logs. Infrastructure providers and host security logs can still process connection information.
-- Each browser cookie can report a post once. A sixth distinct report permanently freezes the post, including its detail page and management access, and removes it from the list and map. The record follows the regular retention schedule.
+- Each browser cookie can report a post once. A sixth distinct report freezes the post, including its detail page and management access, and removes it from the list and map. The default mode keeps the post frozen through its regular retention period.
 - Uploaded photos are re-encoded and their metadata is stripped. Anything visible in a photo remains visible to viewers. External HTTPS images load on request from their hosts. The optional map uses OpenFreeMap, which receives requests from the viewer’s browser.
 - The installable app caches selected interface assets and a generic offline page. It does not cache private management data or queue offline submissions.
 - The service removes posts from active storage at day 30, with cleanup running on startup and approximately every 30 seconds during normal operation. Backups may contain earlier copies. Each backup is retained for up to 90 days after the backup was made, so the last archived copy of a post may remain for about 120 days after publication. Recovery preserves original expiry dates.
+
+## Optional report review
+
+The default `SCALETAG_REPORT_REVIEW=0` keeps anonymous reports and automatic freezing. To collect report reasons and allow review on a SQLite deployment, set `SCALETAG_REPORT_REVIEW=1` in its environment configuration and recreate the application containers. New reports still use the same freeze threshold. The public site sees the reason selector, while category totals stay in the server database.
+
+An administrator can use the running container's existing database permissions. The following commands use the HA Compose project:
+
+```bash
+docker compose -f compose.ha.yaml exec -T app1 node src/report-review.js list
+docker compose -f compose.ha.yaml exec -T app1 node src/report-review.js show POST_ID
+docker compose -f compose.ha.yaml exec -T app1 node src/report-review.js photo POST_ID 1 > photo.png
+docker compose -f compose.ha.yaml exec -T app1 node src/report-review.js restore POST_ID
+```
+
+The `show` command lists photo numbers and formats. Use the original format when saving a photo for local inspection. The review tool does not fetch external image links. Restoring clears the active reports on that post and leaves its original expiration and publication settings in place. Frozen posts that have already expired or were withdrawn stay unavailable.
 
 ## Run locally
 

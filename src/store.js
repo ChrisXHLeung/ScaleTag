@@ -36,11 +36,35 @@ export const voterHash = (value) =>
   createHash("sha256").update(value).digest("hex");
 const reportHash = (token) => voterHash(`report:${token}`);
 const REPORT_FREEZE_THRESHOLD = 6;
+const REPORT_REASONS = new Set(["spam", "privacy", "inappropriate", "other"]);
 const FROZEN_POST = "This post has been permanently frozen after reports.";
+const REVIEWABLE_POST = "This post is hidden after reports.";
 const isDiscoverable = (p, now) =>
   p.visibility !== "unlisted" &&
   p.frozenAt == null && p.withdrawnAt == null && p.deleteAt > now &&
   (p.type !== "sale" || (p.giveawayVersion === 1 && (p.saleState ?? "open") === "open" && p.endsAt > now));
+
+export function saleStateOf(post, now) {
+  const state = post.saleState ?? "open";
+  return state === "open" && Number.isSafeInteger(post.reservedUntil) && post.reservedUntil > now
+    ? "reserved" : state;
+}
+
+function publicSaleAvailability(post, now) {
+  if (post.type !== "sale") return {};
+  const saleState = saleStateOf(post, now);
+  return {
+    saleState,
+    ...(saleState === "reserved" ? { reservedUntil: post.reservedUntil } : {}),
+    ...(["open", "reserved"].includes(saleState) && post.pickupWindow ? { pickupWindow: post.pickupWindow } : {}),
+  };
+}
+
+function validatePickupWindow(window, createdAt, expiresAt, now) {
+  if (window && (window.startsAt < Math.floor(createdAt / 60000) * 60000 ||
+      window.endsAt <= now || window.endsAt > expiresAt))
+    throw new AppError(400, "Choose a pickup window within the giveaway lifetime that has not ended.");
+}
 
 const onMapGrid = ({ latitude, longitude }) => ({
   latitude: Math.round(latitude * 100) / 100 || 0,
@@ -114,6 +138,17 @@ function pollResultsHidden(p, now) {
   return p.resultsVisibility === "after_close" && now < p.endsAt;
 }
 
+function savedPostStatus(type, post, now) {
+  if (!post || (post.type ?? "poll") !== type ||
+      post.deleteAt <= now || post.frozenAt != null || post.withdrawnAt != null ||
+      (type === "sale" && (post.giveawayVersion !== 1 || post.saleState === "closed" || post.endsAt <= now)))
+    return "unavailable";
+  if (type === "poll") return now < post.endsAt ? "poll_open" : "poll_final";
+  if (type === "sale") return `sale_${saleStateOf(post, now)}`;
+  const state = taskStateOf(post);
+  return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "task_assigned" : `task_${state}`;
+}
+
 function pollOptionsEditable(p, now) {
   return p.totalVotes === 0 && now < p.endsAt;
 }
@@ -128,6 +163,7 @@ export class PollStore {
       maxPolls = 10000,
       maxVotes = 50000,
       diskReserveBytes = 256 * 1024 * 1024,
+      reportReviewEnabled = false,
     } = {},
   ) {
     this.directory = directory;
@@ -135,6 +171,9 @@ export class PollStore {
     this.maxPolls = maxPolls;
     this.maxVotes = maxVotes;
     this.diskReserveBytes = diskReserveBytes;
+    if (reportReviewEnabled && typeof this.recordReportReason !== "function")
+      throw Error("SCALETAG_REPORT_REVIEW requires STORAGE_BACKEND=sqlite");
+    this.reportReviewEnabled = reportReviewEnabled;
     this.index = new Map();
     this.queues = new Map();
   }
@@ -169,8 +208,11 @@ export class PollStore {
       reward: p.reward,
       price: p.price,
       saleState: p.saleState,
+      reservedUntil: p.reservedUntil,
+      pickupWindow: p.pickupWindow,
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
+      ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
       frozenAt: p.frozenAt,
       withdrawnAt: p.withdrawnAt,
       ...(p.contactPublicKey ? { contactPublicKey: p.contactPublicKey } : {}),
@@ -252,7 +294,8 @@ export class PollStore {
         "This poll does not exist or has been removed from the website.",
       );
     }
-    if (db.data.frozenAt != null) throw new AppError(404, FROZEN_POST);
+    if (db.data.frozenAt != null)
+      throw new AppError(404, this.reportReviewEnabled ? REVIEWABLE_POST : FROZEN_POST);
     if (db.data.withdrawnAt != null && !allowWithdrawn)
       throw new AppError(404, "This poll has been taken down.");
     return db;
@@ -275,6 +318,7 @@ export class PollStore {
       const { authKey, votingHours = 168, ...postInput } = input;
       const lifetime = type === "sale" ? 3 * DAY :
         type === "task" ? 30 * DAY : votingHours * 3600000;
+      if (type === "sale") validatePickupWindow(input.pickupWindow, now, now + lifetime, now);
       const p = {
         version: 1,
         ...postInput,
@@ -351,6 +395,8 @@ export class PollStore {
       taskState,
       assignedReplyId,
       pickupLocation,
+      pickupWindow,
+      reservedUntil,
       totalVotes,
       options,
       ...result
@@ -360,6 +406,7 @@ export class PollStore {
     return {
       ...result,
       type: p.type ?? "poll",
+      ...publicSaleAvailability(p, now),
       ...(p.resultsVisibility === "after_close" ? { resultsHidden } : {}),
       ...(resultsHidden ? {} : { totalVotes }),
       options: resultsHidden ? options.map(({ id, label }) => ({ id, label })) : options,
@@ -380,6 +427,17 @@ export class PollStore {
     return this.exclusive(id, async () =>
       this.public((await this.live(id)).data, token),
     );
+  }
+
+  savedStatusRows(ids) {
+    return ids.map(id => this.index.get(id)).filter(Boolean);
+  }
+
+  savedStatuses(references) {
+    const ids = [...new Set(references.map(({ id }) => id))];
+    const byId = new Map(this.savedStatusRows(ids).map(post => [post.id, post]));
+    const now = this.clock();
+    return references.map(({ type, id }) => savedPostStatus(type, byId.get(id), now));
   }
 
   async vote(id, token, optionId) {
@@ -473,7 +531,7 @@ export class PollStore {
         type: p.type ?? "poll",
         reward: p.reward,
         price: p.price,
-        saleState: p.saleState,
+        ...publicSaleAvailability(p, now),
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
         ...(pollResultsHidden(p, now) ? { resultsHidden: true } : { totalVotes: p.totalVotes }),
@@ -498,10 +556,11 @@ export class PollStore {
       ),
       ...(p.visibility === "unlisted" ? { visibility: p.visibility } : {}),
       hasReported: Boolean(token && p.reportHashes?.includes(reportHash(token))),
+      ...(this.reportReviewEnabled ? { reportReviewEnabled: true } : {}),
       // Unauthenticated: never includes phone or email.
       replies: task ? (p.replies ?? []).map(publicReply) : [],
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
-      ...(p.type === "sale" ? { saleState: p.saleState ?? "open" } : {}),
+      ...publicSaleAvailability(p, this.clock()),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
       deleteAt: p.type === "sale" ? p.endsAt : p.deleteAt,
@@ -532,7 +591,9 @@ export class PollStore {
     });
   }
 
-  async report(id, token) {
+  async report(id, token, reason = "other") {
+    if (this.reportReviewEnabled && !REPORT_REASONS.has(reason))
+      throw new AppError(400, "Choose a valid report reason.");
     return this.exclusive(id, async () => {
       const db = await this.live(id);
       const p = db.data;
@@ -543,6 +604,7 @@ export class PollStore {
       const frozen = p.reportHashes.length >= REPORT_FREEZE_THRESHOLD;
       if (frozen) p.frozenAt = this.clock();
       await this.write(db);
+      if (this.reportReviewEnabled) this.recordReportReason(id, reason);
       return { hasReported: true, frozen };
     });
   }
@@ -608,7 +670,8 @@ export class PollStore {
         (type === "sale" && (snapshot.giveawayVersion !== 1 ||
          snapshot.saleState === "closed" || snapshot.endsAt <= this.clock())))
       throw new AppError(404, "Post not found.");
-    if (snapshot.frozenAt != null) throw new AppError(404, FROZEN_POST);
+    if (snapshot.frozenAt != null)
+      throw new AppError(404, this.reportReviewEnabled ? REVIEWABLE_POST : FROZEN_POST);
     if (snapshot.withdrawnAt != null && !allowWithdrawn)
       throw new AppError(404, "This poll has been taken down.");
     const verifier = snapshot.manageKeyHash;
@@ -665,6 +728,7 @@ export class PollStore {
       const now = this.clock();
       if (type === "sale" && post.saleState === "claimed")
         throw new AppError(409, "This giveaway has already been claimed.");
+      if (type === "sale") validatePickupWindow(copy.pickupWindow, post.createdAt, post.endsAt, now);
       const questionChanged = type === "poll" && copy.title !== undefined && copy.title !== post.title;
       const optionsChanged = options && (options.length !== post.options.length ||
         options.some((label, index) => label !== post.options[index].label));
@@ -753,15 +817,24 @@ export class PollStore {
     return this.setSaleState(id, key, "closed");
   }
 
-  async setSaleState(id, key, state) {
-    if (!["claimed", "closed"].includes(state))
+  async setSaleState(id, key, state, reservedUntil) {
+    if (!["claimed", "closed", "reserved", "open"].includes(state))
       throw new AppError(400, "Choose a valid giveaway status.");
     return this.withManagedPost(id, key, "sale", async (db) => {
       const post = db.data;
-      if (post.saleState === state) return this.public(post);
+      if (state === "claimed" && post.saleState === "claimed") return this.public(post);
       if (post.saleState === "claimed")
         throw new AppError(409, "This giveaway has already been claimed.");
-      post.saleState = state;
+      if (state === "reserved") {
+        if (!Number.isSafeInteger(reservedUntil) || reservedUntil <= this.clock() || reservedUntil > post.endsAt)
+          throw new AppError(400, "Choose a future hold time within the giveaway lifetime.");
+        if (post.reservedUntil === reservedUntil) return this.public(post);
+        post.reservedUntil = reservedUntil;
+      } else {
+        if (state === "open" && post.reservedUntil === undefined) return this.public(post);
+        delete post.reservedUntil;
+        post.saleState = state;
+      }
       await this.write(db);
       return this.public(post);
     });
