@@ -144,6 +144,74 @@ test("empty list and map results can clear filters without changing the view", a
   assert.equal(page.url(), `${origin}/PostList`);
 });
 
+test("canceling a pending nearby lookup allows immediate retry and ignores the old callback", async (t) => {
+  const { page, origin } = await fixture(t);
+  await page.addInitScript(() => {
+    window.locationLookups = [];
+    navigator.geolocation.getCurrentPosition = success => window.locationLookups.push(success);
+  });
+  await page.goto(`${origin}/PostList`);
+  const nearby = page.locator("#nearby");
+  const cancel = page.getByRole("button", { name: "Cancel nearby search", exact: true });
+  await nearby.click();
+  await page.waitForFunction(() => window.locationLookups.length === 1);
+  await cancel.click({ timeout: 5000 });
+  assert.equal(await nearby.getAttribute("aria-pressed"), "false");
+  await nearby.click();
+  await page.waitForFunction(() => window.locationLookups.length === 2);
+  await page.evaluate(() => window.locationLookups[0]({ coords: { latitude: 1, longitude: 2 } }));
+  await cancel.waitFor();
+  assert.equal(await page.locator("#location-privacy").isHidden(), true);
+
+  await page.locator("#content-type").selectOption("sale");
+  await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
+  assert.equal(await nearby.getAttribute("aria-pressed"), "false");
+  await nearby.click();
+  await page.waitForFunction(() => window.locationLookups.length === 3);
+  const result = page.waitForRequest(request => request.url() === `${origin}/api/posts/search` && request.postDataJSON()?.location);
+  await page.evaluate(() => {
+    window.locationLookups[1]({ coords: { latitude: 3, longitude: 4 } });
+    window.locationLookups[2]({ coords: { latitude: 43.65, longitude: -79.38 } });
+  });
+  assert.deepEqual((await result).postDataJSON().location, { latitude: 43.65, longitude: -79.38 });
+  assert.equal(await nearby.getAttribute("aria-pressed"), "true");
+});
+
+test("an unchanged automatic map refresh keeps keyboard focus on Clear all filters", async (t) => {
+  const { page, origin } = await fixture(t);
+  let release;
+  let requestStarted;
+  const pendingRefresh = new Promise(resolve => { requestStarted = resolve; });
+  await page.route(`${origin}/api/map/search`, async route => {
+    if (release) {
+      requestStarted();
+      await release;
+    }
+    await route.continue();
+  });
+  await page.clock.install();
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("task");
+  await page.getByRole("button", { name: "Map", exact: true }).click();
+  const clear = page.getByRole("button", { name: "Clear all filters", exact: true });
+  await clear.focus();
+  await page.locator("#map-count").evaluate(message => {
+    window.mapResultUpdated = false;
+    new MutationObserver(() => { window.mapResultUpdated = true; }).observe(message, { childList: true });
+  });
+  let unblock;
+  release = new Promise(resolve => { unblock = resolve; });
+  try {
+    await page.clock.fastForward(31000);
+    await pendingRefresh;
+    assert.equal(await clear.evaluate(button => document.activeElement === button, undefined, { timeout: 5000 }), true);
+  } finally {
+    unblock();
+  }
+  await page.waitForFunction(() => window.mapResultUpdated);
+  assert.equal(await clear.evaluate(button => document.activeElement === button), true);
+});
+
 test("a non-cached Back navigation restores the discovery view and public filters only", async (t) => {
   const { page, origin, store, input } = await fixture(t);
   const poll = await store.create(input);

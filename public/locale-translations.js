@@ -515,6 +515,15 @@ export const TRANSLATIONS = {
     de: "Alle Filter zurücksetzen",
     it: "Cancella tutti i filtri",
   },
+  "Cancel nearby search": {
+    ja: "周辺の検索をキャンセル",
+    ko: "주변 검색 취소",
+    fr: "Annuler la recherche à proximité",
+    pt: "Cancelar busca nas proximidades",
+    es: "Cancelar búsqueda cercana",
+    de: "Umgebungssuche abbrechen",
+    it: "Annulla la ricerca nelle vicinanze",
+  },
   "No posts match your search.": {
     ja: "検索条件に一致する投稿はありません。",
     ko: "검색 조건에 맞는 게시물이 없습니다.",
