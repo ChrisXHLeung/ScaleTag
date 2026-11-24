@@ -394,8 +394,11 @@ async function votePage(id, { ownerKey, published } = {}) {
     const results = document.querySelector("#results");
     const resultsHtml = poll.resultsHidden ? "" : poll.options
       .map(
-        (o) =>
-          `<div class="result-row"><div><span>${escape(o.label)}</span><strong>${percent(o.votes, poll.totalVotes)}% <small>${t(`${count(o.votes)} ${o.votes === 1 ? "vote" : "votes"}`, `${count(o.votes)} 票`)}</small></strong></div><progress value="${o.votes}" max="${poll.totalVotes || 1}" aria-label="${escape(o.label)}: ${percent(o.votes, poll.totalVotes)} percent"></progress></div>`,
+        (o) => {
+          const pct = percent(o.votes, poll.totalVotes);
+          const votesText = t(`${count(o.votes)} ${o.votes === 1 ? "vote" : "votes"}`, `${count(o.votes)} 票`);
+          return `<div class="result-row"><div><span>${escape(o.label)}</span><strong>${pct}% <small>${votesText}</small></strong></div><meter min="0" value="${o.votes}" max="${poll.totalVotes || 1}" aria-label="${escape(o.label)}" aria-valuetext="${escape(`${pct}% (${votesText})`)}"></meter></div>`;
+        },
       )
       .join("");
     // Compare against the last markup we wrote (not the browser-serialized
@@ -454,7 +457,7 @@ async function votePage(id, { ownerKey, published } = {}) {
       render();
     }
   };
-  mountSocial(id, false);
+  const social = mountSocial(id, false);
   let fetching = false;
   let timer;
   let stopped = false;
@@ -490,6 +493,7 @@ async function votePage(id, { ownerKey, published } = {}) {
         window.removeEventListener("online", refresh);
         window.removeEventListener("pagehide", onPageHide);
         window.removeEventListener("pageshow", onPageShow);
+        social?.stop?.();
         showError(e);
       } else
         document.querySelector("#results-updated").textContent =
@@ -817,7 +821,7 @@ function postList() {
       .slice(0, 2)
       .map(
         (o) =>
-          `<div><span>${escape(o.label)}</span><strong>${percent(o.votes, p.totalVotes)}%</strong><progress value="${o.votes}" max="${p.totalVotes || 1}" aria-label="${escape(o.label)}: ${percent(o.votes, p.totalVotes)} percent"></progress></div>`,
+          `<div><span>${escape(o.label)}</span><strong>${percent(o.votes, p.totalVotes)}%</strong><meter min="0" value="${o.votes}" max="${p.totalVotes || 1}" aria-label="${escape(o.label)}" aria-valuetext="${percent(o.votes, p.totalVotes)}%"></meter></div>`,
       )
       .join(
         "",

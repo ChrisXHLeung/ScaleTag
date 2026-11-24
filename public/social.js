@@ -177,17 +177,20 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       }
     };
   async function refresh() {
+    if (stopped || !host.isConnected) return;
     if (document.hidden || fetching || liking || replying || reporting || expired) return;
     fetching = true;
     try {
       state = await api(`/api/posts/${id}/social`);
+      if (stopped) return;
       host.querySelector("#social-error").hidden = true;
       render();
       onState?.(state);
     } catch (e) {
+      if (stopped) return;
       if (e.status === 404) {
         expired = true;
-        clearInterval(timer);
+        stop();
         host.innerHTML =
           `<p role="status">${t("This post and its replies are no longer available.", "此帖子及其回复已不可用。")}</p>`;
         onUnavailable?.();
@@ -196,19 +199,51 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       fetching = false;
     }
   }
-  let timer = setInterval(refresh, 15000);
-  document.addEventListener("visibilitychange", refresh);
-  window.addEventListener("online", refresh);
-  window.addEventListener("offline", () => {
-    if (state && !expired) render();
-  });
-  window.addEventListener("pagehide", () => clearInterval(timer));
-  window.addEventListener("pageshow", (event) => {
-    if (!event.persisted || expired) return;
-    clearInterval(timer);
+  let timer;
+  let stopped = false;
+  function startPolling() {
+    if (stopped || timer) return;
     timer = setInterval(refresh, 15000);
+  }
+  function stopPolling() {
+    clearInterval(timer);
+    timer = undefined;
+  }
+  function onVisibilityChange() {
     void refresh();
-  });
+  }
+  function onOnline() {
+    void refresh();
+  }
+  function onOffline() {
+    if (state && !expired && !stopped) render();
+  }
+  function onPageHide() {
+    stopPolling();
+  }
+  function onPageShow(event) {
+    if (!event.persisted || expired || stopped) return;
+    startPolling();
+    void refresh();
+  }
+  // Idempotent: unbinds every listener and clears the timer so a removed post
+  // (or a page that tore down this widget) never keeps polling /social.
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    stopPolling();
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("online", onOnline);
+    window.removeEventListener("offline", onOffline);
+    window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("pageshow", onPageShow);
+  }
+  startPolling();
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("offline", onOffline);
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("pageshow", onPageShow);
   refresh();
-  return { refresh };
+  return { refresh, stop };
 }

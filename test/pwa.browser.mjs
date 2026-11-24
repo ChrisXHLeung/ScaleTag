@@ -273,7 +273,7 @@ test("the browser restores public draft text and keeps saved post links locally"
   await page.getByRole("button", { name: "Publish my poll" }).click();
   await page.waitForURL(/\/vote\/[a-f0-9]{24}/);
   await page.locator("#results-updated").getByText("Results will appear when voting closes.").waitFor();
-  assert.equal(await page.locator("#results progress").count(), 0);
+  assert.equal(await page.locator("#results meter, #results progress").count(), 0);
   const path = new URL(page.url()).pathname;
   await page.getByRole("button", { name: "Save post" }).click();
   await page.goto(`${origin}/saved`);
@@ -944,7 +944,7 @@ test(
 
     await page.goto(`${origin}/vote/${poll.id}`);
     await page.getByRole("heading", { name: poll.title }).waitFor();
-    await page.locator("#results progress").first().waitFor();
+    await page.locator("#results meter").first().waitFor();
     assert.equal(await page.locator("#total-votes").getAttribute("aria-live"), "polite");
     assert.equal(await page.locator("#results-updated").textContent(), hint);
 
@@ -999,6 +999,99 @@ test(
     await page.waitForTimeout(500);
     assert.equal(apiRequests, before);
     assert.equal(await page.evaluate(() => window.__pollTimers.size), 0);
+    assert.deepEqual(f.errors, []);
+  },
+);
+
+test(
+  "poll results render accessible <meter> bars and vote-page 404 stops social polling",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+    const poll = await store.create({
+      title: "Meter regression poll", description: "", signature: "Tester",
+      options: ["Yes", "No"], votingHours: 6, images: [],
+      location: { latitude: 0, longitude: 0 },
+    });
+    const socialPath = `/api/posts/${poll.id}/social`;
+    let socialRequests = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === socialPath) socialRequests++;
+    });
+    const readMeter = (locator) =>
+      locator.evaluate((m) => ({
+        tag: m.tagName.toLowerCase(),
+        min: m.getAttribute("min"),
+        max: m.getAttribute("max"),
+        value: m.getAttribute("value"),
+        label: m.getAttribute("aria-label"),
+        valuetext: m.getAttribute("aria-valuetext"),
+        low: m.hasAttribute("low") || m.hasAttribute("high") || m.hasAttribute("optimum"),
+        height: getComputedStyle(m).height,
+      }));
+
+    // 1. Vote page: <meter> with min/max/value, a plain label and localized valuetext.
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    await page.getByRole("radio", { name: "Yes", exact: true }).check();
+    await page.getByRole("button", { name: "Cast my vote" }).click();
+    await page.getByRole("button", { name: "Your vote is counted" }).waitFor();
+    await page.locator("#results meter").first().waitFor();
+    assert.equal(await page.locator("#results progress").count(), 0);
+    assert.equal(await page.locator("#results meter").count(), 2);
+    const [yes, no] = await Promise.all([
+      readMeter(page.locator("#results meter").nth(0)),
+      readMeter(page.locator("#results meter").nth(1)),
+    ]);
+    assert.deepEqual(yes, {
+      tag: "meter", min: "0", max: "1", value: "1", label: "Yes",
+      valuetext: "100% (1 vote)", low: false, height: "7px",
+    });
+    assert.deepEqual(no, {
+      tag: "meter", min: "0", max: "1", value: "0", label: "No",
+      valuetext: "0% (0 votes)", low: false, height: "7px",
+    });
+    for (const m of [yes, no]) {
+      assert.doesNotMatch(`${m.label} ${m.valuetext}`, /percent/i);
+    }
+
+    // 2. /PostList cards: compact 4px <meter> with a percentage valuetext.
+    await page.goto(`${origin}/PostList`);
+    const card = page.locator(".poll-list-card").filter({ hasText: poll.title });
+    await card.locator(".mini-results meter").first().waitFor();
+    assert.equal(await page.locator(".mini-results progress").count(), 0);
+    const listYes = await readMeter(card.locator(".mini-results meter").first());
+    assert.deepEqual(listYes, {
+      tag: "meter", min: "0", max: "1", value: "1", label: "Yes",
+      valuetext: "100%", low: false, height: "4px",
+    });
+    assert.doesNotMatch(`${listYes.label} ${listYes.valuetext}`, /percent/i);
+
+    // 3. A vote-page 404 also stops mountSocial: later visibilitychange, online
+    //    and pageshow(persisted) send no further /social requests. The social
+    //    endpoint is made unavailable (503) so only votePage's 404 handler can
+    //    stop it, not mountSocial's own 404 branch.
+    const firstSocial = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === socialPath,
+    );
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    await firstSocial;
+    f.setUnavailablePath(socialPath);
+    f.advance(30 * DAY);
+    await page.evaluate(() => dispatchEvent(new Event("online")));
+    await page.getByRole("heading", { name: "This page is unavailable." }).waitFor();
+    await page.waitForTimeout(300);
+    f.setUnavailablePath(undefined);
+    const before = socialRequests;
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      dispatchEvent(new Event("online"));
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    await page.waitForTimeout(500);
+    assert.equal(socialRequests, before);
     assert.deepEqual(f.errors, []);
   },
 );
