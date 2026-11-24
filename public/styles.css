@@ -349,6 +349,15 @@
   color: var(--muted);
   line-height: 1.65;
 }
+.result-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.result-export-actions label {
+  flex: 1 0 100%;
+  min-width: 0;
+}
 #sale-pickup h2 {
   white-space: pre-wrap;
 }

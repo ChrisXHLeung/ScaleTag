@@ -198,6 +198,7 @@ test("poll result cards download public totals and never offer withheld counts",
   });
 
   const downloadButton = page.getByRole("button", { name: "Download result card" });
+  const copyButton = page.getByRole("button", { name: "Copy results as text", exact: true });
   await page.goto(`${origin}/vote/${live.id}?lang=en`);
   await downloadButton.waitFor({ timeout: 3500 });
   const [liveDownload] = await Promise.all([page.waitForEvent("download"), downloadButton.click()]);
@@ -215,16 +216,88 @@ test("poll result cards download public totals and never offer withheld counts",
   await page.goto(`${origin}/vote/${withheld.id}`);
   await page.getByText("Results will appear when voting closes.").first().waitFor();
   assert.equal(await downloadButton.count(), 0);
-  await page.locator(".results-section button").evaluate((button) => button.click());
+  assert.equal(await copyButton.count(), 0);
+  await page.locator("#download-result-card").evaluate((button) => button.click());
   await page.locator("#toast", { hasText: "Could not download the result card" }).waitFor();
   assert.deepEqual(await page.evaluate(() => window.resultCardText), []);
 
   advance(7 * DAY + 1);
   await page.evaluate(() => dispatchEvent(new Event("online")));
   await downloadButton.waitFor();
+  await copyButton.waitFor();
   const [finalDownload] = await Promise.all([page.waitForEvent("download"), downloadButton.click()]);
   assert.equal(finalDownload.suggestedFilename(), `ScaleTag-results-${withheld.id}.png`);
   assert.equal((await sharp(await readFile(await finalDownload.path())).metadata()).format, "png");
   assert.ok((await page.evaluate(() => window.resultCardText)).includes("Final results"));
+  assert.deepEqual(errors, []);
+});
+
+test("copy fresh aggregate poll results as text with a permission fallback", async (t) => {
+  const { store, origin, page, errors } = await fixture(t);
+  const poll = await store.create({ title: "Watering schedule", options: ["Morning", "Evening"], visibility: "unlisted" });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  const url = `${origin}/vote/${poll.id}`;
+  await page.goto(`${url}?lang=en#results`);
+  const copy = page.getByRole("button", { name: "Copy results as text", exact: true });
+  await copy.waitFor({ timeout: 5000 });
+  await store.vote(poll.id, "next-browser", 2);
+  await copy.click();
+  await page.getByText("Results copied.", { exact: true }).waitFor();
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(text, /^Watering schedule\nLive results\nTotal votes: 1\n/u);
+  assert.match(text, /Morning: 0 votes \(0%\)\nEvening: 1 vote \(100%\)\n/u);
+  assert.ok(text.endsWith(url));
+  assert.ok(!text.includes(poll.manageKey) && !text.includes("?lang=") && !text.includes("#results"));
+
+  await page.evaluate(() => { navigator.clipboard.write = async () => { throw new DOMException("Denied", "NotAllowedError"); }; });
+  await copy.click();
+  const fallback = page.getByRole("textbox", { name: "Results text", exact: true });
+  await fallback.waitFor();
+  assert.equal(await fallback.inputValue(), text);
+  assert.ok(await fallback.evaluate(input => document.activeElement === input && input.selectionStart === 0 &&
+    input.selectionEnd === input.value.length));
+  await store.setPollState(poll.id, poll.manageKey, "withdrawn");
+  await copy.click();
+  await page.getByText("Could not copy results. Please try again.", { exact: true }).waitFor();
+  assert.equal(await fallback.isVisible(), false);
+  assert.deepEqual(errors, []);
+});
+
+test("a withdrawn poll cannot copy a delayed result after the page becomes unavailable", async (t) => {
+  const { store, origin, page, errors } = await fixture(t);
+  const poll = await store.create({ title: "Old snapshot", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const apiUrl = `${origin}/api/polls/${poll.id}`;
+  await page.goto(`${origin}/vote/${poll.id}`);
+  const copy = page.getByRole("button", { name: "Copy results as text", exact: true });
+  await copy.waitFor();
+  await page.evaluate(() => {
+    navigator.clipboard.write = async ([item]) => {
+      window.testClipboardStarted = true;
+      try { window.testClipboard = await (await item.getType("text/plain")).text(); }
+      finally { window.testClipboardSettled = true; }
+    };
+  });
+  let entered, release;
+  const captured = new Promise(resolve => { entered = resolve; });
+  const delayed = new Promise(resolve => { release = resolve; });
+  let interceptFirst = true;
+  await page.route(apiUrl, async route => {
+    if (route.request().method() !== "GET" || !interceptFirst) return route.continue();
+    interceptFirst = false;
+    const response = await route.fetch();
+    entered();
+    await delayed;
+    await route.fulfill({ response });
+  });
+  try {
+    await copy.click();
+    await captured;
+    assert.equal(await page.evaluate(() => window.testClipboardStarted), true);
+    await store.setPollState(poll.id, poll.manageKey, "withdrawn");
+    await page.evaluate(() => dispatchEvent(new Event("online")));
+    await page.getByRole("heading", { name: "This page is unavailable.", exact: true }).waitFor();
+  } finally { release(); }
+  await page.waitForFunction(() => window.testClipboardSettled);
+  assert.equal(await page.evaluate(() => window.testClipboard), undefined);
   assert.deepEqual(errors, []);
 });

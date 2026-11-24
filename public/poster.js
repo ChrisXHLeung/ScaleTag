@@ -945,24 +945,109 @@ function renderResultCard(poll) {
   return canvas;
 }
 
-export function mountResultCard(host, id, loadResults) {
+function formatResultText(poll, url) {
+  const percentage = new Intl.NumberFormat(intlLocaleFor(language), { style: "percent", maximumFractionDigits: 1 });
+  return [
+    poll.title,
+    poll.status === "closed" ? t("Final results", "最终结果") : t("Live results", "实时结果"),
+    `${t("Total votes", "总票数")}: ${count(poll.totalVotes)}`,
+    ...poll.options.map(({ label, votes }) => {
+      const total = t(`${count(votes)} ${votes === 1 ? "vote" : "votes"}`, `${count(votes)} 票`);
+      const share = percentage.format(poll.totalVotes ? votes / poll.totalVotes : 0);
+      return `${label}: ${total} (${share})`;
+    }),
+    `${t("Snapshot time", "结果生成时间")}: ${date(poll.serverTime)}`,
+    url,
+  ].join("\n");
+}
+
+export function mountResultExports(host, id, loadResults) {
+  const actions = document.createElement("div");
+  actions.className = "result-export-actions";
   const button = document.createElement("button");
   button.type = "button";
   button.className = "button secondary small";
+  button.id = "download-result-card";
   button.textContent = t("Download result card", "下载投票结果卡");
-  host.append(button);
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = button.className;
+  copy.textContent = t("Copy results as text", "复制文字结果");
+  const fallback = document.createElement("label");
+  fallback.textContent = t("Results text", "结果文本");
+  const field = document.createElement("textarea");
+  field.rows = 6;
+  field.readOnly = true;
+  fallback.append(field);
+  actions.append(button, copy, fallback);
+  host.append(actions);
+  let unavailable = false;
+
+  function resetFallback() {
+    fallback.hidden = true;
+    field.value = "";
+  }
+  resetFallback();
 
   function update(poll) {
-    button.hidden = !hasPublicResults(poll);
+    button.hidden = copy.hidden = unavailable || !hasPublicResults(poll);
+    if (copy.hidden) resetFallback();
   }
+
+  async function currentResults() {
+    // A poll can expire or be withdrawn while its page is open.
+    let poll;
+    try {
+      poll = await loadResults();
+    } catch (error) {
+      if (error.status === 404) {
+        unavailable = true;
+        update({ resultsHidden: true });
+      }
+      throw error;
+    }
+    if (!actions.isConnected) throw new Error("Poll results are no longer displayed");
+    update(poll);
+    if (button.hidden) throw new Error("Poll results are unavailable");
+    return poll;
+  }
+
+  copy.onclick = async () => {
+    if (copy.hidden || copy.disabled) return;
+    copy.disabled = true;
+    resetFallback();
+    const text = currentResults().then(poll => formatResultText(poll, `${location.origin}/vote/${id}`));
+    try {
+      if (globalThis.ClipboardItem && navigator.clipboard?.write) {
+        // Start writing inside the click while the public result is fetched.
+        const payload = text.then(value => new Blob([value], { type: "text/plain" }));
+        payload.catch(() => {});
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": payload })]);
+      } else {
+        const value = await text;
+        await navigator.clipboard.writeText(value);
+      }
+      if (copy.isConnected && !copy.hidden) toast(t("Results copied.", "已复制投票结果。"));
+    } catch {
+      try {
+        const value = await text;
+        if (!copy.isConnected || copy.hidden) return;
+        fallback.hidden = false;
+        field.value = value;
+        field.focus();
+        field.select();
+      } catch {
+        if (copy.isConnected) toast(t("Could not copy results. Please try again.", "无法复制结果，请重试。"));
+      }
+    } finally {
+      copy.disabled = false;
+    }
+  };
 
   button.onclick = async () => {
     button.disabled = true;
     try {
-      // A poll can expire or be withdrawn while its page is open.
-      const poll = await loadResults();
-      update(poll);
-      if (button.hidden) throw new Error("Poll results are unavailable");
+      const poll = await currentResults();
       const url = await canvasBlobUrl(renderResultCard(poll));
       const link = document.createElement("a");
       link.href = url;

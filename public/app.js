@@ -30,7 +30,7 @@ import {
 } from "/common.js";
 import { mountOwnerEdit } from "/owner-edit.js";
 import { mountSocial } from "/social.js";
-import { mountPosterActions, mountResultCard } from "/poster.js";
+import { mountPosterActions, mountResultExports } from "/poster.js";
 import { createTask, taskPage, stateLabel, isFinalState } from "/tasks.js";
 import { createSale, salePage, saleStateLabel } from "/sales.js";
 import { pickupWindowText } from "/pickup.js";
@@ -378,12 +378,12 @@ async function votePage(id, { ownerKey, published } = {}) {
     publicUrl: `${location.origin}/vote/${id}`,
   });
   mountSavedPost(main.querySelector(".share-card"), { path: `/vote/${id}`, title: poll.title });
-  const updateResultCard = mountResultCard(
+  const updateResultExports = mountResultExports(
     main.querySelector(".results-section"), id, () => api(`/api/polls/${id}`),
   );
   let lastResultsHtml;
   function render() {
-    updateResultCard(poll);
+    updateResultExports(poll);
     const title = main.querySelector(".poll-title");
     if (title.textContent !== poll.title) {
       title.textContent = poll.title;
