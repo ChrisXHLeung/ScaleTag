@@ -510,8 +510,10 @@ function postList() {
     mapLoading,
     mapGeneration = 0,
     mapRequest = 0,
+    mapNeedsFit = false,
     mapTimer,
-    listHoldTimer;
+    listHoldTimer,
+    suspended = false;
   const nearbyButton = document.querySelector("#nearby");
   const radiusSelect = document.querySelector("#nearby-radius");
   const sortSelect = document.querySelector("#nearby-sort");
@@ -562,8 +564,18 @@ function postList() {
       });
     return mapLoading;
   }
+  function disposeMap() {
+    ++mapGeneration;
+    mapView?.destroy();
+    mapView = undefined;
+    mapLoading = undefined;
+    searchMap.disabled = true;
+    document.querySelector("#poll-map").replaceChildren();
+  }
   async function loadMap(fit = true) {
     clearTimeout(mapTimer);
+    if (suspended) return;
+    mapNeedsFit = fit;
     const current = ++mapRequest;
     const error = document.querySelector("#list-error");
     error.hidden = true;
@@ -586,6 +598,7 @@ function postList() {
         (p) => (p.type === "sale" ? p.endsAt : p.deleteAt) > data.serverTime + Date.now() - started,
       );
       view.setData(data.polls, fit);
+      mapNeedsFit = false;
       view.resize();
       document.querySelector("#map-count").textContent = data.total
         ? t(`${count(data.polls.length)} of ${count(data.total)} matching mapped posts`, `显示 ${count(data.polls.length)} / ${count(data.total)} 条符合条件的地图帖子`) + (data.total > data.polls.length ? ` · ${t("First 1,000 results", "前 1,000 条结果")}` : "")
@@ -639,14 +652,7 @@ function postList() {
       document.querySelector("#list-count").hidden = mode === "map";
       chooseArea.hidden = mode === "map";
       updateListCaption();
-      if (mode === "list" || previousMode === "map") {
-        ++mapGeneration;
-        mapView?.destroy();
-        mapView = undefined;
-        mapLoading = undefined;
-        searchMap.disabled = true;
-        document.querySelector("#poll-map").replaceChildren();
-      }
+      if (mode === "list" || previousMode === "map") disposeMap();
       load();
     };
   });
@@ -659,15 +665,21 @@ function postList() {
     loadMap(false);
   };
   document.querySelector("#map-fit").onclick = () => loadMap();
-  window.addEventListener(
-    "pagehide",
-    () => {
-      clearTimeout(mapTimer);
-      clearTimeout(listHoldTimer);
-      mapView?.destroy();
-    },
-    { once: true },
-  );
+  window.addEventListener("pagehide", (event) => {
+    suspended = true;
+    ++mapRequest;
+    clearTimeout(mapTimer);
+    clearTimeout(listHoldTimer);
+    // A cached page keeps the same canvas, camera and selected filters.
+    if (!event.persisted) disposeMap();
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    suspended = false;
+    if (mode === "map") {
+      if (!document.hidden) loadMap(!mapView || mapNeedsFit);
+    } else refreshHoldBadges(document.querySelector("#poll-list"));
+  });
   window.addEventListener("offline", () => {
     if (mode !== "map") return;
     ++mapRequest;
@@ -688,7 +700,7 @@ function postList() {
       clearTimeout(mapTimer);
       mapView?.setData([]);
       document.querySelector("#mapped-poll-links").replaceChildren();
-    } else loadMap(false);
+    } else loadMap(!mapView || mapNeedsFit);
   });
   typeSelect.onchange = (event) => {
     contentType = event.target.value;

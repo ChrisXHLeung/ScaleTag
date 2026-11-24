@@ -144,6 +144,48 @@ test("empty list and map results can clear filters without changing the view", a
   assert.equal(page.url(), `${origin}/PostList`);
 });
 
+test("a cached PostList restores its map and refreshes the current filters", async (t) => {
+  const { page, origin, store, input, errors } = await fixture(t);
+  const poll = await store.create(input);
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("poll");
+  await page.locator("#post-query").fill("Trees");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await mapReady(page);
+  const canvas = page.locator("#poll-map canvas");
+  await canvas.evaluate(element => { element.dataset.originalCanvas = "yes"; });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const incoming = page.waitForResponse(`${origin}/api/map/search`, { timeout: 5000 });
+    await page.evaluate(() => {
+      dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    assert.deepEqual((await incoming).request().postDataJSON(), { status: "all", type: "poll", query: "Trees" });
+    assert.equal(await canvas.getAttribute("data-original-canvas", { timeout: 5000 }), "yes");
+    await page.locator(`#mapped-poll-links a[href="/vote/${poll.id}"]`).waitFor({ state: "attached" });
+  }
+  assert.equal(await page.locator("#post-query").inputValue(), "Trees");
+  assert.equal(await page.getByRole("button", { name: "Map", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(page.url(), `${origin}/PostList`);
+  assert.deepEqual(errors, []);
+});
+
+test("a cached PostList list updates expired holds without rebuilding results", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const sale = await store.create({ ...input, type: "sale", giveawayVersion: 1, options: [] });
+  await store.setSaleState(sale.id, sale.manageKey, "reserved", sale.createdAt + 60000);
+  await page.goto(`${origin}/PostList`);
+  const card = page.locator(`#poll-list a[href="/sale/${sale.id}"]`);
+  await card.getByText("Reserved", { exact: true }).waitFor();
+  await card.evaluate(element => { element.dataset.originalCard = "yes"; });
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+  await page.clock.setFixedTime(new Date(Date.now() + 120000));
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await card.getByText("Available", { exact: true }).waitFor({ timeout: 5000 });
+  assert.equal(await card.getAttribute("data-original-card"), "yes");
+});
+
 test("map is opt-in, renders real MapLibre markers, filters and provides accessible poll links", async (t) => {
   const f = await fixture(t);
   const poll = await f.store.create(f.input);
