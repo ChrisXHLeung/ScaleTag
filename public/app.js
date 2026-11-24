@@ -214,6 +214,31 @@ function mountPollManagementDetails(host, poll, key) {
   mountSavedPost(host, { path, title: poll.title });
 }
 
+function pollLinkFallback(inputId) {
+  return `<div hidden><label for="${inputId}">${t("Public link", "公开链接")}</label><input id="${inputId}" readonly></div>`;
+}
+
+function bindPollLinkCopy(control, id) {
+  const link = `${location.origin}/vote/${id}`;
+  const fallback = control.nextElementSibling;
+  const input = fallback.querySelector("input");
+  control.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      if (!control.isConnected) return;
+      fallback.hidden = true;
+      toast(t("Poll link copied.", "投票链接已复制。"));
+    } catch {
+      if (!control.isConnected) return;
+      input.value = link;
+      fallback.hidden = false;
+      input.focus();
+      input.select();
+      toast(t("Copy the selected link.", "请复制选中的链接。"));
+    }
+  };
+}
+
 async function pollManagePage(id, key) {
   if (!key) return managementPasswordForm((password) => pollManagePage(id, password));
   const poll = await api(`/api/polls/${id}/manage`, { key });
@@ -227,7 +252,8 @@ function renderPollManager(poll, key, message = "", openEditor = false) {
   main.innerHTML = `<section class="empty-page"><section class="manage-card" id="poll-owner-controls">
     <h1>${t("Manage this poll", "管理此投票")}</h1><h2>${escape(poll.title)}</h2>
     <p>${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
-    <a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>
+    <div><a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>
+    <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${pollLinkFallback("owner-public-link")}</div>
     ${poll.status === "open" ? `<button type="button" class="button secondary small" data-poll-state="closed">${t("End voting now", "立即结束投票")}</button>` : ""}
     <button type="button" class="button secondary small" data-poll-state="withdrawn">${t("Take down", "下架帖子")}</button>
     <p class="form-error" role="alert" hidden></p>
@@ -237,6 +263,7 @@ function renderPollManager(poll, key, message = "", openEditor = false) {
   const management = document.createElement("div");
   host.querySelector("h2").after(management);
   mountPollManagementDetails(management, poll, key);
+  bindPollLinkCopy(host.querySelector("#copy-owner-public-link"), id);
   const editor = mountOwnerEdit(host, poll, `${endpoint}/edit`, key, (updated) => {
     renderPollManager(updated, key, t("Changes saved.", "已保存修改。"), true);
   });
@@ -294,7 +321,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     ${externalImages.length ? `<div class="external-images"><button class="button secondary small" id="load-images">${t(`Show ${externalImages.length} external image${externalImages.length > 1 ? "s" : ""}`, `显示 ${externalImages.length} 张外部图片`)}</button><p class="field-hint">${t("Images load from third-party hosts, which may receive your IP address.", "图片从第三方服务器加载，该服务可能接收你的 IP 地址。")}</p><div id="poll-images"></div></div>` : ""}
     <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
     <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes"></span></div><div id="results"></div><p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
-    <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link">${t("Copy poll link", "复制投票链接")}</button></section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
+    <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link" type="button">${t("Copy poll link", "复制投票链接")}</button>${pollLinkFallback("public-poll-link")}</section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   if (ownerKey) {
     const owner = document.createElement("section");
     owner.className = "manage-card";
@@ -323,16 +350,7 @@ async function votePage(id, { ownerKey, published } = {}) {
       }
       e.currentTarget.remove();
     };
-  document.querySelector("#copy-link").onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(`${location.origin}/vote/${id}`);
-      toast(t("Poll link copied.", "投票链接已复制。"));
-    } catch {
-      toast(
-        t("Could not copy automatically. Copy the link from your address bar.", "无法自动复制，请从地址栏复制链接。"),
-      );
-    }
-  };
+  bindPollLinkCopy(document.querySelector("#copy-link"), id);
   mountPosterActions(main.querySelector(".share-card"), {
     type: "poll",
     id,

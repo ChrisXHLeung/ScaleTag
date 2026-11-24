@@ -555,6 +555,43 @@ test("post detail and management save buttons reflect changes in another tab", a
   }
 });
 
+test("poll readers can manually copy a public URL when clipboard access is denied", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Poll link fallback", options: ["Yes", "No"], visibility: "unlisted" });
+  const publicUrl = `${origin}/vote/${poll.id}`;
+  await page.goto(`${publicUrl}?created=1#local-fragment`);
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  await page.getByRole("button", { name: "Copy poll link", exact: true }).click();
+  const link = page.getByLabel("Public link", { exact: true });
+  await link.waitFor({ timeout: 5000 });
+  assert.equal(await link.inputValue(), publicUrl);
+  assert.deepEqual(await link.evaluate(input => [document.activeElement === input, input.selectionStart, input.selectionEnd]),
+    [true, 0, publicUrl.length]);
+});
+
+test("a poll owner can share the public URL directly from the management page", async (t) => {
+  const { page, context, origin, store } = await fixture(t);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  const poll = await store.create({ title: "Owner share shortcut", options: ["Yes", "No"], visibility: "unlisted" });
+  const publicUrl = `${origin}/vote/${poll.id}`;
+  await page.goto(`${publicUrl}/manage?created=1#local-fragment`);
+  await page.getByLabel("Management password").fill(poll.manageKey);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  const copy = page.getByRole("button", { name: "Copy public link", exact: true });
+  await copy.click({ timeout: 5000 });
+  await page.getByText("Poll link copied.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), publicUrl);
+
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  await copy.click();
+  assert.equal(await page.getByLabel("Public link", { exact: true }).inputValue(), publicUrl);
+  assert.equal(new URL(page.url()).pathname, `/vote/${poll.id}/manage`);
+});
+
 test("new poll owner can copy management details, edit photos, end and take down", { timeout: 60000 }, async (t) => {
   const { page, context, origin } = await fixture(t);
   await context.grantPermissions(["geolocation", "clipboard-read", "clipboard-write"], { origin });
