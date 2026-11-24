@@ -29,6 +29,10 @@ function savedPosts() {
     postPath.test(item.path) && typeof item.title === "string").slice(0, 100);
 }
 
+function savedLinksChanged(event) {
+  return event.storageArea === localStorage && (event.key === savedKey || event.key === null);
+}
+
 function notice(text) {
   const line = document.createElement("p");
   line.className = "field-hint";
@@ -170,17 +174,10 @@ export function bindTextDraft(form, kind, selectors, options) {
 
 export function mountSavedPost(host, { path, title }) {
   if (!host || !postPath.test(path)) return;
-  const management = path.endsWith("/manage");
   const control = button("");
+  control.dataset.savedPostPath = path;
   const status = notice("");
   status.hidden = true;
-  function render() {
-    const selected = savedPosts().some((item) => item.path === path);
-    control.setAttribute("aria-pressed", String(selected));
-    control.textContent = selected
-      ? t("Remove from saved links", "从已保存链接移除")
-      : management ? t("Save management link", "保存管理网址") : t("Save post", "保存帖子");
-  }
   control.onclick = () => {
     const items = savedPosts();
     const index = items.findIndex((item) => item.path === path);
@@ -188,11 +185,30 @@ export function mountSavedPost(host, { path, title }) {
     else items.unshift({ path, title });
     status.hidden = write(savedKey, items.slice(0, 100));
     status.textContent = status.hidden ? "" : unavailable();
-    render();
+    syncSavedButtons();
   };
-  render();
   host.append(control, status);
+  syncSavedButtons();
 }
+
+function syncSavedButtons() {
+  const paths = new Set(savedPosts().map(item => item.path));
+  for (const control of document.querySelectorAll("button[data-saved-post-path]")) {
+    const path = control.dataset.savedPostPath;
+    const selected = paths.has(path);
+    control.setAttribute("aria-pressed", String(selected));
+    control.textContent = selected
+      ? t("Remove from saved links", "从已保存链接移除")
+      : path.endsWith("/manage") ? t("Save management link", "保存管理网址") : t("Save post", "保存帖子");
+  }
+}
+
+window.addEventListener("storage", (event) => {
+  if (savedLinksChanged(event)) syncSavedButtons();
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) syncSavedButtons();
+});
 
 export function renderSavedPosts(host) {
   const page = document.createElement("section");
@@ -223,13 +239,19 @@ export function renderSavedPosts(host) {
   const failed = t("Could not check post status.", "暂时无法查看帖子状态。");
   const lookups = new Map();
 
-  let request;
-  async function refreshStatuses() {
+  let request, refreshTimer;
+  function cancelStatusRefresh() {
+    clearTimeout(refreshTimer);
     request?.abort();
+  }
+
+  async function refreshStatuses() {
+    cancelStatusRefresh();
     if (!lookups.size || !page.isConnected || document.hidden) return;
     request = new AbortController();
     const { signal } = request;
     const entries = [...lookups.values()];
+    let nextRefresh = Infinity;
     for (let i = 0; i < entries.length && !signal.aborted; i += 20) {
       const batch = entries.slice(i, i + 20).filter(lookup => lookup.labels.size);
       if (!batch.length) continue;
@@ -238,14 +260,21 @@ export function renderSavedPosts(host) {
         const result = await api("/api/posts/statuses", {
           posts: batch.map(({ type, id }) => ({ type, id })),
         }, { signal });
-        if (Array.isArray(result.statuses) && result.statuses.length === batch.length)
+        if (Array.isArray(result.statuses) && result.statuses.length === batch.length) {
           statuses = result.statuses;
+          if (Number.isSafeInteger(result.refreshAfterMs) && result.refreshAfterMs > 0)
+            nextRefresh = Math.min(nextRefresh, performance.now() + result.refreshAfterMs);
+        }
       } catch {
         // An unavailable connection does not change the saved links.
       }
       if (!signal.aborted) batch.forEach((lookup, index) => {
         for (const output of lookup.labels) output.textContent = labels.get(statuses[index]) ?? failed;
       });
+    }
+    if (!signal.aborted && lookups.size && Number.isFinite(nextRefresh)) {
+      const delay = Math.max(100, nextRefresh - performance.now());
+      refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
     }
   }
 
@@ -279,6 +308,7 @@ export function renderSavedPosts(host) {
         }
         lookup.labels.delete(status);
         if (!lookup.labels.size) lookups.delete(tag);
+        if (!lookups.size) cancelStatusRefresh();
         row.remove();
         empty.hidden = list.childElementCount > 0;
       };
@@ -292,12 +322,12 @@ export function renderSavedPosts(host) {
 
   render();
   window.addEventListener("storage", (event) => {
-    if (event.storageArea === localStorage && (event.key === savedKey || event.key === null)) render();
+    if (savedLinksChanged(event)) render();
   });
   document.addEventListener("visibilitychange", refreshStatuses);
   window.addEventListener("online", refreshStatuses);
-  window.addEventListener("pagehide", () => request?.abort());
+  window.addEventListener("pagehide", cancelStatusRefresh);
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted) void refreshStatuses();
+    if (event.persisted) render();
   });
 }

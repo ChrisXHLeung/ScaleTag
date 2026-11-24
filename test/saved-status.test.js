@@ -60,14 +60,22 @@ for (const Store of [PollStore, SQLiteStore]) {
     assert.deepEqual(await response.json(), {
       statuses: ["poll_open", "poll_final", "task_assigned", "sale_claimed",
         "unavailable", "unavailable", "unavailable", "unavailable", "sale_reserved"],
+      refreshAfterMs: 7200000,
+    });
+    assert.deepEqual(await (await request([posts[0], posts[1]])).json(), {
+      statuses: ["poll_open", "poll_final"], refreshAfterMs: 7 * DAY,
     });
     assert.equal((await request(posts, "https://other.test")).status, 403);
     assert.equal((await request(Array(21).fill(posts[0]))).status, 400);
     assert.equal((await request([{ type: "secrex", id: open.id }])).status, 400);
     assert.equal((await request([{ type: "poll", id: "https://other.test/" }])).status, 400);
     now += 7200000;
-    assert.deepEqual(await (await request([posts.at(-1)])).json(), { statuses: ["sale_open"] });
+    assert.deepEqual(await (await request([posts.at(-1)])).json(), {
+      statuses: ["sale_open"], refreshAfterMs: 3 * DAY - 7200000,
+    });
     now += 3 * DAY;
-    assert.deepEqual(await (await request([posts[3]])).json(), { statuses: ["unavailable"] });
+    assert.deepEqual(await (await request([posts[3]])).json(), {
+      statuses: ["unavailable"], refreshAfterMs: null,
+    });
   });
 }

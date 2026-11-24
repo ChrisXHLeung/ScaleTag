@@ -286,7 +286,7 @@ export function createApp(
       throw new AppError(400, "Send between 1 and 20 valid post references.");
     }
     res.set("X-Robots-Tag", "noindex");
-    res.json({ statuses: store.savedStatuses(posts) });
+    res.json(store.savedStatuses(posts));
   });
   app.get("/api/polls", list);
   app.post("/api/polls/search", list);

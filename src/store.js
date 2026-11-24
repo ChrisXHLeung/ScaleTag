@@ -437,7 +437,19 @@ export class PollStore {
     const ids = [...new Set(references.map(({ id }) => id))];
     const byId = new Map(this.savedStatusRows(ids).map(post => [post.id, post]));
     const now = this.clock();
-    return references.map(({ type, id }) => savedPostStatus(type, byId.get(id), now));
+    let nextChange = Infinity;
+    const statuses = references.map(({ type, id }) => {
+      const post = byId.get(id);
+      const status = savedPostStatus(type, post, now);
+      if (status !== "unavailable") {
+        const expiration = type === "sale" ? post.endsAt : post.deleteAt;
+        nextChange = Math.min(nextChange, expiration);
+        if (status === "sale_reserved") nextChange = Math.min(nextChange, post.reservedUntil);
+        if (status === "poll_open") nextChange = Math.min(nextChange, post.endsAt);
+      }
+      return status;
+    });
+    return { statuses, refreshAfterMs: Number.isFinite(nextChange) ? nextChange - now : null };
   }
 
   async vote(id, token, optionId) {

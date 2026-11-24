@@ -452,6 +452,45 @@ test("saved links show current public status and stay usable if status checks fa
   assert.equal(await rows.last().locator("a").getAttribute("href"), managePath);
 });
 
+test("an open Saved page refreshes when a giveaway hold ends", async (t) => {
+  const { store, page, origin, advance } = await fixture(t);
+  const giveaway = await store.create({
+    type: "sale", giveawayVersion: 1, visibility: "unlisted", title: "Held books", options: [],
+  });
+  const remaining = 1000;
+  await store.setSaleState(giveaway.id, giveaway.manageKey, "reserved", giveaway.createdAt + remaining);
+  const path = `/sale/${giveaway.id}`;
+  await page.evaluate(item => localStorage.setItem("scaletag-saved-posts", JSON.stringify([item])), {
+    path, title: giveaway.title,
+  });
+  await page.goto(`${origin}/saved`);
+  const status = page.locator(".saved-post-status");
+  await status.getByText("Reserved", { exact: true }).waitFor();
+  advance(remaining);
+  await status.getByText("Available", { exact: true }).waitFor({ timeout: 5000 });
+});
+
+test("post detail and management save buttons reflect changes in another tab", async (t) => {
+  const { store, page, context, origin } = await fixture(t);
+  const poll = await store.create({ title: "Save from two tabs", options: ["A", "B"] });
+  const publicPath = `/vote/${poll.id}`;
+  const managementPath = `${publicPath}/manage`;
+  const saved = await context.newPage();
+  for (const [path, label] of [[publicPath, "Save post"], [managementPath, "Save management link"]]) {
+    await page.goto(`${origin}${path}`);
+    if (path === managementPath) {
+      await page.getByLabel("Management password").fill(poll.manageKey);
+      await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    }
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await saved.goto(`${origin}/saved`);
+    await saved.getByRole("button", { name: "Remove", exact: true }).click();
+    const button = page.getByRole("button", { name: label, exact: true });
+    await button.waitFor({ timeout: 5000 });
+    assert.equal(await button.getAttribute("aria-pressed"), "false");
+  }
+});
+
 test("new poll owner can copy management details, edit photos, end and take down", { timeout: 60000 }, async (t) => {
   const { page, context, origin } = await fixture(t);
   await context.grantPermissions(["geolocation", "clipboard-read", "clipboard-write"], { origin });
