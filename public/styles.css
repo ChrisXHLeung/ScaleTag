@@ -70,6 +70,9 @@
   border-radius: 12px;
   background: var(--pale);
 }
+#pickup-now-filter {
+  margin-block: 0 14px;
+}
 .view-switch button {
   padding: 10px 26px;
   border: 0;

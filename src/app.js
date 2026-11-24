@@ -254,6 +254,10 @@ export function createApp(
       throw new AppError(400, "Choose a valid post sort order.");
     return { location, radiusKm, sort };
   }
+  function pickupFilter(value) {
+    if (value !== undefined && value !== "now") throw new AppError(400, "Invalid filter.");
+    return value;
+  }
   function list(req, res) {
     const data = req.method === "POST" ? (req.body ?? {}) : req.query;
     if (data.status && !["all", "open", "closed"].includes(data.status))
@@ -274,6 +278,7 @@ export function createApp(
         cursor: data.cursor,
         type: contentType(data),
         query: keywordQuery(data.query),
+        pickup: pickupFilter(data.pickup),
       }),
     );
   }
@@ -301,6 +306,7 @@ export function createApp(
         status: data.status,
         type: contentType(data),
         query: keywordQuery(data.query),
+        pickup: pickupFilter(data.pickup),
       }),
     );
   });

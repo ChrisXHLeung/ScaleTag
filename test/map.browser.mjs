@@ -94,6 +94,101 @@ async function fixture(t) {
   };
 }
 
+test("Pickup now follows giveaway time boundaries in List and Map", async (t) => {
+  const { advance, errors, input, origin, page, store } = await fixture(t);
+  const now = store.clock();
+  const make = (title, pickupWindow) => store.create({ ...input, title, type: "sale", giveawayVersion: 1,
+    pickupLocation: "Library entrance", pickupWindow,
+  });
+  const current = await make("Available chair", { startsAt: now, endsAt: now + 60000 });
+  const future = await make("Scheduled chair", { startsAt: now + 60000, endsAt: now + 120000 });
+  const unknown = await make("Unscheduled chair");
+  await page.clock.install({ time: new Date(now) });
+  await page.goto(`${origin}/PostList`);
+  const type = page.locator("#content-type");
+  const pickup = page.getByRole("checkbox", { name: "Pickup now", exact: true });
+  assert.equal(await pickup.isVisible(), false);
+  await type.selectOption("sale");
+  const card = sale => page.locator(`#poll-list a[href="/sale/${sale.id}"]`);
+  await card(unknown).waitFor();
+  await pickup.check();
+  await card(unknown).waitFor({ state: "hidden" });
+  await card(current).waitFor();
+  assert.equal(await card(future).count(), 0);
+
+  advance(61000);
+  await page.clock.fastForward(61000);
+  await card(future).waitFor();
+  assert.equal(await card(current).count(), 0);
+
+  await mapReady(page);
+  const mapped = sale => page.locator(`#mapped-poll-links a[href="/sale/${sale.id}"]`);
+  await mapped(future).waitFor({ state: "attached" });
+  assert.equal(await mapped(unknown).count(), 0);
+  assert.equal(await mapped(current).count(), 0);
+  advance(60000);
+  await page.clock.fastForward(60000);
+  await page.getByText("No mapped posts match these filters. Try List to see all posts.", { exact: true }).waitFor();
+  assert.equal(await mapped(future).count(), 0);
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  assert.equal(await pickup.isChecked(), true);
+  await page.getByText("No giveaways match the current pickup time.", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
+  assert.equal(await pickup.isVisible(), false);
+  await card(unknown).waitFor();
+  assert.deepEqual(errors, []);
+});
+
+test("pickup timing transitions reconcile a delayed Load more without dropping results", async (t) => {
+  const { advance, input, origin, page, store, context } = await fixture(t);
+  const now = store.clock();
+  const make = (title, startsAt, endsAt) => store.create({ ...input, title, type: "sale", giveawayVersion: 1,
+    pickupLocation: "Library entrance", pickupWindow: { startsAt, endsAt },
+  });
+  for (let i = 0; i < 21; i++) await make(`Stable pickup ${i}`, now, now + 240000);
+  advance(1000);
+  const expiring = await make("Expiring pickup", now + 1000, now + 60000);
+  const beginning = await make("Beginning pickup", now + 60000, now + 120000);
+  await page.clock.install({ time: new Date(now + 1000) });
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("sale");
+  const pickup = page.getByRole("checkbox", { name: "Pickup now", exact: true });
+  await pickup.check();
+  const cards = page.locator("#poll-list .sale-list-card");
+  const card = sale => cards.filter({ hasText: sale.title });
+  await card(expiring).waitFor();
+  const more = page.getByRole("button", { name: "Load more posts", exact: true });
+  let entered, release;
+  const requested = new Promise(resolve => { entered = resolve; });
+  const delayed = new Promise(resolve => { release = resolve; });
+  await context.route("**/api/posts/search", async route => {
+    if (route.request().postDataJSON().cursor) {
+      entered();
+      await delayed;
+    }
+    await route.continue();
+  });
+  try {
+    await more.click();
+    await requested;
+    advance(60000);
+    await page.clock.fastForward(60000);
+  } finally {
+    release();
+  }
+  await card(beginning).waitFor();
+  assert.equal(await card(expiring).count(), 0);
+  assert.equal(await cards.count(), 22);
+  const last = cards.last();
+  const href = await last.getAttribute("href");
+  await last.focus();
+  advance(60000);
+  await page.clock.fastForward(60000);
+  await card(beginning).waitFor({ state: "hidden" });
+  assert.equal(await cards.count(), 21);
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute("href")), href);
+});
+
 async function mapReady(page) {
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await page.waitForFunction(

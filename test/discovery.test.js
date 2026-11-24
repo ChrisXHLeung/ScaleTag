@@ -106,6 +106,45 @@ for (const Store of [PollStore, SQLiteStore]) {
     assert.equal(second.nextCursor, null);
     assert.deepEqual(new Set([...first.polls, ...second.polls].map(post => post.id)), expected);
   });
+
+  test(`${Store.name}: pickup-now search applies window and hold boundaries in List and Map`, async t => {
+    const { store, request, publish } = await fixture(t, Store);
+    const start = Math.floor(Date.now() / 60000) * 60000;
+    let now = start;
+    store.clock = () => now;
+    const sale = (title, pickupWindow, extra = {}) => publish("sale", {
+      title, pickupLocation: "Library entrance", location, mapVisible: true, pickupWindow, ...extra,
+    });
+    const current = await sale("Garden chair", { startsAt: start, endsAt: start + 5000 });
+    const later = await sale("Garden table", { startsAt: start + 5000, endsAt: start + 15000 });
+    const held = await sale("Garden tools", { startsAt: start, endsAt: start + 17000 });
+    await store.setSaleState(held.id, held.manageKey, "reserved", start + 10000);
+    const unknown = await sale("Garden rake");
+    await sale("Other item", { startsAt: start, endsAt: start + 1000 });
+    await sale("Private garden stool", { startsAt: start, endsAt: start + 1000 }, { visibility: "unlisted" });
+    await publish("poll", { title: "Garden poll", location, mapVisible: true });
+
+    for (const [offset, ids, refreshAfterMs] of [
+      [0, [current.id], 5000],
+      [5000, [later.id], 5000],
+      [10000, [later.id, held.id], 5000],
+      [15000, [held.id], 2000],
+      [17000, [], undefined],
+    ]) {
+      now = start + offset;
+      for (const path of ["/api/posts/search", "/api/map/search"]) {
+        const response = await request(path, { query: "garden", pickup: "now", location, radiusKm: 2 });
+        assert.equal(response.status, 200);
+        const data = await response.json();
+        assert.deepEqual(new Set(data.polls.map(post => post.id)), new Set(ids));
+        assert.equal(data.refreshAfterMs, refreshAfterMs);
+      }
+    }
+    const response = await request("/api/posts/search", { type: "sale", query: "garden" });
+    assert.ok((await response.json()).polls.some(post => post.id === unknown.id));
+    assert.equal((await request("/api/posts?pickup=tomorrow")).status, 400);
+    assert.equal((await request("/api/map/search", { pickup: ["now"] })).status, 400);
+  });
 }
 
 test("offline.html and base.css enforce skip-link landmark and reduced-motion accessibility rules", async () => {

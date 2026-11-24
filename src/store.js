@@ -60,6 +60,21 @@ function publicSaleAvailability(post, now) {
   };
 }
 
+function filterPickupRows(rows, now) {
+  let next = Infinity;
+  const available = rows.filter(({ post }) => {
+    const window = post.pickupWindow;
+    if (post.type !== "sale" || !window) return false;
+    const startsAt = Math.max(window.startsAt, post.reservedUntil ?? 0);
+    const endsAt = Math.min(window.endsAt, post.endsAt);
+    if (startsAt >= endsAt || endsAt <= now) return false;
+    const current = startsAt <= now;
+    next = Math.min(next, current ? endsAt : startsAt);
+    return current;
+  });
+  return { rows: available, refreshAfterMs: Number.isFinite(next) ? next - now : undefined };
+}
+
 function validatePickupWindow(window, createdAt, expiresAt, now) {
   if (window && (window.startsAt < Math.floor(createdAt / 60000) * 60000 ||
       window.endsAt <= now || window.endsAt > expiresAt))
@@ -482,7 +497,7 @@ export class PollStore {
     });
   }
 
-  list({ location, radiusKm = 100, sort = "newest", status = "all", cursor, type = "all", query = "" } = {}) {
+  list({ location, radiusKm = 100, sort = "newest", status = "all", cursor, type = "all", query = "", pickup } = {}) {
     let before;
     if (cursor) {
       try {
@@ -506,6 +521,8 @@ export class PollStore {
       rows = rows.filter((p) => postStatus(p, now) === status);
     rows = rows.filter(searchFilter(query));
     let ordered = nearbyRows(rows, location, radiusKm, sort);
+    let refreshAfterMs;
+    if (pickup === "now") ({ rows: ordered, refreshAfterMs } = filterPickupRows(ordered, now));
     if (before) {
       const boundary = { post: before, distanceBand: sort === "nearest" ? before.distanceBand : 0 };
       ordered = ordered.filter(row => compareNearbyRows(row, boundary) > 0);
@@ -515,6 +532,7 @@ export class PollStore {
     const last = page.at(-1);
     return {
       polls: page.map(({ post }) => this.public(post)),
+      ...(refreshAfterMs === undefined ? {} : { refreshAfterMs }),
       nextCursor:
         ordered.length > 20
           ? Buffer.from(
@@ -528,16 +546,20 @@ export class PollStore {
     };
   }
 
-  map({ location, radiusKm = 100, sort = "newest", status = "all", type = "all", query = "" } = {}) {
+  map({ location, radiusKm = 100, sort = "newest", status = "all", type = "all", query = "", pickup } = {}) {
     const now = this.clock();
     const posts = [...this.index.values()]
       .filter((p) => p.mapVisible && isDiscoverable(p, now))
       .filter((p) => type === "all" || (p.type ?? "poll") === type)
       .filter((p) => status === "all" || postStatus(p, now) === status)
       .filter(searchFilter(query));
-    const rows = nearbyRows(posts, location, radiusKm, sort).sort(compareNearbyRows);
+    let rows = nearbyRows(posts, location, radiusKm, sort);
+    let refreshAfterMs;
+    if (pickup === "now") ({ rows, refreshAfterMs } = filterPickupRows(rows, now));
+    rows.sort(compareNearbyRows);
     return {
       serverTime: now,
+      ...(refreshAfterMs === undefined ? {} : { refreshAfterMs }),
       total: rows.length,
       // Bound response size; the UI identifies the 1,000 result limit.
       polls: rows.slice(0, 1000).map(({ post: p }) => ({
