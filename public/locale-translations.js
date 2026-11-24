@@ -2,6 +2,24 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Search saved links": {
+    ja: "保存済みのリンクを検索",
+    ko: "저장한 링크 검색",
+    fr: "Rechercher dans les liens enregistrés",
+    pt: "Buscar links salvos",
+    es: "Buscar enlaces guardados",
+    de: "Gespeicherte Links durchsuchen",
+    it: "Cerca nei link salvati",
+  },
+  "No saved links match these filters.": {
+    ja: "絞り込み条件に一致する保存済みリンクはありません。",
+    ko: "필터와 일치하는 저장된 링크가 없습니다.",
+    fr: "Aucun lien enregistré ne correspond à ces filtres.",
+    pt: "Nenhum link salvo corresponde a estes filtros.",
+    es: "Ningún enlace guardado coincide con estos filtros.",
+    de: "Keine gespeicherten Links entsprechen diesen Filtern.",
+    it: "Nessun link salvato corrisponde a questi filtri.",
+  },
   "Add pickup time to calendar": {
     ja: "受け取り時間をカレンダーに追加",
     ko: "수령 시간을 캘린더에 추가",

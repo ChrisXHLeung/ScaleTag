@@ -267,6 +267,20 @@
   color: var(--ink);
   font: inherit;
 }
+.saved-filters .content-filter {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: block;
+  margin: 0;
+}
+.saved-filters .content-filter select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+}
+.saved-filter-message:empty {
+  margin: 0;
+}
 
 .content-filter {
   display: inline-flex;

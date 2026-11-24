@@ -520,6 +520,44 @@ test("saved links show current public status and stay usable if status checks fa
   assert.equal(await rows.last().locator("a").getAttribute("href"), managePath);
 });
 
+test("Saved links filter by local title and type without changing data or requesting again", async (t) => {
+  const { store, page, context, origin } = await fixture(t);
+  const poll = await store.create({ title: "Garden poll", options: ["A", "B"] });
+  const entries = [
+    { path: `/vote/${poll.id}/manage`, title: "Garden poll" },
+    { path: `/sale/${"a".repeat(24)}`, title: "Ｇａｒｄｅｎ tools" },
+    { path: `/task/${"b".repeat(24)}`, title: "Books task" },
+  ];
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), entries);
+  const requests = [];
+  page.on("request", request => {
+    if (request.url().startsWith(`${origin}/api/`)) requests.push(request.postDataJSON());
+  });
+  await page.goto(`${origin}/saved`);
+  await page.getByText("Open for votes", { exact: true }).waitFor();
+  const initialRequests = requests.length;
+  const search = page.getByLabel("Search saved links", { exact: true });
+  const type = page.getByLabel("Post type", { exact: true });
+  const rows = page.locator(".saved-posts li:visible");
+  await search.fill(" GARDEN ", { timeout: 5000 });
+  await rows.filter({ hasText: "Ｇａｒｄｅｎ tools" }).waitFor();
+  assert.equal(await rows.count(), 2);
+  await type.selectOption("sale");
+  assert.equal(await rows.count(), 1);
+  await search.fill("private test query without results");
+  await page.getByText("No saved links match these filters.", { exact: true }).waitFor();
+  assert.equal(await rows.count(), 0);
+  await page.getByRole("button", {name:"Clear all filters", exact:true}).click();
+  assert.equal(await rows.count(), 3);
+  assert.equal(requests.length, initialRequests);
+  assert.equal(page.url(), `${origin}/saved`);
+  await context.setOffline(true);
+  await search.fill("garden poll");
+  assert.equal(await rows.count(), 1);
+  assert.equal(await rows.getByRole("link").getAttribute("href"), entries[0].path);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), entries);
+});
+
 test("an open Saved page refreshes when a giveaway hold ends", async (t) => {
   const { store, page, origin, advance } = await fixture(t);
   const giveaway = await store.create({

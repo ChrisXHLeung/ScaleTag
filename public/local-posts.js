@@ -312,11 +312,54 @@ export function renderSavedPosts(host) {
   const heading = document.createElement("h1");
   heading.textContent = t("Saved links", "已保存链接");
   const description = notice(t("These links stay in this browser. Management passwords are not saved here.", "这些链接仅保存在此浏览器。管理密码不会保存在这里。"));
+  const filters = document.createElement("div");
+  filters.className = "post-search saved-filters";
+  filters.setAttribute("role", "search");
+  filters.innerHTML = `<label>${t("Search saved links", "搜索已保存链接")}<input type="search" autocomplete="off" maxlength="140"></label>
+    <div class="content-filter">
+      <label for="saved-type-filter">${t("Post type", "发布类型")}</label>
+      <select id="saved-type-filter">
+        <option value="all">${t("All post types", "全部类型")}</option>
+        <option value="poll">${t("Polls", "投票")}</option>
+        <option value="task">${t("Tasks", "任务")}</option>
+        <option value="sale">${t("Free Giveaways", "闲置赠予")}</option>
+      </select>
+    </div>`;
+  const search = filters.querySelector("input");
+  const typeFilter = filters.querySelector("select");
+  const clear = button(t("Clear all filters", "清除所有筛选"));
+  filters.append(clear);
   const list = document.createElement("ul");
   list.className = "saved-posts";
-  const empty = notice(t("You have no saved links.", "暂无已保存链接。"));
-  page.append(heading, description, list, empty);
+  const noBookmarks = t("You have no saved links.", "暂无已保存链接。");
+  const noMatches = t("No saved links match these filters.", "没有符合筛选条件的已保存链接。");
+  const empty = notice("");
+  empty.classList.add("saved-filter-message");
+  page.append(heading, description, filters, list, empty);
   host.replaceChildren(page);
+
+  const normalize = value => value.normalize("NFKC").toLowerCase().trim();
+  function applyFilters() {
+    const query = normalize(search.value);
+    const type = typeFilter.value;
+    let matched = false;
+    for (const row of list.children) {
+      row.hidden = (type !== "all" && type !== row.dataset.postType) || !row.dataset.searchTitle.includes(query);
+      matched ||= !row.hidden;
+    }
+    filters.hidden = !list.childElementCount;
+    clear.hidden = !search.value && type === "all";
+    const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
+    if (empty.textContent !== message) empty.textContent = message;
+  }
+  search.oninput = applyFilters;
+  typeFilter.onchange = applyFilters;
+  clear.onclick = () => {
+    search.value = "";
+    typeFilter.value = "all";
+    search.focus();
+    applyFilters();
+  };
 
   const labels = new Map([
     ["poll_open", t("Open for votes", "投票进行中")],
@@ -396,6 +439,8 @@ export function renderSavedPosts(host) {
       link.setAttribute("aria-describedby", status.id);
       const [, kind, id] = path.split("/");
       const type = kind === "vote" ? "poll" : kind;
+      row.dataset.postType = type;
+      row.dataset.searchTitle = normalize(title);
       const tag = `${type}:${id}`;
       if (!lookups.has(tag)) lookups.set(tag, { type, id, labels: new Set() });
       const lookup = lookups.get(tag);
@@ -410,13 +455,13 @@ export function renderSavedPosts(host) {
         if (!lookup.labels.size) lookups.delete(tag);
         if (!lookups.size) cancelStatusRefresh();
         row.remove();
-        empty.hidden = list.childElementCount > 0;
+        applyFilters();
       };
       details.append(link, status);
       row.append(details, remove);
       list.append(row);
     }
-    empty.hidden = list.childElementCount > 0;
+    applyFilters();
     void refreshStatuses();
   }
 
