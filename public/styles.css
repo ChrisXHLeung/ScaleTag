@@ -70,9 +70,6 @@
   border-radius: 12px;
   background: var(--pale);
 }
-#pickup-now-filter {
-  margin-block: 0 14px;
-}
 .view-switch button {
   padding: 10px 26px;
   border: 0;
@@ -315,6 +312,20 @@
   background: white;
   color: var(--ink);
   font: inherit;
+}
+#pickup-time-filter {
+  display: flex;
+  flex-wrap: wrap;
+  margin-block: 0 14px;
+}
+#pickup-time-filter select {
+  max-width: 100%;
+}
+.sale-list-card {
+  min-width: 0;
+}
+.sale-list-card .card-top {
+  flex-wrap: wrap;
 }
 .nearby-controls {
   display: flex;

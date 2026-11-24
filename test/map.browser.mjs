@@ -106,12 +106,12 @@ test("Pickup now follows giveaway time boundaries in List and Map", async (t) =>
   await page.clock.install({ time: new Date(now) });
   await page.goto(`${origin}/PostList`);
   const type = page.locator("#content-type");
-  const pickup = page.getByRole("checkbox", { name: "Pickup now", exact: true });
+  const pickup = page.getByRole("combobox", { name: "Pickup time", exact: true });
   assert.equal(await pickup.isVisible(), false);
   await type.selectOption("sale");
   const card = sale => page.locator(`#poll-list a[href="/sale/${sale.id}"]`);
   await card(unknown).waitFor();
-  await pickup.check();
+  await pickup.selectOption("now");
   await card(unknown).waitFor({ state: "hidden" });
   await card(current).waitFor();
   assert.equal(await card(future).count(), 0);
@@ -131,7 +131,7 @@ test("Pickup now follows giveaway time boundaries in List and Map", async (t) =>
   await page.getByText("No mapped posts match these filters. Try List to see all posts.", { exact: true }).waitFor();
   assert.equal(await mapped(future).count(), 0);
   await page.getByRole("button", { name: "List", exact: true }).click();
-  assert.equal(await pickup.isChecked(), true);
+  assert.equal(await pickup.inputValue(), "now");
   await page.getByText("No giveaways match the current pickup time.", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
   assert.equal(await pickup.isVisible(), false);
@@ -152,8 +152,8 @@ test("pickup timing transitions reconcile a delayed Load more without dropping r
   await page.clock.install({ time: new Date(now + 1000) });
   await page.goto(`${origin}/PostList`);
   await page.locator("#content-type").selectOption("sale");
-  const pickup = page.getByRole("checkbox", { name: "Pickup now", exact: true });
-  await pickup.check();
+  const pickup = page.getByRole("combobox", { name: "Pickup time", exact: true });
+  await pickup.selectOption("now");
   const cards = page.locator("#poll-list .sale-list-card");
   const card = sale => cards.filter({ hasText: sale.title });
   await card(expiring).waitFor();
@@ -187,6 +187,48 @@ test("pickup timing transitions reconcile a delayed Load more without dropping r
   await card(beginning).waitFor({ state: "hidden" });
   assert.equal(await cards.count(), 21);
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute("href")), href);
+});
+
+test("upcoming pickup enters the 24-hour range and moves out when it starts", async (t) => {
+  const { advance, input, origin, page, store, errors } = await fixture(t);
+  const now = store.clock();
+  const make = (title, start) => store.create({ ...input, title, type: "sale", giveawayVersion: 1,
+    pickupLocation: "Library entrance", pickupWindow: { startsAt: now + start, endsAt: now + start + 120000 },
+  });
+  const next = await make("Soon pickup", 60000);
+  const far = await make("Next-day pickup", DAY + 30000);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.clock.install({ time: new Date(now) });
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("sale");
+  const pickup = page.getByRole("combobox", { name: "Pickup time", exact: true });
+  const card = sale => page.locator(`#poll-list a[href="/sale/${sale.id}"]`);
+  await card(far).waitFor();
+  await pickup.selectOption({ label: "Starts in the next 24 hours" });
+  await card(far).waitFor({ state: "hidden" });
+  await card(next).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  advance(31000);
+  await page.clock.fastForward(31000);
+  await card(far).waitFor();
+  await mapReady(page);
+  const link = sale => page.locator(`#mapped-poll-links a[href="/sale/${sale.id}"]`);
+  await link(next).waitFor({ state: "attached" });
+  await link(far).waitFor({ state: "attached" });
+  assert.match(await link(next).textContent(), /Pickup window ·/u);
+  await page.locator(".mapped-polls summary").click();
+  await link(far).focus();
+  advance(31000);
+  await page.clock.fastForward(31000);
+  await link(next).waitFor({ state: "detached" });
+  assert.equal(await link(far).count(), 1);
+  assert.equal(await link(far).evaluate(element => document.activeElement === element), true);
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  assert.equal(await pickup.inputValue(), "upcoming");
+  await pickup.selectOption("now");
+  await card(next).waitFor();
+  assert.equal(await card(far).count(), 0);
+  assert.deepEqual(errors, []);
 });
 
 async function mapReady(page) {
@@ -371,6 +413,28 @@ test("a non-cached Back navigation restores the discovery view and public filter
   await page.reload();
   assert.equal(await page.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator("#content-type").inputValue(), "all");
+});
+
+test("Back restores the upcoming pickup selection while reload resets it", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const now = store.clock();
+  const sale = await store.create({ ...input, type: "sale", giveawayVersion: 1,
+    pickupLocation: "Library entrance", pickupWindow: { startsAt: now + 60000, endsAt: now + 120000 },
+  });
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("sale");
+  const pickup = page.getByRole("combobox", { name: "Pickup time", exact: true });
+  await pickup.selectOption("upcoming");
+  assert.equal(await page.evaluate(() => history.state?.scaleTagPostList?.pickup), "upcoming");
+  await page.locator(`#poll-list a[href="/sale/${sale.id}"]`).click();
+  await page.getByRole("heading", { name: sale.title, exact: true }).waitFor();
+  const results = page.waitForResponse(`${origin}/api/posts/search`, { timeout: 10000 });
+  await page.goBack();
+  assert.equal((await results).request().postDataJSON().pickup, "upcoming");
+  assert.equal(await pickup.inputValue(), "upcoming");
+  await page.reload();
+  assert.equal(await page.locator("#content-type").inputValue(), "all");
+  assert.equal(await pickup.isVisible(), false);
 });
 
 test("a cached PostList restores its map and refreshes the current filters", async (t) => {

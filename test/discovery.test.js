@@ -145,6 +145,40 @@ for (const Store of [PollStore, SQLiteStore]) {
     assert.equal((await request("/api/posts?pickup=tomorrow")).status, 400);
     assert.equal((await request("/api/map/search", { pickup: ["now"] })).status, 400);
   });
+
+  test(`${Store.name}: upcoming pickup includes unheld windows starting in the next 24 hours`, async t => {
+    const { store, request, publish } = await fixture(t, Store);
+    const start = Math.floor(Date.now() / 60000) * 60000;
+    let now = start;
+    store.clock = () => now;
+    const sale = (title, startsAt) => publish("sale", {
+      title, pickupLocation: "Library entrance", location, mapVisible: true,
+      pickupWindow: { startsAt, endsAt: startsAt + 7200000 },
+    });
+    const running = await sale("Current pickup", start);
+    const first = await sale("Upcoming pickup", start + 60000);
+    const held = await sale("Held pickup", start + 180000);
+    const far = await sale("Next-day pickup", start + 86430000);
+    await store.setSaleState(held.id, held.manageKey, "reserved", start + 90000);
+    for (const [offset, ids, refreshAfterMs] of [
+      [0, [first.id], 30000],
+      [30000, [first.id, far.id], 30000],
+      [60000, [far.id], 30000],
+      [90000, [far.id, held.id], 90000],
+      [180000, [far.id], 86430000 - 180000],
+    ]) {
+      now = start + offset;
+      for (const path of ["/api/posts/search", "/api/map/search"]) {
+        const response = await request(path, { pickup: "upcoming", type: "sale" });
+        assert.equal(response.status, 200);
+        const results = await response.json();
+        const actual = new Set(results.polls.map(post => post.id));
+        assert.deepEqual(actual, new Set(ids));
+        assert.equal(actual.has(running.id), false);
+        assert.equal(results.refreshAfterMs, refreshAfterMs);
+      }
+    }
+  });
 }
 
 test("offline.html and base.css enforce skip-link landmark and reduced-motion accessibility rules", async () => {

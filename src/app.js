@@ -255,7 +255,7 @@ export function createApp(
     return { location, radiusKm, sort };
   }
   function pickupFilter(value) {
-    if (value !== undefined && value !== "now") throw new AppError(400, "Invalid filter.");
+    if (value !== undefined && !["now", "upcoming"].includes(value)) throw new AppError(400, "Invalid filter.");
     return value;
   }
   function list(req, res) {

@@ -60,13 +60,14 @@ function publicSaleAvailability(post, now) {
   };
 }
 
-function filterPickupRows(rows, now) {
+function filterPickupRows(rows, now, pickup) {
   let next = Infinity;
   const available = rows.filter(({ post }) => {
     const window = post.pickupWindow;
     if (post.type !== "sale" || !window) return false;
-    const startsAt = Math.max(window.startsAt, post.reservedUntil ?? 0);
-    const endsAt = Math.min(window.endsAt, post.endsAt);
+    const upcoming = pickup === "upcoming";
+    const startsAt = Math.max(upcoming ? window.startsAt - DAY : window.startsAt, post.reservedUntil ?? 0);
+    const endsAt = Math.min(upcoming ? window.startsAt : window.endsAt, post.endsAt);
     if (startsAt >= endsAt || endsAt <= now) return false;
     const current = startsAt <= now;
     next = Math.min(next, current ? endsAt : startsAt);
@@ -522,7 +523,7 @@ export class PollStore {
     rows = rows.filter(searchFilter(query));
     let ordered = nearbyRows(rows, location, radiusKm, sort);
     let refreshAfterMs;
-    if (pickup === "now") ({ rows: ordered, refreshAfterMs } = filterPickupRows(ordered, now));
+    if (pickup) ({ rows: ordered, refreshAfterMs } = filterPickupRows(ordered, now, pickup));
     if (before) {
       const boundary = { post: before, distanceBand: sort === "nearest" ? before.distanceBand : 0 };
       ordered = ordered.filter(row => compareNearbyRows(row, boundary) > 0);
@@ -555,7 +556,7 @@ export class PollStore {
       .filter(searchFilter(query));
     let rows = nearbyRows(posts, location, radiusKm, sort);
     let refreshAfterMs;
-    if (pickup === "now") ({ rows, refreshAfterMs } = filterPickupRows(rows, now));
+    if (pickup) ({ rows, refreshAfterMs } = filterPickupRows(rows, now, pickup));
     rows.sort(compareNearbyRows);
     return {
       serverTime: now,
