@@ -346,6 +346,16 @@
   color: var(--muted);
   line-height: 1.65;
 }
+#sale-pickup h2 {
+  white-space: pre-wrap;
+}
+#pickup-copy {
+  margin-block: 12px;
+}
+.pickup-copy-fallback {
+  display: block;
+  margin-block-start: 8px;
+}
 .task-card-reward {
   padding: 20px 0;
 }

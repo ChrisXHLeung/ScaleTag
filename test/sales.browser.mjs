@@ -175,11 +175,14 @@ test("set a pickup window and hold a giveaway until it becomes available again",
   await visitor.clock.install({ time: new Date() });
   await visitor.goto(`${f.origin}/sale/${id}`);
   await visitor.getByText("Reserved", { exact: true }).waitFor();
+  const copyPickup = visitor.getByRole("button", { name: "Copy pickup location", exact: true });
   assert.equal(await calendar.isVisible(), false);
+  assert.equal(await copyPickup.isVisible(), false);
   f.advance(7 * 60000);
   await visitor.clock.fastForward(7 * 60000);
   await visitor.getByText("Available", { exact: true }).waitFor();
   await calendar.waitFor();
+  await copyPickup.waitFor();
   assert.equal(await visitor.getByText("Reserved", { exact: true }).isVisible(), false);
   await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   publisher.once("dialog", dialog => dialog.accept());
@@ -188,6 +191,7 @@ test("set a pickup window and hold a giveaway until it becomes available again",
   await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
   await visitor.getByText("Claimed", { exact: true }).waitFor({ timeout: 4500 });
   assert.equal(await calendar.isVisible(), false);
+  assert.equal(await copyPickup.count(), 0);
   assert.deepEqual(f.errors, []);
 });
 
@@ -205,6 +209,50 @@ test("hide the calendar link as soon as the pickup window ends", async (t) => {
   f.advance(5000);
   await f.page.clock.fastForward(5000);
   await calendar.waitFor({ state: "hidden", timeout: 4000 });
+});
+
+test("copy an available giveaway's pickup text and offer manual copy if denied", async (t) => {
+  const { origin, context, page, store, input } = await fixture(t);
+  const pickup = "図書館  North entrance\nUse the ramp";
+  const now = Date.now();
+  const sale = await store.create({ ...input, type: "sale", giveawayVersion: 1,
+    title: "Pickup location copy check", pickupLocation: pickup,
+  });
+  const path = `${origin}/sale/${sale.id}`;
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(path);
+  const copy = page.getByRole("button", { name: "Copy pickup location", exact: true });
+  const fallback = page.getByRole("textbox", { name: "Pickup location (public)", exact: true });
+  const heading = page.locator("#sale-pickup h2");
+  await heading.waitFor();
+  assert.equal(await heading.innerText(), pickup);
+  assert.equal(await fallback.isVisible(), false);
+  await copy.click({ timeout: 5000 });
+  await page.getByText("Pickup location copied.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), pickup);
+  assert.equal(await fallback.isVisible(), false);
+
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  await copy.click();
+  await fallback.waitFor();
+  assert.equal(await fallback.inputValue(), pickup);
+  assert.ok(await fallback.evaluate(input => document.activeElement === input &&
+    input.selectionStart === 0 && input.selectionEnd === input.value.length));
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+  await store.setSaleState(sale.id, sale.manageKey, "reserved", now + 20 * 60000);
+  await page.reload();
+  await page.getByText("Reserved", { exact: true }).waitFor();
+  assert.equal(await copy.isVisible(), false);
+  assert.equal(await fallback.isVisible(), false);
+  await store.setSaleState(sale.id, sale.manageKey, "claimed");
+  await page.reload();
+  await page.getByText("This item has been picked up.", { exact: true }).waitFor();
+  assert.equal(await copy.count(), 0);
+  assert.equal(await page.getByText(pickup, { exact: true }).count(), 0);
 });
 
 test("claim a giveaway and keep its shared address without the pickup location", async t => {

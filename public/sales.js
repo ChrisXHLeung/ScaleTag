@@ -98,6 +98,39 @@ export async function salePage(id, { manage = false, password, published } = {})
     publicUrl: publicLink,
   });
   if (!claimed) renderPoster();
+  const reservedUntil = main.querySelector('#sale-reserved-until');
+  let pickupCopy;
+  if (!manage && reservedUntil) {
+    reservedUntil.insertAdjacentHTML('afterend', `<div id="pickup-copy" hidden>
+      <button type="button" class="button secondary small">${t('Copy pickup location', '复制领取地点')}</button>
+      <label class="pickup-copy-fallback" hidden>${t('Pickup location (public)', '领取地点（公开）')}
+        <textarea rows="3" readonly></textarea>
+      </label>
+    </div>`);
+    pickupCopy = main.querySelector('#pickup-copy');
+    const copy = pickupCopy.querySelector('button');
+    const fallback = pickupCopy.querySelector('label');
+    const text = fallback.querySelector('textarea');
+    const heading = main.querySelector('#sale-pickup h2');
+    copy.onclick = async () => {
+      const address = heading.textContent;
+      try {
+        await navigator.clipboard.writeText(address);
+      } catch {
+        if (!pickupCopy.isConnected || pickupCopy.hidden) return;
+        fallback.hidden = false;
+        text.value = address;
+        text.focus();
+        text.select();
+        toast(t('Copy the selected location.', '请复制选中的地点。'));
+        return;
+      }
+      if (!pickupCopy.isConnected || pickupCopy.hidden) return;
+      fallback.hidden = true;
+      text.value = '';
+      toast(t('Pickup location copied.', '已复制领取地点。'));
+    };
+  }
   const calendar = main.querySelector('#pickup-calendar');
   let calendarTimer, calendarDeadline = 0;
   let holdTimer;
@@ -127,9 +160,15 @@ export async function salePage(id, { manage = false, password, published } = {})
     calendarDeadline = state.saleState === 'open' && state.pickupWindow
       ? Date.now() + state.pickupWindow.endsAt - state.serverTime : 0;
     refreshCalendarLink();
-    const reservedUntil = main.querySelector('#sale-reserved-until');
     reservedUntil.hidden = !reserved;
     reservedUntil.textContent = reserved ? `${t('Reserved until', '保留至')} ${date(state.reservedUntil)}` : '';
+    if (pickupCopy) {
+      pickupCopy.hidden = state.saleState !== 'open';
+      if (pickupCopy.hidden) {
+        pickupCopy.querySelector('label').hidden = true;
+        pickupCopy.querySelector('textarea').value = '';
+      }
+    }
     const release = main.querySelector('#release-sale');
     if (release) release.hidden = !reserved;
     if (reserved) holdTimer = setTimeout(() => renderAvailability({
