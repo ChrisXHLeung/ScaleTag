@@ -477,7 +477,7 @@ function postList() {
   document.querySelector('[data-nav="list"]').classList.add("active");
   const searchForm = `<form class="post-search" id="post-search" role="search">
     <label for="post-query">${t("Search posts", "搜索帖子")}
-      <input id="post-query" type="search" maxlength="240" placeholder="${t("Title or description", "标题或描述")}">
+      <input id="post-query" type="search" autocomplete="off" maxlength="240" placeholder="${t("Title or description", "标题或描述")}">
     </label>
     <button class="button secondary small" type="submit">${t("Search", "搜索")}</button>
     <button class="text-link" id="clear-post-search" type="button" hidden>${t("Clear search", "清除搜索")}</button>
@@ -524,6 +524,17 @@ function postList() {
   const statusButtons = [...document.querySelectorAll("[data-filter]")];
   const nearbyOptions = () => location ? { location, radiusKm, sort } : {};
   const hasFilters = () => Boolean(query || contentType !== "all" || status !== "all" || location);
+
+  function rememberDiscovery() {
+    const existing = history.state;
+    const previous = existing?.scaleTagPostList;
+    if (previous?.mode === mode && previous.type === contentType && previous.status === status) return;
+    try {
+      history.replaceState({ ...existing, scaleTagPostList: { mode, type: contentType, status } }, "");
+    } catch {
+      // Browsers can limit history writes. Browsing still works without restoration.
+    }
+  }
 
   function updateListCaption() {
     document.querySelector("#list-caption").textContent = mode === "map"
@@ -639,6 +650,7 @@ function postList() {
     button.onclick = () => {
       const previousMode = mode;
       mode = button.dataset.view;
+      rememberDiscovery();
       request++;
       mapRequest++;
       clearTimeout(mapTimer);
@@ -704,6 +716,7 @@ function postList() {
   });
   typeSelect.onchange = (event) => {
     contentType = event.target.value;
+    rememberDiscovery();
     load();
   };
   const search = document.querySelector("#post-search");
@@ -718,6 +731,7 @@ function postList() {
     radiusKm = 100;
     document.querySelector("#nearby-label").textContent = t("Within 100 km", "100 公里内");
     setNearbyLocation(undefined);
+    rememberDiscovery();
     searchInput.focus();
     load();
   }
@@ -832,6 +846,7 @@ function postList() {
   for (const button of statusButtons) {
     button.onclick = () => {
       setStatus(button.dataset.filter);
+      rememberDiscovery();
       load();
     };
   }
@@ -872,6 +887,19 @@ function postList() {
     }
   };
   document.querySelector("#load-more").onclick = () => load(false);
+  const returned = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+  const prior = returned ? history.state?.scaleTagPostList : undefined;
+  if (prior) {
+    if ([...typeSelect.options].some(option => option.value === prior.type)) {
+      contentType = typeSelect.value = prior.type;
+    }
+    if (statusButtons.some(button => button.dataset.filter === prior.status)) setStatus(prior.status);
+    if (prior.mode === "map") {
+      document.querySelector('[data-view="map"]').click();
+      return;
+    }
+  }
+  rememberDiscovery();
   load();
 }
 

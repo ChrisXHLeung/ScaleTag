@@ -144,6 +144,36 @@ test("empty list and map results can clear filters without changing the view", a
   assert.equal(page.url(), `${origin}/PostList`);
 });
 
+test("a non-cached Back navigation restores the discovery view and public filters only", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const poll = await store.create(input);
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#nearby").click();
+  await page.locator("#nearby[aria-pressed=true]").waitFor();
+  await page.locator("#content-type").selectOption("poll");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.locator("#post-query").fill("Trees");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await mapReady(page);
+  assert.deepEqual(await page.evaluate(() => history.state?.scaleTagPostList), {
+    mode: "map", type: "poll", status: "open",
+  });
+
+  await page.goto(`${origin}/vote/${poll.id}`);
+  await page.getByRole("heading", { name: poll.title }).waitFor();
+  const results = page.waitForResponse(`${origin}/api/map/search`, { timeout: 5000 });
+  await page.goBack();
+  assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0].type), "back_forward");
+  assert.deepEqual((await results).request().postDataJSON(), { status: "open", type: "poll", query: "" });
+  assert.equal(await page.getByRole("button", { name: "Map", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#post-query").inputValue(), "");
+  assert.equal(await page.locator("#nearby").getAttribute("aria-pressed"), "false");
+  assert.equal(page.url(), `${origin}/PostList`);
+  await page.reload();
+  assert.equal(await page.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#content-type").inputValue(), "all");
+});
+
 test("a cached PostList restores its map and refreshes the current filters", async (t) => {
   const { page, origin, store, input, errors } = await fixture(t);
   const poll = await store.create(input);
