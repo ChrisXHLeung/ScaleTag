@@ -183,7 +183,8 @@ button {
   padding: 14px 0;
   color: var(--muted);
 }
-.header-inner nav a.active {
+.header-inner nav a.active,
+.header-inner nav a[aria-current="page"] {
   color: var(--blue);
 }
 .header-inner nav a:last-child {
@@ -274,6 +275,9 @@ main {
   white-space: nowrap;
 }
 .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-size: 13px;
   font-weight: 600;
   border-bottom: 1px solid #a9bde3;
@@ -792,6 +796,12 @@ input[type="radio"] {
   font-size: 13px;
   color: var(--muted);
 }
+.footer-links a,
+.footer-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
 .footer-links > span {
   flex-basis: 100%;
   text-align: right;
@@ -1091,7 +1101,9 @@ meter::-moz-meter-bar {
   padding: 44px 0 70px;
 }
 .back-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-size: 14px;
   color: var(--muted);
   margin-bottom: 28px;
@@ -2020,7 +2032,8 @@ meter::-moz-meter-bar {
 .site-header { border-color: var(--line); }
 .brand { color: var(--ink); font-weight: 800; }
 .header-inner nav a { color: var(--ink); }
-.header-inner nav a.active { color: var(--red); }
+.header-inner nav a.active,
+.header-inner nav a[aria-current="page"] { color: var(--red); }
 .header-inner nav a:last-child { border-color: var(--line); border-radius: 5px; }
 .button { background: var(--red); border-color: var(--red); border-radius: 5px; font-weight: 700; box-shadow: none; }
 .button:hover:not(:disabled) { background: #a81325; }
@@ -2113,6 +2126,36 @@ input[type="text"], input:not([type]), textarea { font-size: 15px; border-color:
 }
 #poster-print-root {
   display: none;
+}
+@media (max-width: 720px), (pointer: coarse) {
+  .header-inner nav a {
+    display: inline-flex;
+    align-items: center;
+  }
+  .header-inner nav a,
+  .language-control select,
+  .button.small,
+  .filter-tabs button,
+  .view-switch button,
+  .near-button,
+  .text-link,
+  .back-link,
+  .add-option,
+  .update-dismiss,
+  .footer-links a,
+  .footer-action,
+  .map-legend button {
+    min-height: 44px;
+  }
+  .filter-tabs {
+    flex-wrap: wrap;
+  }
+  .remove-option,
+  .dialog-close,
+  .maplibregl-popup-close-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 @media print {
   @page {

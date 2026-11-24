@@ -1353,3 +1353,129 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "header navigation aria-current synchronization and 390x844 mobile touch targets",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+
+    async function navState() {
+      return page.evaluate(() =>
+        [...document.querySelectorAll("header nav a[data-nav]")].map((link) => ({
+          nav: link.dataset.nav,
+          active: link.classList.contains("active"),
+          ariaCurrent: link.getAttribute("aria-current"),
+        })),
+      );
+    }
+
+    const expectedRoutes = [
+      { path: "/PostList", activeNav: "list", waitSelector: ".list-page", expectedCount: 3 },
+      { path: "/saved", activeNav: "saved", waitSelector: "main h1", expectedCount: 3 },
+      { path: "/create", activeNav: "create", waitSelector: "#create-form", expectedCount: 3 },
+      { path: "/create/task", activeNav: "create", waitSelector: "#task-form", expectedCount: 3 },
+      { path: "/create/sale", activeNav: "create", waitSelector: "#sale-form", expectedCount: 3 },
+      { path: "/secrex", activeNav: "create", waitSelector: "#secrex-compose", expectedCount: 2 },
+    ];
+
+    for (const { path, activeNav, waitSelector, expectedCount } of expectedRoutes) {
+      await page.goto(`${origin}${path}`);
+      await page.locator(waitSelector).waitFor();
+      const state = await navState();
+      assert.equal(state.length, expectedCount, `Expected ${expectedCount} header nav links on ${path}`);
+      for (const item of state) {
+        if (item.nav === activeNav) {
+          assert.equal(item.active, true, `${path} -> [data-nav="${item.nav}"] should have .active`);
+          assert.equal(item.ariaCurrent, "page", `${path} -> [data-nav="${item.nav}"] should have aria-current="page"`);
+        } else {
+          assert.equal(item.active, false, `${path} -> [data-nav="${item.nav}"] should not have .active`);
+          assert.equal(item.ariaCurrent, null, `${path} -> [data-nav="${item.nav}"] should not have aria-current`);
+        }
+      }
+    }
+
+    const poll = await store.create({
+      title: "Nav reset detail poll",
+      options: ["Yes", "No"],
+      visibility: "unlisted",
+    });
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    const detailNav = await navState();
+    for (const item of detailNav) {
+      assert.equal(item.active, false, `/vote/:id -> [data-nav="${item.nav}"] should not have .active`);
+      assert.equal(item.ariaCurrent, null, `/vote/:id -> [data-nav="${item.nav}"] should not have aria-current`);
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto(`${origin}/PostList`);
+    await page.locator(".list-page").waitFor();
+    const postListMetrics = await page.evaluate(() => {
+      const selectors = [
+        'header nav a[data-nav="list"]',
+        'header nav a[data-nav="saved"]',
+        'header nav a[data-nav="create"]',
+        ".filter-tabs button",
+        ".view-switch button",
+        ".near-button",
+        ".language-control select",
+      ];
+      const heights = {};
+      for (const sel of selectors) {
+        const els = [...document.querySelectorAll(sel)];
+        heights[sel] = els.map((el) => el.getBoundingClientRect().height);
+      }
+      return {
+        heights,
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      };
+    });
+    assert.ok(
+      postListMetrics.scrollWidth <= postListMetrics.innerWidth,
+      `Expected /PostList scrollWidth (${postListMetrics.scrollWidth}) <= innerWidth (${postListMetrics.innerWidth})`,
+    );
+    for (const [sel, list] of Object.entries(postListMetrics.heights)) {
+      assert.ok(list.length > 0, `Expected elements for ${sel} on /PostList`);
+      for (const h of list) {
+        assert.ok(h >= 44, `Expected ${sel} height (${h}) >= 44 on /PostList at 390x844`);
+      }
+    }
+
+    await page.goto(`${origin}/create`);
+    await page.locator("#create-form").waitFor();
+    const createMetrics = await page.evaluate(() => {
+      const selectors = [
+        'header nav a[data-nav="list"]',
+        'header nav a[data-nav="saved"]',
+        'header nav a[data-nav="create"]',
+        ".language-control select",
+      ];
+      const heights = {};
+      for (const sel of selectors) {
+        const els = [...document.querySelectorAll(sel)];
+        heights[sel] = els.map((el) => el.getBoundingClientRect().height);
+      }
+      return {
+        heights,
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      };
+    });
+    assert.ok(
+      createMetrics.scrollWidth <= createMetrics.innerWidth,
+      `Expected /create scrollWidth (${createMetrics.scrollWidth}) <= innerWidth (${createMetrics.innerWidth})`,
+    );
+    for (const [sel, list] of Object.entries(createMetrics.heights)) {
+      assert.ok(list.length > 0, `Expected elements for ${sel} on /create`);
+      for (const h of list) {
+        assert.ok(h >= 44, `Expected ${sel} height (${h}) >= 44 on /create at 390x844`);
+      }
+    }
+
+    assert.deepEqual(f.errors, []);
+  },
+);

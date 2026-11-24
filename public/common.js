@@ -409,6 +409,15 @@ export function mountNativeShare(anchor, { title, url } = {}) {
   anchor.before(btn);
 }
 
+export function setActiveNav(name) {
+  document.querySelectorAll("header nav a[data-nav]").forEach((link) => {
+    const active = link.dataset.nav === name;
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+}
+
 export function showFormError(node, error, { focus = true } = {}) {
   const msg = typeof error === "string" ? error : (error?.message ?? "");
   node.textContent = msg;

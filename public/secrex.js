@@ -1,4 +1,4 @@
-import { t, icons } from "/common.js";
+import { t, icons, setActiveNav } from "/common.js";
 import {
   decryptSecret,
   deriveClaim,
@@ -49,7 +49,7 @@ function createView() {
     "Secrex — One-time encrypted secret — ScaleTag",
     "Secrex 阅后即焚 — ScaleTag",
   );
-  document.querySelector('[data-nav="create"]')?.classList.add("active");
+  setActiveNav("create");
   main.innerHTML = `<section class="create-section">
     <aside class="section-intro">
       <a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a>
