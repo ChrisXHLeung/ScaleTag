@@ -212,6 +212,42 @@ test("an unchanged automatic map refresh keeps keyboard focus on Clear all filte
   assert.equal(await clear.evaluate(button => document.activeElement === button), true);
 });
 
+test("background map refresh keeps markers and links visible and Clear all filters keeps focus in map", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const poll = await store.create(input);
+  let release;
+  let requestStarted;
+  const pendingRefresh = new Promise(resolve => { requestStarted = resolve; });
+  await page.route(`${origin}/api/map/search`, async route => {
+    if (release) {
+      requestStarted();
+      await release;
+    }
+    await route.continue();
+  });
+  await page.clock.install();
+  await page.goto(`${origin}/PostList`);
+  await page.getByRole("button", { name: "Map", exact: true }).click();
+  await mapReady(page);
+  await page.locator(`#mapped-poll-links a[href="/vote/${poll.id}"]`).waitFor({ state: "attached" });
+  let unblock;
+  release = new Promise(resolve => { unblock = resolve; });
+  try {
+    await page.clock.fastForward(31000);
+    await pendingRefresh;
+    assert.equal(await page.locator(`#mapped-poll-links a[href="/vote/${poll.id}"]`).count(), 1);
+  } finally {
+    unblock();
+  }
+  await page.locator(`#mapped-poll-links a[href="/vote/${poll.id}"]`).waitFor({ state: "attached" });
+  release = undefined;
+
+  await page.locator("#content-type").selectOption("task");
+  const clear = page.getByRole("button", { name: "Clear all filters", exact: true });
+  await clear.click();
+  assert.equal(await page.locator("#map-count").evaluate(el => document.activeElement === el), true);
+});
+
 test("a non-cached Back navigation restores the discovery view and public filters only", async (t) => {
   const { page, origin, store, input } = await fixture(t);
   const poll = await store.create(input);

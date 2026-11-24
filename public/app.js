@@ -611,8 +611,10 @@ function postList() {
       showMapClear(false);
       mapCount.textContent = t("Finding mapped posts…", "正在查找地图帖子…");
     }
-    mapView?.setData([]);
-    document.querySelector("#mapped-poll-links").replaceChildren();
+    if (!background) {
+      mapView?.setData([]);
+      document.querySelector("#mapped-poll-links").replaceChildren();
+    }
     const started = Date.now();
     try {
       const data = await api("/api/map/search", {
@@ -634,13 +636,15 @@ function postList() {
         ? t(`${count(data.polls.length)} of ${count(data.total)} matching mapped posts`, `显示 ${count(data.polls.length)} / ${count(data.total)} 条符合条件的地图帖子`) + (data.total > data.polls.length ? ` · ${t("First 1,000 results", "前 1,000 条结果")}` : "")
         : t("No mapped posts match these filters. Try List to see all posts.", "没有符合条件的地图帖子，请使用列表查看全部帖子。");
       showMapClear(!data.total && hasFilters());
+      const mappedLinks = document.querySelector("#mapped-poll-links");
+      mappedLinks.replaceChildren();
       for (const p of data.polls) {
         const li = document.createElement("li");
         const a = document.createElement("a");
         a.href = `/${p.type === "sale" ? "sale" : p.type === "task" ? "task" : "vote"}/${p.id}`;
         a.textContent = `${p.title} · ${p.type === "sale" ? `${t("Free Giveaways", "闲置赠予")} · ${saleStateLabel(p.saleState)}` : p.type === "task" ? `${t("Task", "任务")} · ${stateLabel(p.taskState)}` : p.status === "open" ? t("Open", "进行中") : t("Ended", "已结束")}`;
         li.append(a);
-        document.querySelector("#mapped-poll-links").append(li);
+        mappedLinks.append(li);
       }
       const boundary = data.polls.reduce(
         (time, p) =>
@@ -751,7 +755,8 @@ function postList() {
     radiusKm = 100;
     setNearbyLocation(undefined);
     rememberDiscovery();
-    searchInput.focus();
+    if (mode === "map") mapCount.focus({ preventScroll: true });
+    else searchInput.focus();
     load();
   }
   mapClear.onclick = clearFilters;
@@ -881,6 +886,7 @@ function postList() {
   };
   nearbyButton.onclick = async () => {
     if (locating) {
+      document.querySelector("#list-error").hidden = true;
       setNearbyLocation(undefined);
       return;
     }

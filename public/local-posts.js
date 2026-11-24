@@ -348,6 +348,7 @@ export function renderSavedPosts(host) {
     const { signal } = request;
     const entries = [...lookups.values()];
     let nextRefresh = Infinity;
+    let hadError = false;
     for (let i = 0; i < entries.length && !signal.aborted; i += 20) {
       const batch = entries.slice(i, i + 20).filter(lookup => lookup.labels.size);
       if (!batch.length) continue;
@@ -362,15 +363,18 @@ export function renderSavedPosts(host) {
             nextRefresh = Math.min(nextRefresh, performance.now() + result.refreshAfterMs);
         }
       } catch {
+        hadError = true;
         // An unavailable connection does not change the saved links.
       }
       if (!signal.aborted) batch.forEach((lookup, index) => {
         for (const output of lookup.labels) output.textContent = labels.get(statuses[index]) ?? failed;
       });
     }
-    if (!signal.aborted && lookups.size && Number.isFinite(nextRefresh)) {
-      const delay = Math.max(100, nextRefresh - performance.now());
-      refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
+    if (!signal.aborted && lookups.size) {
+      const delay = Number.isFinite(nextRefresh)
+        ? Math.max(100, nextRefresh - performance.now())
+        : hadError ? 30000 : Infinity;
+      if (Number.isFinite(delay)) refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
     }
   }
 

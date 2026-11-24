@@ -198,6 +198,8 @@ export async function createPollMap() {
   });
   return {
     setData(polls, shouldFit = false) {
+      const unchanged = !shouldFit && JSON.stringify(rows) === JSON.stringify(polls);
+      if (unchanged) return;
       popup?.remove();
       rows = polls;
       pendingFit = shouldFit;
