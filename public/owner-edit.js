@@ -1,5 +1,5 @@
 import {
-  api, bindPhotoInput, escape, photoFields, t, uploadedPhotosHtml,
+  api, bindPhotoInput, escape, mountPollOptionOrder, photoFields, syncPollOptionOrder, t, uploadedPhotosHtml,
 } from "/common.js";
 import { mountDraftCopy } from "/local-posts.js";
 import { pickupWindowFields, readPickupWindow } from "/pickup.js";
@@ -59,7 +59,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         const input = row.querySelector("input");
         input.id = label.htmlFor = `owner-option-${index + 1}`;
         label.textContent = t(`Option ${index + 1}`, `选项 ${index + 1}`);
-        const remove = row.querySelector("button");
+        syncPollOptionOrder(row, index, rows.length);
+        const remove = row.querySelector(".text-link");
         remove.disabled = rows.length <= 2;
         remove.setAttribute("aria-label", t(`Remove option ${index + 1}`, `删除选项 ${index + 1}`));
       });
@@ -72,6 +73,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       const input = row.querySelector("input");
       input.value = value;
       row.querySelector("button").onclick = () => { row.remove(); renumber(); };
+      mountPollOptionOrder(row, renumber);
       optionList.append(row);
       return input;
     }

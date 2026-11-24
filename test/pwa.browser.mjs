@@ -302,6 +302,53 @@ test("the browser restores public draft text and keeps saved post links locally"
   assert.equal(await page.getByLabel("The question").inputValue(), "Newer edit before the response");
 });
 
+test("poll draft options can be reordered with the keyboard and retain their order on reload", async (t) => {
+  const { page, origin } = await fixture(t);
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("Option 1", { exact: true }).fill("Morning");
+  await page.getByLabel("Option 2", { exact: true }).fill("Evening");
+  await page.getByRole("button", { name: "Add an option", exact: true }).click();
+  await page.getByLabel("Option 3", { exact: true }).fill("Afternoon");
+  const firstUp = page.getByRole("button", { name: "Move option 1 up", exact: true });
+  await firstUp.waitFor({ timeout: 5000 });
+  assert.equal(await firstUp.isDisabled(), true);
+
+  const thirdUp = page.getByRole("button", { name: "Move option 3 up", exact: true });
+  await thirdUp.focus();
+  await page.keyboard.press("Enter");
+  const secondUp = page.getByRole("button", { name: "Move option 2 up", exact: true });
+  assert.equal(await secondUp.evaluate(button => document.activeElement === button), true);
+  await page.keyboard.press("Enter");
+  const firstDown = page.getByRole("button", { name: "Move option 1 down", exact: true });
+  assert.equal(await firstDown.evaluate(button => document.activeElement === button), true);
+  assert.deepEqual(await page.locator("#option-inputs input").evaluateAll(inputs => inputs.map(input => input.value)), ["Afternoon", "Morning", "Evening"]);
+  await page.reload();
+  assert.deepEqual(await page.locator("#option-inputs input").evaluateAll(inputs => inputs.map(input => input.value)), ["Afternoon", "Morning", "Evening"]);
+});
+
+test("a poll owner can reorder choices until the first vote", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Garden pickup schedule", options: ["Morning", "Evening"], visibility: "unlisted" });
+  await page.goto(`${origin}/vote/${poll.id}/manage`);
+  await page.getByLabel("Management password").fill(poll.manageKey);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  await page.getByText("Edit public details", { exact: true }).click();
+  await page.getByRole("button", { name: "Move option 1 down", exact: true }).click({ timeout: 5000 });
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByText("Changes saved.", { exact: true }).waitFor();
+  await page.goto(`${origin}/vote/${poll.id}`);
+  assert.deepEqual(await page.locator("#vote-options label").allTextContents().then(labels => labels.map(label => label.trim())), ["Evening", "Morning"]);
+  await page.getByRole("radio", { name: "Evening", exact: true }).check();
+  await page.getByRole("button", { name: "Cast my vote" }).click();
+  await page.getByRole("button", { name: "Your vote is counted" }).waitFor();
+  await page.goto(`${origin}/vote/${poll.id}/manage`);
+  await page.getByLabel("Management password").fill(poll.manageKey);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  await page.getByText("Edit public details", { exact: true }).click();
+  await page.getByText("The poll question and options can change only before the first vote and before voting closes.", { exact: true }).waitFor();
+  assert.equal(await page.locator(".poll-option-order").count(), 0);
+});
+
 test("a stale draft keeps local edits and requires a choice before replacing saved text", async (t) => {
   const { page, context, origin } = await fixture(t);
   const other = await context.newPage();

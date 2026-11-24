@@ -23,6 +23,8 @@ import {
   managementDetails,
   managementPasswordForm,
   mountNativeShare,
+  mountPollOptionOrder,
+  syncPollOptionOrder,
   setActiveNav,
   showFormError,
 } from "/common.js";
@@ -94,9 +96,10 @@ function createPoll() {
       );
       row.querySelector("input").setAttribute("aria-label", t(`Option ${i + 1}`, `选项 ${i + 1}`));
       row.querySelector("input").placeholder = t(`Option ${i + 1}`, `选项 ${i + 1}`);
-      row.querySelector("button").disabled = inputs.children.length <= 2;
+      syncPollOptionOrder(row, i, inputs.children.length);
+      row.querySelector(".remove-option").disabled = inputs.children.length <= 2;
       row
-        .querySelector("button")
+        .querySelector(".remove-option")
         .setAttribute("aria-label", t(`Remove option ${i + 1}`, `删除选项 ${i + 1}`));
     });
     document.querySelector("#add-option").disabled =
@@ -113,6 +116,10 @@ function createPoll() {
       renumber();
       draft.save();
     };
+    mountPollOptionOrder(row, () => {
+      renumber();
+      draft.save();
+    });
     inputs.append(row);
     renumber();
     if (focus) row.querySelector("input").focus();

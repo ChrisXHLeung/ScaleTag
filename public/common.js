@@ -418,6 +418,35 @@ export function setActiveNav(name) {
   });
 }
 
+export function mountPollOptionOrder(row, onMove) {
+  const controls = document.createElement("div");
+  controls.className = "poll-option-order";
+  controls.innerHTML = `<button type="button" class="button secondary small">↑</button>
+    <button type="button" class="button secondary small">↓</button>`;
+  const [up, down] = controls.children;
+  row.querySelector("input").after(controls);
+
+  up.onclick = () => {
+    row.previousElementSibling?.before(row);
+    onMove();
+    (up.disabled ? down : up).focus();
+  };
+  down.onclick = () => {
+    row.nextElementSibling?.after(row);
+    onMove();
+    (down.disabled ? up : down).focus();
+  };
+}
+
+export function syncPollOptionOrder(row, index, total) {
+  const [up, down] = row.querySelector(".poll-option-order").children;
+  const number = index + 1;
+  up.setAttribute("aria-label", t(`Move option ${number} up`, `上移选项 ${number}`));
+  down.setAttribute("aria-label", t(`Move option ${number} down`, `下移选项 ${number}`));
+  up.disabled = index === 0;
+  down.disabled = index === total - 1;
+}
+
 export function showFormError(node, error, { focus = true } = {}) {
   const msg = typeof error === "string" ? error : (error?.message ?? "");
   node.textContent = msg;

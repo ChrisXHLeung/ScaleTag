@@ -6037,6 +6037,16 @@ export const DYNAMIC_TRANSLATIONS = [
     it: m => `Rimuovi l’opzione ${m[1]}`,
   },
   {
+    pattern: /^Move option (\d+) (up|down)$/,
+    ja: m => `選択肢 ${m[1]} を${m[2] === "up" ? "上" : "下"}へ移動`,
+    ko: m => `선택지 ${m[1]} ${m[2] === "up" ? "위" : "아래"}로 이동`,
+    fr: m => `Déplacer l’option ${m[1]} vers le ${m[2] === "up" ? "haut" : "bas"}`,
+    pt: m => `Mover a opção ${m[1]} para ${m[2] === "up" ? "cima" : "baixo"}`,
+    es: m => `Mover la opción ${m[1]} hacia ${m[2] === "up" ? "arriba" : "abajo"}`,
+    de: m => `Option ${m[1]} nach ${m[2] === "up" ? "oben" : "unten"} verschieben`,
+    it: m => `Sposta l’opzione ${m[1]} verso ${m[2] === "up" ? "l’alto" : "il basso"}`,
+  },
+  {
     pattern: /^Show (\d+) external images?$/,
     ja: m => `${m[1]} 件の外部画像を表示`,
     ko: m => `외부 이미지 ${m[1]}장 표시`,

@@ -644,6 +644,21 @@ textarea:focus {
 .option-input input {
   min-width: 0;
 }
+.poll-option-order {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.poll-option-order .button {
+  min-inline-size: 44px;
+  padding-inline: 6px;
+}
+#owner-options .poll-option-order {
+  display: inline-flex;
+  margin-block: 6px;
+  margin-inline-end: 8px;
+  vertical-align: middle;
+}
 .remove-option {
   border: 0;
   background: none;
