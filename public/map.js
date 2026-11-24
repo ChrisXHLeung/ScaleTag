@@ -3,6 +3,14 @@ import { t } from "/locale.js";
 const vendor = "/vendor/maplibre/6.16.0/";
 const empty = () => ({ type: "FeatureCollection", features: [] });
 
+export function clusterEaseDuration(mm = globalThis.matchMedia) {
+  try {
+    return typeof mm === "function" && mm.call(globalThis, "(prefers-reduced-motion: reduce)")?.matches ? 0 : 300;
+  } catch {
+    return 300;
+  }
+}
+
 export async function createPollMap() {
   if (!document.querySelector("#maplibre-css")) {
     const css = document.createElement("link");
@@ -166,7 +174,7 @@ export async function createPollMap() {
         map.easeTo({
           center: feature.geometry.coordinates,
           zoom: Math.min(zoom, 14),
-          duration: 300,
+          duration: clusterEaseDuration(),
         });
       } catch {
         /* Source may have changed while filtering. */

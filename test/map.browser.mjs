@@ -551,4 +551,28 @@ test("cluster expands and overlapping grid markers expose all polls safely", asy
   await f.page.locator(".map-poll-link").first().waitFor();
   assert.equal(await f.page.locator(".map-poll-link").count(), 2);
   assert.deepEqual(f.errors, []);
+
+  await f.page.emulateMedia({ reducedMotion: "no-preference" });
+  const normalDuration = await f.page.evaluate(async () => {
+    const { clusterEaseDuration } = await import("/map.js");
+    return {
+      defaultMatch: clusterEaseDuration(),
+      reduceTrue: clusterEaseDuration(() => ({ matches: true })),
+      reduceFalse: clusterEaseDuration(() => ({ matches: false })),
+      noMatchMedia: clusterEaseDuration(null),
+    };
+  });
+  assert.deepEqual(normalDuration, {
+    defaultMatch: 300,
+    reduceTrue: 0,
+    reduceFalse: 300,
+    noMatchMedia: 300,
+  });
+
+  await f.page.emulateMedia({ reducedMotion: "reduce" });
+  const reducedDuration = await f.page.evaluate(async () => {
+    const { clusterEaseDuration } = await import("/map.js");
+    return clusterEaseDuration();
+  });
+  assert.equal(reducedDuration, 0);
 });

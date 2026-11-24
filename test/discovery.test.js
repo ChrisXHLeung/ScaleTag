@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../src/app.js";
@@ -107,3 +107,20 @@ for (const Store of [PollStore, SQLiteStore]) {
     assert.deepEqual(new Set([...first.polls, ...second.polls].map(post => post.id)), expected);
   });
 }
+
+test("offline.html and base.css enforce skip-link landmark and reduced-motion accessibility rules", async () => {
+  const [offlineHtml, offlineJs, baseCss] = await Promise.all([
+    readFile(new URL("../public/offline.html", import.meta.url), "utf8"),
+    readFile(new URL("../public/offline.js", import.meta.url), "utf8"),
+    readFile(new URL("../public/base.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(offlineHtml, /<a\s+class="skip-link"\s+href="#main">Skip to content<\/a>/);
+  assert.match(offlineHtml, /<main\s+id="main"\s+tabindex="-1">/);
+  assert.match(offlineJs, /\.skip-link/);
+  assert.match(offlineJs, /t\("Skip to content",\s*"跳至内容"\)/);
+  assert.match(baseCss, /\.skip-link\s*\{[^}]*z-index:\s*100;[^}]*\}/);
+  assert.match(baseCss, /\.skip-link\s*\{[^}]*transform:\s*translateY\(-200%\);[^}]*\}/);
+  assert.match(baseCss, /\.skip-link:focus\s*\{[^}]*transform:\s*none;[^}]*\}/);
+  assert.match(baseCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\*,\s*\*::before,\s*\*::after\s*\{[\s\S]*?animation:\s*none\s*!important;/);
+  assert.match(baseCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.button:hover:not\(:disabled\),\s*\.poll-list-card:hover\s*\{\s*transform:\s*none;\s*\}/);
+});

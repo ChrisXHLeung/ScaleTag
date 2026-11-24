@@ -2,6 +2,7 @@ import { htmlLangFor, language, t } from "/locale.js";
 document.documentElement.lang = htmlLangFor(language);
 if (language !== "en") {
   document.title = t("Connection unavailable — ScaleTag", "无法连接 — ScaleTag");
+  document.querySelector(".skip-link").textContent = t("Skip to content", "跳至内容");
   document.querySelector(".eyebrow").textContent = t("A MOMENT TO RECONNECT", "连接中断");
   document.querySelector("h1").textContent = t("Connection unavailable.", "无法连接。");
   const paragraphs = document.querySelectorAll("main section > p:not(#offline-status)");
