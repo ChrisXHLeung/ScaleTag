@@ -17,6 +17,7 @@ import {
   managementPasswordForm,
   managementDetails,
   bindManagementCopy,
+  mountNativeShare,
 } from "/common.js";
 import { mountSocial } from "/social.js";
 import { mountPosterActions } from "/poster.js";
@@ -208,6 +209,12 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     publicUrl: `${location.origin}/task/${id}`,
   });
   renderPoster();
+  if (!manage) {
+    mountNativeShare(main.querySelector("#copy-task-link"), {
+      title: task.title,
+      url: `${location.origin}/task/${id}`,
+    });
+  }
   main.querySelector("#copy-task-link").onclick = async () => {
     const publicLink = `${location.origin}/task/${id}`;
     try {

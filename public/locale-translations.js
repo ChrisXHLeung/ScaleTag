@@ -5924,6 +5924,24 @@ export const TRANSLATIONS = {
     de: "Diese Aufgabe und ihre Antworten haben die Website verlassen. Private Archive unterliegen der Aufbewahrungsrichtlinie für Backups.",
     it: "Questa attività e le sue risposte sono state rimosse dal sito. Gli archivi privati seguono la politica di conservazione dei backup.",
   },
+  "Share link": {
+    ja: "リンクを共有",
+    ko: "링크 공유",
+    fr: "Partager le lien",
+    pt: "Compartilhar link",
+    es: "Compartir enlace",
+    de: "Link teilen",
+    it: "Condividi link",
+  },
+  "Could not open share sheet. Use Copy link instead.": {
+    ja: "共有メニューを開けませんでした。代わりにリンクをコピーしてください。",
+    ko: "공유 시트를 열 수 없습니다. 대신 링크 복사를 이용해 주세요.",
+    fr: "Impossible d’ouvrir le menu de partage. Utilisez plutôt Copier le lien.",
+    pt: "Não foi possível abrir o menu de compartilhamento. Use Copiar link.",
+    es: "No se pudo abrir el menú para compartir. Usa Copiar enlace en su lugar.",
+    de: "Das Teilen-Menü konnte nicht geöffnet werden. Verwende stattdessen Link kopieren.",
+    it: "Impossibile aprire il menu di condivisione. Usa invece Copia link.",
+  },
 };
 
 const PHOTO_LABELS = {

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../src/app.js";
 import { PollStore, DAY } from "../src/store.js";
+import { SecrexStore } from "../src/secrex-store.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "../src/pwa.js";
 import { createTaskCredentials } from "../public/task-crypto.js";
 
@@ -16,6 +17,8 @@ async function fixture(t) {
   let now = Date.now();
   const store = new PollStore(directory, { clock: () => now });
   await store.init();
+  const secrex = new SecrexStore(directory, { clock: () => now });
+  await secrex.init();
   let app,
     nextVersion = false,
     unavailablePath;
@@ -42,7 +45,7 @@ async function fixture(t) {
   }).listen(0, "127.0.0.1");
   await once(server, "listening");
   const origin = `http://127.0.0.1:${server.address().port}`;
-  app = createApp(store, { origin });
+  app = createApp(store, { origin, secrex });
   const browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox"],
@@ -50,6 +53,7 @@ async function fixture(t) {
   t.after(async () => {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
+    secrex.close();
     await rm(directory, { recursive: true, force: true });
   });
   const context = await browser.newContext({
@@ -1092,6 +1096,165 @@ test(
     });
     await page.waitForTimeout(500);
     assert.equal(socialRequests, before);
+    assert.deepEqual(f.errors, []);
+  },
+);
+
+test(
+  "progressive Web Share button mounts only on public poll, task and giveaway pages",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, context, origin, store } = f;
+    const poll = await store.create({
+      title: "Shareable neighborhood poll",
+      options: ["Yes", "No"],
+      visibility: "unlisted",
+    });
+    const { password: taskPassword, ...taskCredentials } =
+      await createTaskCredentials();
+    const task = await store.create({
+      ...taskCredentials,
+      type: "task",
+      title: "Shareable local task",
+      description: "Carry two boxes.",
+      signature: "Alex",
+      reward: "Coffee",
+      options: [],
+      visibility: "unlisted",
+    });
+    const sale = await store.create({
+      type: "sale",
+      giveawayVersion: 1,
+      title: "Shareable free giveaway",
+      description: "Gently used lamp.",
+      signature: "Alex",
+      pickupLocation: "Front porch",
+      options: [],
+      visibility: "unlisted",
+    });
+
+    // 1. When navigator.share is absent, public pages do not render [data-native-share].
+    await page.evaluate(() => {
+      delete navigator.share;
+      delete navigator.canShare;
+    });
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    assert.equal(await page.locator("[data-native-share]").count(), 0);
+
+    // 2. When navigator.share is supported, test public pages, canonical URL, errors & exclusions.
+    const sharePage = await context.newPage();
+    const shareErrors = [];
+    sharePage.on("pageerror", (e) => shareErrors.push(e.message));
+    await sharePage.addInitScript(() => {
+      window.__sharedCalls = [];
+      window.__shareOutcome = "resolve";
+      navigator.canShare = (data) => Boolean(data && data.url);
+      navigator.share = async (data) => {
+        window.__sharedCalls.push(data);
+        if (window.__shareOutcome === "abort") {
+          throw new DOMException("User cancelled", "AbortError");
+        }
+        if (window.__shareOutcome === "error") {
+          throw new DOMException("Share failed", "NotAllowedError");
+        }
+      };
+    });
+
+    // Public poll page
+    await sharePage.goto(`${origin}/vote/${poll.id}?created=1#extra`);
+    await sharePage.getByRole("heading", { name: poll.title }).waitFor();
+    const pollShare = sharePage.locator("[data-native-share]");
+    assert.equal(await pollShare.count(), 1);
+    assert.equal(await pollShare.textContent(), "Share link");
+    await sharePage.getByRole("button", { name: "Copy poll link", exact: true }).waitFor();
+    await pollShare.click();
+    assert.deepEqual(await sharePage.evaluate(() => window.__sharedCalls), [
+      { title: poll.title, url: `${origin}/vote/${poll.id}` },
+    ]);
+
+    // Clipboard fallback on poll page still works (nextElementSibling intact)
+    await sharePage.evaluate(() => {
+      navigator.clipboard.writeText = async () => {
+        throw new DOMException("Denied", "NotAllowedError");
+      };
+    });
+    await sharePage.getByRole("button", { name: "Copy poll link", exact: true }).click();
+    const fallbackInput = sharePage.getByLabel("Public link", { exact: true });
+    await fallbackInput.waitFor();
+    assert.equal(await fallbackInput.inputValue(), `${origin}/vote/${poll.id}`);
+
+    // AbortError is silent; other errors show fallback toast
+    await sharePage.evaluate(() => {
+      window.__shareOutcome = "abort";
+      document.querySelector("#toast").classList.remove("show");
+      document.querySelector("#toast").textContent = "";
+    });
+    await pollShare.click();
+    assert.equal(await sharePage.locator("#toast").textContent(), "");
+
+    await sharePage.evaluate(() => {
+      window.__shareOutcome = "error";
+    });
+    await pollShare.click();
+    await sharePage
+      .locator("#toast")
+      .getByText("Could not open share sheet. Use Copy link instead.", { exact: true })
+      .waitFor();
+
+    // Public task page
+    await sharePage.goto(`${origin}/task/${task.id}?ref=1#hash`);
+    await sharePage.getByRole("heading", { name: task.title }).waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 1);
+    await sharePage.getByRole("button", { name: "Copy task link", exact: true }).waitFor();
+    await sharePage.evaluate(() => {
+      window.__sharedCalls = [];
+      window.__shareOutcome = "resolve";
+    });
+    await sharePage.locator("[data-native-share]").click();
+    assert.deepEqual(await sharePage.evaluate(() => window.__sharedCalls), [
+      { title: task.title, url: `${origin}/task/${task.id}` },
+    ]);
+
+    // Public giveaway page
+    await sharePage.goto(`${origin}/sale/${sale.id}?ref=1#hash`);
+    await sharePage.getByRole("heading", { name: sale.title }).waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 1);
+    await sharePage.getByRole("button", { name: "Copy public link", exact: true }).waitFor();
+    await sharePage.evaluate(() => {
+      window.__sharedCalls = [];
+      window.__shareOutcome = "resolve";
+    });
+    await sharePage.locator("[data-native-share]").click();
+    assert.deepEqual(await sharePage.evaluate(() => window.__sharedCalls), [
+      { title: sale.title, url: `${origin}/sale/${sale.id}` },
+    ]);
+
+    // Management pages and /secrex never render [data-native-share]
+    await sharePage.goto(`${origin}/vote/${poll.id}/manage`);
+    await sharePage.getByLabel("Management password").fill(poll.manageKey);
+    await sharePage.getByRole("button", { name: "Unlock", exact: true }).click();
+    await sharePage.getByRole("heading", { name: "Manage this poll" }).waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 0);
+
+    await sharePage.goto(`${origin}/task/${task.id}/manage`);
+    await sharePage.getByLabel("Management password").fill(taskPassword);
+    await sharePage.getByRole("button", { name: "Unlock", exact: true }).click();
+    await sharePage.getByRole("heading", { name: "Manage this task" }).waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 0);
+
+    await sharePage.goto(`${origin}/sale/${sale.id}/manage`);
+    await sharePage.getByLabel("Management password").fill(sale.manageKey);
+    await sharePage.getByRole("button", { name: "Unlock", exact: true }).click();
+    await sharePage.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 0);
+
+    await sharePage.goto(`${origin}/secrex`);
+    await sharePage.locator("#secrex-compose").waitFor();
+    assert.equal(await sharePage.locator("[data-native-share]").count(), 0);
+
+    assert.deepEqual(shareErrors, []);
     assert.deepEqual(f.errors, []);
   },
 );

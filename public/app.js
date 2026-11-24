@@ -22,6 +22,7 @@ import {
   bindManagementCopy,
   managementDetails,
   managementPasswordForm,
+  mountNativeShare,
 } from "/common.js";
 import { mountOwnerEdit } from "/owner-edit.js";
 import { mountSocial } from "/social.js";
@@ -351,6 +352,10 @@ async function votePage(id, { ownerKey, published } = {}) {
       e.currentTarget.remove();
     };
   bindPollLinkCopy(document.querySelector("#copy-link"), id);
+  mountNativeShare(document.querySelector("#copy-link"), {
+    title: poll.title,
+    url: `${location.origin}/vote/${id}`,
+  });
   mountPosterActions(main.querySelector(".share-card"), {
     type: "poll",
     id,

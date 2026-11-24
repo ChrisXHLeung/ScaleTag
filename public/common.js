@@ -375,3 +375,36 @@ export function bindManagementCopy(url, key) {
     }
   };
 }
+
+export function mountNativeShare(anchor, { title, url } = {}) {
+  if (!anchor || !url || typeof navigator?.share !== "function") return;
+  if (typeof navigator.canShare === "function") {
+    try {
+      if (!navigator.canShare({ title, url })) return;
+    } catch {
+      return;
+    }
+  }
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "button secondary";
+  btn.dataset.nativeShare = "";
+  btn.textContent = t("Share link", "分享链接");
+  let sharing = false;
+  btn.onclick = async () => {
+    if (sharing) return;
+    sharing = true;
+    btn.disabled = true;
+    try {
+      await navigator.share({ title, url });
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        toast(t("Could not open share sheet. Use Copy link instead.", "无法打开系统分享，请改用复制链接。"));
+      }
+    } finally {
+      sharing = false;
+      btn.disabled = false;
+    }
+  };
+  anchor.before(btn);
+}
