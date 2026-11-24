@@ -321,9 +321,16 @@ test("poll draft options can be reordered with the keyboard and retain their ord
   await page.keyboard.press("Enter");
   const firstDown = page.getByRole("button", { name: "Move option 1 down", exact: true });
   assert.equal(await firstDown.evaluate(button => document.activeElement === button), true);
-  assert.deepEqual(await page.locator("#option-inputs input").evaluateAll(inputs => inputs.map(input => input.value)), ["Afternoon", "Morning", "Evening"]);
+  const reordered = ["Afternoon", "Morning", "Evening"];
+  const currentOptions = () => page.locator("#option-inputs input").evaluateAll(inputs => inputs.map(input => input.value));
+  assert.deepEqual(await currentOptions(), reordered);
+  await page.waitForFunction(expected => {
+    const draft = JSON.parse(localStorage.getItem("scaletag-text-draft-poll"));
+    return JSON.stringify(draft?.choices) === JSON.stringify(expected);
+  }, reordered);
   await page.reload();
-  assert.deepEqual(await page.locator("#option-inputs input").evaluateAll(inputs => inputs.map(input => input.value)), ["Afternoon", "Morning", "Evening"]);
+  await page.getByText("Text draft restored.", { exact: true }).waitFor();
+  assert.deepEqual(await currentOptions(), reordered);
 });
 
 test("a poll owner can reorder choices until the first vote", async (t) => {
