@@ -2,6 +2,15 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Reconnect to open posts and check their current status.": {
+    ja: "再接続すると投稿を開いて最新の状態を確認できます。",
+    ko: "다시 연결하면 게시물을 열고 최신 상태를 확인할 수 있습니다.",
+    fr: "Reconnectez-vous pour ouvrir les publications et vérifier leur état actuel.",
+    pt: "Reconecte-se para abrir as publicações e verificar o status atual.",
+    es: "Vuelve a conectarte para abrir las publicaciones y consultar su estado actual.",
+    de: "Stelle die Verbindung wieder her, um Beiträge zu öffnen und ihren aktuellen Status zu prüfen.",
+    it: "Riconnettiti per aprire i post e verificarne lo stato attuale.",
+  },
   "Search saved links": {
     ja: "保存済みのリンクを検索",
     ko: "저장한 링크 검색",

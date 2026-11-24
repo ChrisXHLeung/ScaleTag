@@ -306,7 +306,7 @@ window.addEventListener("pageshow", (event) => {
   if (event.persisted) syncSavedButtons();
 });
 
-export function renderSavedPosts(host) {
+export function renderSavedPosts(host, { offline = false } = {}) {
   const page = document.createElement("section");
   page.className = "list-page";
   const heading = document.createElement("h1");
@@ -335,7 +335,9 @@ export function renderSavedPosts(host) {
   const noMatches = t("No saved links match these filters.", "没有符合筛选条件的已保存链接。");
   const empty = notice("");
   empty.classList.add("saved-filter-message");
-  page.append(heading, description, filters, list, empty);
+  page.append(heading, description);
+  if (offline) page.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
+  page.append(filters, list, empty);
   host.replaceChildren(page);
 
   const normalize = value => value.normalize("NFKC").toLowerCase().trim();
@@ -432,32 +434,38 @@ export function renderSavedPosts(host) {
       link.href = path;
       link.textContent = title;
       if (path.endsWith("/manage")) link.append(` · ${t("Management URL", "管理网址")}`);
-      const status = document.createElement("span");
-      status.className = "field-hint saved-post-status";
-      status.id = `saved-status-${list.childElementCount}`;
-      status.textContent = checking;
-      link.setAttribute("aria-describedby", status.id);
       const [, kind, id] = path.split("/");
       const type = kind === "vote" ? "poll" : kind;
       row.dataset.postType = type;
       row.dataset.searchTitle = normalize(title);
       const tag = `${type}:${id}`;
-      if (!lookups.has(tag)) lookups.set(tag, { type, id, labels: new Set() });
-      const lookup = lookups.get(tag);
-      lookup.labels.add(status);
+      let status;
+      details.append(link);
+      if (!offline) {
+        status = document.createElement("span");
+        status.className = "field-hint saved-post-status";
+        status.id = `saved-status-${list.childElementCount}`;
+        status.textContent = checking;
+        link.setAttribute("aria-describedby", status.id);
+        if (!lookups.has(tag)) lookups.set(tag, { type, id, labels: new Set() });
+        lookups.get(tag).labels.add(status);
+        details.append(status);
+      }
       const remove = button(t("Remove", "移除"));
       remove.onclick = () => {
         if (!write(savedKey, savedPosts().filter(item => item.path !== path))) {
           description.textContent = unavailable();
           return;
         }
-        lookup.labels.delete(status);
-        if (!lookup.labels.size) lookups.delete(tag);
+        const lookup = lookups.get(tag);
+        if (lookup) {
+          lookup.labels.delete(status);
+          if (!lookup.labels.size) lookups.delete(tag);
+        }
         if (!lookups.size) cancelStatusRefresh();
         row.remove();
         applyFilters();
       };
-      details.append(link, status);
       row.append(details, remove);
       list.append(row);
     }

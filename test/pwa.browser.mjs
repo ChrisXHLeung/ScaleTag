@@ -558,6 +558,33 @@ test("Saved links filter by local title and type without changing data or reques
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), entries);
 });
 
+test("Saved links can be opened offline from the fallback and refresh on reconnect", async (t) => {
+  const { store, page, context, origin } = await fixture(t);
+  const poll = await store.create({ title: "Local garden vote", options: ["Yes", "No"] });
+  const path = `/vote/${poll.id}/manage`;
+  await page.evaluate(([path, title]) => localStorage.setItem("scaletag-saved-posts", JSON.stringify([{ path, title }])), [path, poll.title]);
+  const requests = [];
+  page.on("request", request => {
+    if (request.url().startsWith(`${origin}/api/`)) requests.push(request.url());
+  });
+  await context.setOffline(true);
+  await page.goto(`${origin}/privacy`);
+  await page.getByRole("heading", { name: "Connection unavailable.", exact: true }).waitFor();
+  await page.getByRole("link", { name: "Saved links", exact: true }).click({ timeout: 5000 });
+  await page.getByRole("heading", { name: "Saved links", exact: true }).waitFor();
+  await page.getByText("Reconnect to open posts and check their current status.", { exact: true }).waitFor();
+  const row = page.locator(".saved-posts li");
+  assert.equal(await row.getByRole("link").getAttribute("href"), path);
+  assert.equal(await row.locator(".saved-post-status").count(), 0);
+  await page.getByLabel("Search saved links", { exact: true }).fill("Garden");
+  assert.equal(await row.isVisible(), true);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
+  await context.setOffline(false);
+  await row.getByText("Open for votes", { exact: true }).waitFor();
+  assert.equal(page.url(), `${origin}/saved`);
+});
+
 test("an open Saved page refreshes when a giveaway hold ends", async (t) => {
   const { store, page, origin, advance } = await fixture(t);
   const giveaway = await store.create({

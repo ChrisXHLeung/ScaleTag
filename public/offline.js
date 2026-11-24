@@ -1,4 +1,4 @@
-import { htmlLangFor, language, t } from "/locale.js";
+import { htmlLangFor, language, localizedPath, t } from "/locale.js";
 document.documentElement.lang = htmlLangFor(language);
 if (language !== "en") {
   document.title = t("Connection unavailable — ScaleTag", "无法连接 — ScaleTag");
@@ -10,6 +10,28 @@ if (language !== "en") {
   paragraphs[1].textContent = t("Publishing, voting and current results need a live connection. Votes are never queued or submitted in the background.", "发布、投票和查看最新结果需要联网。投票不会排队或在后台提交。");
   document.querySelector("#retry-connection").textContent = t("Try again ↗", "重试 ↗");
   document.querySelector("#offline-status").textContent = t("This page will retry when your connection returns.", "网络恢复后会自动重试。");
+}
+const savedLink = document.querySelector("#offline-saved-link");
+if (savedLink) {
+  savedLink.textContent = t("Saved links", "已保存链接");
+  savedLink.href = localizedPath("/saved");
+  savedLink.closest("nav").setAttribute("aria-label", t("Main navigation", "主导航"));
+}
+if (location.pathname === "/saved") {
+  savedLink?.setAttribute("aria-current", "page");
+  void import("/local-posts.js").then(({ renderSavedPosts }) => {
+    const host = document.createElement("div");
+    renderSavedPosts(host, { offline: true });
+    const main = document.querySelector("#main");
+    const connectionTitle = main.querySelector("h1");
+    const secondaryTitle = document.createElement("h2");
+    secondaryTitle.textContent = connectionTitle.textContent;
+    connectionTitle.replaceWith(secondaryTitle);
+    main.prepend(host);
+    document.title = t("Saved links — ScaleTag", "已保存链接 — ScaleTag");
+  }).catch(() => {
+    // The connection fallback is still usable if a saved-list asset is missing.
+  });
 }
 const status = document.querySelector("#offline-status");
 let timer;
