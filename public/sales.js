@@ -68,7 +68,11 @@ export async function salePage(id, { manage = false, password, published } = {})
     <button type="submit" class="button secondary small">${t('Hold item', '保留物品')}</button>
     <button id="release-sale" type="button" class="button secondary small" hidden>${t('Release hold', '取消保留')}</button>
   </form>` : '';
-  main.innerHTML=`<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">${t('← Back to PostList','← 返回帖子列表')}</a>${manage&&new URLSearchParams(location.search).has('created')?`<div class="success-banner" role="status">${t('Your giveaway is live. Save the management details before leaving.','闲置赠予已发布。离开前请保存管理信息。')}</div>`:''}<div class="poll-meta"><span class="status-badge">${t('Free Giveaway','闲置赠予')}</span><span id="sale-availability" class="status-badge" ${claimed ? 'hidden' : ''}></span><span id="sale-claimed" class="status-badge closed" ${claimed ? '' : 'hidden'}>${saleStateLabel('claimed')}</span><span><span id="sale-expiry-label">${claimed ? t('Link expires', '链接有效期至') : t('Available until','有效期至')}</span> ${date(sale.endsAt)}</span></div><h1 class="poll-title">${escape(sale.title)}</h1><p class="byline">${t('Posted by','发布者')} <strong>${escape(sale.signature)}</strong> · ${date(sale.createdAt)}</p><p class="poll-description">${escape(sale.description)}</p><div class="sale-photos">${(sale.images??[]).filter(src=>/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)).map((src,i)=>`<img src="${escape(src)}" alt="${t(`Item photo ${i+1}`,`物品照片 ${i+1}`)}" loading="lazy">`).join('')}</div><section id="sale-pickup" class="task-reward" ${claimed ? 'hidden' : ''}>${claimed ? '' : `<span class="eyebrow">${t('PICKUP LOCATION','领取地点')}</span><h2>${escape(sale.pickupLocation)}</h2><p>${t('Free to pick up. The item may have already been taken.','免费领取，物品也可能已被拿走。')}</p><p id="sale-pickup-window" hidden></p><p id="sale-reserved-until" class="field-hint" hidden></p>`}</section><p id="sale-claimed-message" class="success-banner" role="status" ${claimed ? '' : 'hidden'}>${t('This item has been picked up.', '这件物品已被领取。')}</p>${manage?`<section class="manage-card"><h2>${t('Manage giveaway','管理闲置赠予')}</h2>${legacyKey ? `<p>${t('Save this private link. Anyone with it can take the post down. It cannot be recovered.','请保存此私人链接。持有链接的人可以下架帖子，链接丢失后无法找回。')}</p><label for="manage-link">${t('Private management link','私人管理链接')}</label><input id="manage-link" readonly value="${escape(privateLink)}"><button id="copy-manage-link" class="button secondary small">${t('Copy private link','复制私人链接')}</button>` : managementDetails(manageUrl)}${claimed ? '' : `<div id="sale-management-actions">${holdControls}<button id="claim-sale" type="button" class="button">${t('Mark as claimed', '标记为已领取')}</button> <button id="close-sale" type="button" class="button secondary">${t('Take down','下架帖子')}</button></div>`}<p id="manage-error" class="form-error" role="alert" hidden></p></section>`:''}<section id="social"></section></div><aside class="poll-sidebar"><section class="share-card"><h2>${t('Share this item','分享这件物品')}</h2><div class="qr-frame"><img src="/api/sales/${id}/qr.png" width="256" height="256" alt="${t('Public giveaway QR code','闲置赠予公开链接二维码')}"></div><button id="copy-sale-link" class="button secondary">${t('Copy public link','复制公开链接')}</button><div id="public-link-fallback" hidden><label for="public-sale-link">${t('Public link','公开链接')}</label><input id="public-sale-link" readonly></div></section><section class="timeline-card"><p>${t('Available for 72 hours after publication.','发布后 72 小时内可查看。')}</p><strong>${date(sale.endsAt)}</strong></section></aside></section>`;
+  const pickupCalendar = manage ? '' : `<div id="pickup-calendar" hidden>
+    <a class="button secondary small" href="/api/sales/${id}/pickup.ics" download>${t('Add pickup time to calendar', '将领取时段加入日历')}</a>
+    <p class="field-hint">${t('Check the post for current availability before heading out.', '出发前请打开帖子确认物品是否仍可领取。')}</p>
+  </div>`;
+  main.innerHTML=`<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">${t('← Back to PostList','← 返回帖子列表')}</a>${manage&&new URLSearchParams(location.search).has('created')?`<div class="success-banner" role="status">${t('Your giveaway is live. Save the management details before leaving.','闲置赠予已发布。离开前请保存管理信息。')}</div>`:''}<div class="poll-meta"><span class="status-badge">${t('Free Giveaway','闲置赠予')}</span><span id="sale-availability" class="status-badge" ${claimed ? 'hidden' : ''}></span><span id="sale-claimed" class="status-badge closed" ${claimed ? '' : 'hidden'}>${saleStateLabel('claimed')}</span><span><span id="sale-expiry-label">${claimed ? t('Link expires', '链接有效期至') : t('Available until','有效期至')}</span> ${date(sale.endsAt)}</span></div><h1 class="poll-title">${escape(sale.title)}</h1><p class="byline">${t('Posted by','发布者')} <strong>${escape(sale.signature)}</strong> · ${date(sale.createdAt)}</p><p class="poll-description">${escape(sale.description)}</p><div class="sale-photos">${(sale.images??[]).filter(src=>/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)).map((src,i)=>`<img src="${escape(src)}" alt="${t(`Item photo ${i+1}`,`物品照片 ${i+1}`)}" loading="lazy">`).join('')}</div><section id="sale-pickup" class="task-reward" ${claimed ? 'hidden' : ''}>${claimed ? '' : `<span class="eyebrow">${t('PICKUP LOCATION','领取地点')}</span><h2>${escape(sale.pickupLocation)}</h2><p>${t('Free to pick up. The item may have already been taken.','免费领取，物品也可能已被拿走。')}</p><p id="sale-pickup-window" hidden></p><p id="sale-reserved-until" class="field-hint" hidden></p>${pickupCalendar}`}</section><p id="sale-claimed-message" class="success-banner" role="status" ${claimed ? '' : 'hidden'}>${t('This item has been picked up.', '这件物品已被领取。')}</p>${manage?`<section class="manage-card"><h2>${t('Manage giveaway','管理闲置赠予')}</h2>${legacyKey ? `<p>${t('Save this private link. Anyone with it can take the post down. It cannot be recovered.','请保存此私人链接。持有链接的人可以下架帖子，链接丢失后无法找回。')}</p><label for="manage-link">${t('Private management link','私人管理链接')}</label><input id="manage-link" readonly value="${escape(privateLink)}"><button id="copy-manage-link" class="button secondary small">${t('Copy private link','复制私人链接')}</button>` : managementDetails(manageUrl)}${claimed ? '' : `<div id="sale-management-actions">${holdControls}<button id="claim-sale" type="button" class="button">${t('Mark as claimed', '标记为已领取')}</button> <button id="close-sale" type="button" class="button secondary">${t('Take down','下架帖子')}</button></div>`}<p id="manage-error" class="form-error" role="alert" hidden></p></section>`:''}<section id="social"></section></div><aside class="poll-sidebar"><section class="share-card"><h2>${t('Share this item','分享这件物品')}</h2><div class="qr-frame"><img src="/api/sales/${id}/qr.png" width="256" height="256" alt="${t('Public giveaway QR code','闲置赠予公开链接二维码')}"></div><button id="copy-sale-link" class="button secondary">${t('Copy public link','复制公开链接')}</button><div id="public-link-fallback" hidden><label for="public-sale-link">${t('Public link','公开链接')}</label><input id="public-sale-link" readonly></div></section><section class="timeline-card"><p>${t('Available for 72 hours after publication.','发布后 72 小时内可查看。')}</p><strong>${date(sale.endsAt)}</strong></section></aside></section>`;
   async function copyLink(link,input,fallback) {try {await navigator.clipboard.writeText(link);toast(t('Link copied.','链接已复制。'));} catch {if(fallback) fallback.hidden=false;input.value=link;input.focus();input.select();toast(t('Copy the selected link.','请复制选中的链接。'));}}
   main.querySelector('#copy-sale-link').onclick=()=>copyLink(publicLink,main.querySelector('#public-sale-link'),main.querySelector('#public-link-fallback'));
   if (!manage) {
@@ -94,8 +98,17 @@ export async function salePage(id, { manage = false, password, published } = {})
     publicUrl: publicLink,
   });
   if (!claimed) renderPoster();
+  const calendar = main.querySelector('#pickup-calendar');
+  let calendarTimer, calendarDeadline = 0;
   let holdTimer;
   let availabilityTime = 0;
+  function refreshCalendarLink() {
+    if (!calendar?.isConnected) return;
+    clearTimeout(calendarTimer);
+    const remaining = calendarDeadline - Date.now();
+    calendar.hidden = remaining <= 0;
+    if (remaining > 0) calendarTimer = setTimeout(refreshCalendarLink, remaining);
+  }
   function renderAvailability(state) {
     const badge = main.querySelector('#sale-availability');
     if (!badge || claimed || state.serverTime < availabilityTime) return;
@@ -111,6 +124,9 @@ export async function salePage(id, { manage = false, password, published } = {})
     const windowLabel = main.querySelector('#sale-pickup-window');
     windowLabel.hidden = !state.pickupWindow;
     windowLabel.textContent = state.pickupWindow ? pickupWindowText(state.pickupWindow) : '';
+    calendarDeadline = state.saleState === 'open' && state.pickupWindow
+      ? Date.now() + state.pickupWindow.endsAt - state.serverTime : 0;
+    refreshCalendarLink();
     const reservedUntil = main.querySelector('#sale-reserved-until');
     reservedUntil.hidden = !reserved;
     reservedUntil.textContent = reserved ? `${t('Reserved until', '保留至')} ${date(state.reservedUntil)}` : '';
@@ -121,7 +137,13 @@ export async function salePage(id, { manage = false, password, published } = {})
     }), Math.max(0, state.reservedUntil - state.serverTime));
   }
   renderAvailability(sale);
-  window.addEventListener('pagehide', () => clearTimeout(holdTimer));
+  window.addEventListener('pagehide', () => {
+    clearTimeout(holdTimer);
+    clearTimeout(calendarTimer);
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) refreshCalendarLink();
+  });
   function showClaimed() {
     if (claimed) return;
     claimed = true;

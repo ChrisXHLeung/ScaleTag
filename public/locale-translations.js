@@ -2,6 +2,24 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Add pickup time to calendar": {
+    ja: "受け取り時間をカレンダーに追加",
+    ko: "수령 시간을 캘린더에 추가",
+    fr: "Ajouter le créneau de retrait au calendrier",
+    pt: "Adicionar horário de retirada ao calendário",
+    es: "Añadir horario de recogida al calendario",
+    de: "Abholzeit zum Kalender hinzufügen",
+    it: "Aggiungi l’orario di ritiro al calendario",
+  },
+  "Check the post for current availability before heading out.": {
+    ja: "出かける前に投稿で受け取り状況をご確認ください。",
+    ko: "출발하기 전에 게시물에서 현재 수령 가능 여부를 확인하세요.",
+    fr: "Consultez l’annonce avant de partir pour vérifier la disponibilité.",
+    pt: "Confira a publicação antes de sair para verificar a disponibilidade.",
+    es: "Consulta la publicación antes de salir para comprobar la disponibilidad.",
+    de: "Prüfe vor dem Losgehen im Beitrag, ob der Artikel noch verfügbar ist.",
+    it: "Prima di uscire, controlla nel post se l’oggetto è ancora disponibile.",
+  },
   "Copy to new draft": {
     ja: "新しい下書きにコピー",
     ko: "새 초안으로 복사",

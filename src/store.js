@@ -278,13 +278,15 @@ export class PollStore {
     this.index.delete(id);
   }
 
-  async live(id, { allowWithdrawn = false } = {}) {
+  async live(id, { allowWithdrawn = false, expectedType } = {}) {
     const db = await this.read(id);
     if (!db.data)
       throw new AppError(
         404,
         "This poll does not exist or has been removed from the website.",
       );
+    if (expectedType && (db.data.type ?? "poll") !== expectedType)
+      throw new AppError(404, "This post is unavailable.");
     if (db.data.type === "sale" && (db.data.giveawayVersion !== 1 || db.data.saleState === "closed" || db.data.endsAt <= this.clock()))
       throw new AppError(404, "This giveaway is no longer available.");
     if (db.data.deleteAt <= this.clock()) {
@@ -423,9 +425,9 @@ export class PollStore {
     };
   }
 
-  async get(id, token) {
+  async get(id, token, options) {
     return this.exclusive(id, async () =>
-      this.public((await this.live(id)).data, token),
+      this.public((await this.live(id, options)).data, token),
     );
   }
 

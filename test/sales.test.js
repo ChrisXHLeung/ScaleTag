@@ -29,7 +29,7 @@ for (const Store of [PollStore, SQLiteStore]) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const input = {
-      title: 'Reading chair', description: 'Good condition', pickupLocation: 'Library',
+      title: 'Reading chair, bench; \\ ' + '図書館入口'.repeat(12), description: 'Good condition', pickupLocation: 'Library',
       location: { latitude: 43, longitude: -79 }, mapVisible: true, retentionAccepted: true,
     };
     for (const pickupWindow of [
@@ -48,6 +48,20 @@ for (const Store of [PollStore, SQLiteStore]) {
     const detail = `/api/sales/${id}`;
     const state = (state, fields) => request(`${detail}/state`, { key, state, ...fields });
     assert.deepEqual((await (await request(detail)).json()).pickupWindow, pickupWindow);
+    const calendar = await request(`${detail}/pickup.ics`);
+    assert.equal(calendar.status, 200);
+    assert.match(calendar.headers.get('content-type'), /^text\/calendar/);
+    assert.match(calendar.headers.get('content-disposition'), /attachment;.*\.ics/);
+    assert.match(calendar.headers.get('cache-control'), /no-store/);
+    assert.equal(calendar.headers.get('set-cookie'), null);
+    const file = await calendar.text();
+    for (const line of file.split('\r\n')) assert.ok(Buffer.byteLength(line) <= 75);
+    const event = file.replace(/\r\n[ \t]/g, '');
+    assert.ok(event.includes('SUMMARY:Reading chair\\, bench\\; \\\\ ' + '図書館入口'.repeat(12)));
+    assert.ok(event.includes('DTSTART:20010909T014641Z\r\nDTEND:20010909T014642Z\r\n'));
+    assert.ok(event.includes(`URL:${origin}/sale/${id}\r\n`));
+    assert.doesNotMatch(event, /LOCATION:|Library|Good condition|\/manage/);
+    assert.ok(!event.includes(key));
     assert.equal((await state('reserved', { reservedUntil: now + 1000, key: '0'.repeat(64) })).status, 403);
     for (const reservedUntil of [now, endsAt + 1, '1000000001000']) {
       assert.equal((await state('reserved', { reservedUntil })).status, 400);
@@ -59,6 +73,7 @@ for (const Store of [PollStore, SQLiteStore]) {
       assert.equal((await response.json()).saleState, 'reserved');
     }
     const stored = (await store.read(id)).data;
+    assert.equal((await request(`${detail}/pickup.ics`)).status, 404);
     assert.equal(stored.saleState, 'open', 'legacy state remains compatible');
     assert.equal(stored.endsAt, endsAt);
     for (const path of [detail, `/api/posts/${id}/social`]) {
@@ -72,21 +87,33 @@ for (const Store of [PollStore, SQLiteStore]) {
     }
     now = reservedUntil;
     assert.equal((await (await request(detail)).json()).saleState, 'open');
+    assert.equal((await request(`${detail}/pickup.ics`)).status, 200);
     assert.equal((await state('reserved', { reservedUntil: now + 1000 })).status, 200);
     for (let retry = 0; retry < 2; retry++) assert.equal((await state('open')).status, 200);
+    const brief = { startsAt: now + 100, endsAt: now + 200 };
+    assert.equal((await request(`${detail}/edit`, { key, pickupWindow: brief })).status, 200);
+    const briefCalendar = await (await request(`${detail}/pickup.ics`)).text();
+    assert.ok(briefCalendar.includes('DTSTART:20010909T014641Z\r\nDTEND:20010909T014642Z\r\n'));
     assert.equal((await (await request(detail)).json()).saleState, 'open');
     const replacement = { startsAt: now, endsAt: now + 5000 };
     const edited = await request(`${detail}/edit`, { key, pickupWindow: replacement });
     assert.equal(edited.status, 200);
     assert.deepEqual((await edited.json()).pickupWindow, replacement);
+    now = replacement.endsAt;
+    assert.equal((await request(`${detail}/pickup.ics`)).status, 404);
     const cleared = await request(`${detail}/edit`, { key, pickupWindow: null });
     assert.equal(cleared.status, 200);
     assert.equal((await cleared.json()).pickupWindow, undefined);
+    assert.equal((await request(`${detail}/pickup.ics`)).status, 404);
     assert.equal((await state('reserved', { reservedUntil: now + 1000 })).status, 200);
     const claim = await state('claimed');
     assert.equal(claim.status, 200);
     assert.equal((await claim.json()).reservedUntil, undefined);
     assert.equal((await state('open')).status, 409);
+    const poll = await store.create({ title: 'Old poll', signature: 'Neighbour', options: ['Yes', 'No'] });
+    now += 31 * DAY;
+    assert.equal((await request(`/api/sales/${poll.id}/pickup.ics`)).status, 404);
+    assert.ok((await store.read(poll.id)).data, 'calendar lookup must leave unrelated expired records to regular pruning');
   });
 }
 

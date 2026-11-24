@@ -157,6 +157,15 @@ test("set a pickup window and hold a giveaway until it becomes available again",
   const visitor = await f.context.newPage();
   await visitor.goto(`${f.origin}/sale/${id}`);
   await visitor.locator("#sale-pickup-window", { hasText: "Pickup window" }).waitFor();
+  const calendar = visitor.getByRole("link", { name: "Add pickup time to calendar", exact: true });
+  const downloading = visitor.waitForEvent("download", { timeout: 6000 });
+  await calendar.click({ timeout: 6000 });
+  const download = await downloading;
+  assert.match(download.suggestedFilename(), /\.ics$/);
+  const calendarText = await readFile(await download.path(), "utf8");
+  assert.match(calendarText, /BEGIN:VEVENT\r\n/);
+  assert.ok(calendarText.includes(`URL:${f.origin}/sale/${id}\r\n`));
+  assert.equal(await publisher.getByRole("link", { name: "Add pickup time to calendar", exact: true }).count(), 0);
   await publisher.getByLabel("Hold until").fill(starts);
   await publisher.getByRole("button", { name: "Hold item" }).click();
   await publisher.getByText("Reserved", { exact: true }).waitFor();
@@ -166,9 +175,11 @@ test("set a pickup window and hold a giveaway until it becomes available again",
   await visitor.clock.install({ time: new Date() });
   await visitor.goto(`${f.origin}/sale/${id}`);
   await visitor.getByText("Reserved", { exact: true }).waitFor();
+  assert.equal(await calendar.isVisible(), false);
   f.advance(7 * 60000);
   await visitor.clock.fastForward(7 * 60000);
   await visitor.getByText("Available", { exact: true }).waitFor();
+  await calendar.waitFor();
   assert.equal(await visitor.getByText("Reserved", { exact: true }).isVisible(), false);
   await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   publisher.once("dialog", dialog => dialog.accept());
@@ -176,7 +187,24 @@ test("set a pickup window and hold a giveaway until it becomes available again",
   await publisher.getByText("Claimed", { exact: true }).waitFor();
   await visitor.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
   await visitor.getByText("Claimed", { exact: true }).waitFor({ timeout: 4500 });
+  assert.equal(await calendar.isVisible(), false);
   assert.deepEqual(f.errors, []);
+});
+
+test("hide the calendar link as soon as the pickup window ends", async (t) => {
+  const f = await fixture(t);
+  const now = Date.now();
+  const sale = await f.store.create({ ...f.input, type: "sale", giveawayVersion: 1,
+    title: "Short pickup window", pickupLocation: "Library",
+    pickupWindow: { startsAt: now + 1000, endsAt: now + 4000 },
+  });
+  await f.page.clock.install({ time: new Date(now) });
+  await f.page.goto(`${f.origin}/sale/${sale.id}`);
+  const calendar = f.page.getByRole("link", { name: "Add pickup time to calendar", exact: true });
+  await calendar.waitFor();
+  f.advance(5000);
+  await f.page.clock.fastForward(5000);
+  await calendar.waitFor({ state: "hidden", timeout: 4000 });
 });
 
 test("claim a giveaway and keep its shared address without the pickup location", async t => {

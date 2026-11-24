@@ -20,6 +20,7 @@ import { canonical, createSecrexRouter } from "./secrex.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
 import { saleImages } from "./sale-images.js";
+import { pickupCalendar } from "./pickup-calendar.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
@@ -420,6 +421,14 @@ export function createApp(
     markPostRobots(res, sale);
     const png = await QRCode.toBuffer(`${origin}/sale/${sale.id}`, { type: "png", width: 768, margin: 4 });
     res.type("png").send(png);
+  });
+  app.get("/api/sales/:id/pickup.ics", async (req, res) => {
+    const sale = await store.get(req.params.id, undefined, { expectedType: "sale" });
+    if (sale.saleState !== "open" || !(sale.pickupWindow?.endsAt > sale.serverTime)) {
+      throw new AppError(404, "Sale not found.");
+    }
+    res.set("X-Robots-Tag", "noindex");
+    res.attachment(`ScaleTag-pickup-${sale.id}.ics`).type("text/calendar; charset=utf-8").send(pickupCalendar(sale, origin));
   });
   app.get("/api/tasks/:id", async (req, res) => {
     const task = await store.get(req.params.id);
