@@ -19,16 +19,15 @@ async function fixture(t) {
   await store.init();
   const secrex = new SecrexStore(directory, { clock: () => now });
   await secrex.init();
-  let app,
-    nextVersion = false,
-    unavailablePath;
+  let app, nextVersion = false;
+  let unavailablePaths = new Map();
   const server = createServer((req, res) => {
     const { pathname } = new URL(req.url, "http://localhost");
     if (pathname === "/healthz") {
       // The public ingress does not expose the internal health check.
       res.writeHead(404).end();
-    } else if (pathname === unavailablePath) {
-      res.writeHead(503).end();
+    } else if (unavailablePaths.has(pathname)) {
+      res.writeHead(unavailablePaths.get(pathname)).end();
     } else if (req.url === "/sw.js" && nextVersion) {
       res.writeHead(200, {
         "Content-Type": "application/javascript",
@@ -76,8 +75,8 @@ async function fixture(t) {
     nextVersion: () => {
       nextVersion = true;
     },
-    setUnavailablePath: (path) => {
-      unavailablePath = path;
+    setUnavailablePath: (paths = [], status = 503) => {
+      unavailablePaths = new Map([paths].flat().map(path => [path, status]));
     },
     advance: (ms) => {
       now += ms;
@@ -583,6 +582,27 @@ test("Saved links can be opened offline from the fallback and refresh on reconne
   await context.setOffline(false);
   await row.getByText("Open for votes", { exact: true }).waitFor();
   assert.equal(page.url(), `${origin}/saved`);
+});
+
+test("a server outage can use cached static assets for the offline Saved page", async (t) => {
+  const { page, origin, setUnavailablePath } = await fixture(t);
+  await page.evaluate(() => localStorage.setItem("scaletag-saved-posts", JSON.stringify([
+    { path: `/sale/${"a".repeat(24)}`, title: "Saved through an outage" },
+  ])));
+  setUnavailablePath(["/saved", "/styles.css", "/offline.js", "/local-posts.js"]);
+  await page.goto(`${origin}/saved`);
+  await page.getByRole("link", { name: "Saved through an outage", exact: true }).waitFor({ timeout: 5000 });
+  await page.getByText("Reconnect to open posts and check their current status.", { exact: true }).waitFor();
+  assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
+
+  setUnavailablePath("/favicon.svg", 404);
+  assert.equal(await page.evaluate(async () => (await fetch("/favicon.svg")).status), 404);
+  setUnavailablePath(["/icons/icon-512.png", "/api/visits"]);
+  const statuses = await page.evaluate(async () => {
+    for (const cacheName of await caches.keys()) await (await caches.open(cacheName)).delete("/icons/icon-512.png");
+    return Promise.all(["/icons/icon-512.png", "/api/visits"].map(async path => (await fetch(path)).status));
+  });
+  assert.deepEqual(statuses, [503, 503]);
 });
 
 test("an open Saved page refreshes when a giveaway hold ends", async (t) => {

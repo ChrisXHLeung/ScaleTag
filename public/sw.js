@@ -70,6 +70,7 @@ self.addEventListener("fetch", (event) => {
           // Only allowlisted static bytes enter this cache, never cookies or poll data.
           event.waitUntil(cache.put(url.pathname, response.clone()));
         }
+        if (response.status >= 500) return (await cache.match(url.pathname)) ?? response;
         return response;
       } catch {
         return (await cache.match(url.pathname)) ?? Response.error();
