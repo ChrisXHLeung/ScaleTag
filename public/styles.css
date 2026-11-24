@@ -45,6 +45,21 @@
   display: block;
 }
 
+.saved-post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.saved-copy-fallback {
+  flex: 1 0 100%;
+  min-width: 0;
+}
+
+.saved-copy-status:empty {
+  margin: 0;
+}
+
 /* The map is optional; the list stays available without WebGL or map hosting. */
 .view-switch {
   display: inline-flex;

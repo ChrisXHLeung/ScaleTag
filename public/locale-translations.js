@@ -4727,6 +4727,15 @@ export const TRANSLATIONS = {
     de: "Link kopieren",
     it: "Copia link",
   },
+  "Copy management URL": {
+    ja: "管理用URLをコピー",
+    ko: "관리 URL 복사",
+    fr: "Copier l’URL de gestion",
+    pt: "Copiar URL de gerenciamento",
+    es: "Copiar la URL de gestión",
+    de: "Verwaltungs-URL kopieren",
+    it: "Copia l’URL di gestione",
+  },
   "Share password": {
     ja: "共有パスワード",
     ko: "공유 비밀번호",

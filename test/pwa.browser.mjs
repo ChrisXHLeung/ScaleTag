@@ -557,6 +557,35 @@ test("Saved links filter by local title and type without changing data or reques
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), entries);
 });
 
+test("saved links can be copied directly and manually when clipboard access is denied", async (t) => {
+  const { page, context, origin } = await fixture(t);
+  const id = "a".repeat(24);
+  const paths = [`/vote/${id}`, `/vote/${id}/manage`];
+  await page.evaluate(paths => localStorage.setItem("scaletag-saved-posts", JSON.stringify([
+    { path: paths[0], title: "Garden poll" },
+    { path: paths[1], title: "Manage garden poll", password: "must-not-be-copied" },
+  ])), paths);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  await page.goto(`${origin}/saved?lang=en`);
+
+  const publicRow = page.locator(".saved-posts li").filter({ has: page.getByRole("link", { name: "Garden poll", exact: true }) });
+  await publicRow.getByRole("button", { name: "Copy link", exact: true }).click({ timeout: 5000 });
+  await publicRow.getByText("Link copied.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${origin}${paths[0]}`);
+
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  const managementRow = page.locator(".saved-posts li").filter({ hasText: "Manage garden poll" });
+  await managementRow.getByRole("button", { name: "Copy management URL", exact: true }).click();
+  const fallback = managementRow.getByRole("textbox", { name: "Management URL", exact: true });
+  await fallback.waitFor();
+  assert.equal(await fallback.inputValue(), `${origin}${paths[1]}`);
+  assert.equal(await fallback.evaluate(input => document.activeElement === input &&
+    input.selectionStart === 0 && input.selectionEnd === input.value.length), true);
+  assert.equal(new URL(page.url()).pathname, "/saved");
+});
+
 test("Saved links can be opened offline from the fallback and refresh on reconnect", async (t) => {
   const { store, page, context, origin } = await fixture(t);
   const poll = await store.create({ title: "Local garden vote", options: ["Yes", "No"] });
@@ -577,6 +606,10 @@ test("Saved links can be opened offline from the fallback and refresh on reconne
   assert.equal(await row.locator(".saved-post-status").count(), 0);
   await page.getByLabel("Search saved links", { exact: true }).fill("Garden");
   assert.equal(await row.isVisible(), true);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  await row.getByRole("button", { name: "Copy management URL", exact: true }).click({ timeout: 5000 });
+  await row.getByText("Link copied.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${origin}${path}`);
   assert.deepEqual(requests, []);
   assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
   await context.setOffline(false);

@@ -433,7 +433,8 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       const link = document.createElement("a");
       link.href = path;
       link.textContent = title;
-      if (path.endsWith("/manage")) link.append(` · ${t("Management URL", "管理网址")}`);
+      const management = path.endsWith("/manage");
+      if (management) link.append(` · ${t("Management URL", "管理网址")}`);
       const [, kind, id] = path.split("/");
       const type = kind === "vote" ? "poll" : kind;
       row.dataset.postType = type;
@@ -451,6 +452,34 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         lookups.get(tag).labels.add(status);
         details.append(status);
       }
+      const controls = document.createElement("div");
+      controls.className = "saved-post-actions";
+      const copy = button(management ? t("Copy management URL", "复制管理网址") : t("Copy link", "复制链接"));
+      const feedback = notice("");
+      feedback.classList.add("saved-copy-status");
+      const fallback = document.createElement("label");
+      fallback.className = "saved-copy-fallback";
+      fallback.hidden = true;
+      fallback.textContent = management ? t("Management URL", "管理网址") : t("Public link", "公开链接");
+      const url = document.createElement("input");
+      url.readOnly = true;
+      fallback.append(url);
+      copy.onclick = async () => {
+        feedback.textContent = "";
+        const address = new URL(path, location.origin).href;
+        try {
+          await navigator.clipboard.writeText(address);
+          fallback.hidden = true;
+          feedback.textContent = t("Link copied.", "链接已复制。");
+        } catch {
+          if (!copy.isConnected || row.hidden) return;
+          url.value = address;
+          fallback.hidden = false;
+          url.focus();
+          url.select();
+          feedback.textContent = t("Copy the selected link.", "请复制选中的链接。");
+        }
+      };
       const remove = button(t("Remove", "移除"));
       remove.onclick = () => {
         if (!write(savedKey, savedPosts().filter(item => item.path !== path))) {
@@ -466,7 +495,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         row.remove();
         applyFilters();
       };
-      row.append(details, remove);
+      controls.append(copy, remove);
+      details.append(feedback);
+      row.append(details, controls, fallback);
       list.append(row);
     }
     applyFilters();
