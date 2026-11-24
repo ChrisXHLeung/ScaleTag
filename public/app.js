@@ -174,8 +174,7 @@ function createPoll() {
         location = await locate();
         locatedAt = Date.now();
       }
-      const submittedDraft = draft.snapshot();
-      const poll = await api("/api/polls", {
+      const payload = {
         title: form.elements.namedItem("title").value,
         description: form.elements.namedItem("description").value,
         signature: form.elements.namedItem("signature").value,
@@ -185,8 +184,10 @@ function createPoll() {
         images,
         ...visibility.payload(location),
         retentionAccepted: document.querySelector("#retention").checked,
-      });
-      draft.published(submittedDraft);
+      };
+      const submittedDraft = await draft.snapshot();
+      const poll = await api("/api/polls", payload);
+      await draft.published(submittedDraft);
       const address = localizedPath(`/vote/${poll.id}?created=1`);
       if (!poll.manageKey) {
         window.location.assign(address);

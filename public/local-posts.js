@@ -53,6 +53,22 @@ const unavailable = () => t("This browser cannot store this item.", "此浏览�
 const textDraftKey = (kind) => `scaletag-text-draft-${kind}`;
 const hasTextDraft = (draft) => draft?.fields && typeof draft.fields === "object";
 
+function readDraft(key) {
+  let stored;
+  try {
+    stored = localStorage.getItem(key);
+    return { stored, draft: JSON.parse(stored) };
+  } catch {
+    return { stored };
+  }
+}
+
+async function withDraftLock(key, operation) {
+  // Use one lock per origin and post type where the browser supports Web Locks.
+  if (navigator.locks) return navigator.locks.request(key, operation);
+  return operation();
+}
+
 const draftCopyFields = {
   poll: {
     path: "/create",
@@ -86,26 +102,28 @@ export function mountDraftCopy(host, getPost) {
     const preset = draftCopyFields[post.type];
     if (!preset) return;
     const key = textDraftKey(post.type);
-    const previous = read(key);
+    const { stored, draft: previous } = readDraft(key);
+    if (stored === undefined) return explain(unavailable());
     if (hasTextDraft(previous)) {
       if (!window.confirm(t("Replace the existing draft in this browser?", "替换此浏览器中已有的草稿？"))) return;
       // The confirmation dialog pauses delivery of this tab's storage updates.
       await new Promise(resolve => setTimeout(resolve, 0));
-    }
-    if (JSON.stringify(read(key)) !== JSON.stringify(previous)) {
-      explain(t("The draft changed in another tab. Try again.", "草稿已在其他标签页中修改，请重试。"));
-      return;
     }
     // Copy only named public text fields. Publication settings use the new form defaults.
     const fields = Object.fromEntries(Object.entries(preset.fields)
       .filter(([, name]) => typeof post[name] === "string")
       .map(([selector, name]) => [selector, post[name]]));
     const choices = post.type === "poll" ? post.options.map(({ label }) => label) : undefined;
-    if (!write(key, { fields, choices })) {
+    try {
+      const saved = await withDraftLock(key, () => {
+        if (readDraft(key).stored === stored) return write(key, { fields, choices });
+        explain(t("The draft changed in another tab. Try again.", "草稿已在其他标签页中修改，请重试。"));
+      });
+      if (saved) window.location.assign(localizedPath(preset.path));
+      if (saved === false) explain(unavailable());
+    } catch {
       explain(unavailable());
-      return;
     }
-    window.location.assign(localizedPath(preset.path));
   };
 }
 
@@ -114,19 +132,21 @@ export function bindTextDraft(form, kind, selectors, options) {
   const key = textDraftKey(kind);
   const fields = selectors.map((selector) => form.querySelector(selector));
   const defaults = fields.map((field) => field.value);
-  const saved = read(key, {});
+  const { stored, draft: saved } = readDraft(key);
   const status = notice(t("Text drafts stay in this browser.", "文字草稿仅保存在此浏览器。"));
   const clear = button(t("Clear draft", "清除草稿"));
+  const load = button(t("Load saved draft", "载入已保存草稿"));
+  const replace = button(t("Replace saved draft", "替换已保存草稿"));
   const controls = document.createElement("div");
   controls.className = "local-post-controls";
-  controls.append(status, clear);
+  controls.append(status, clear, load, replace);
   form.querySelector(".form-heading").after(controls);
 
   function restore(fieldsToRestore, choices) {
     fields.forEach((field, i) => {
       const value = Array.isArray(fieldsToRestore) ? fieldsToRestore[i] : fieldsToRestore?.[selectors[i]];
-      if (typeof value !== "string") return;
-      field.value = field.maxLength > 0 ? value.slice(0, field.maxLength) : value;
+      field.value = typeof value !== "string" ? defaults[i]
+        : field.maxLength > 0 ? value.slice(0, field.maxLength) : value;
       if (field instanceof HTMLSelectElement && field.selectedIndex < 0) field.value = defaults[i];
     });
     options?.restore(choices);
@@ -135,40 +155,116 @@ export function bindTextDraft(form, kind, selectors, options) {
     restore(saved.fields, saved.choices);
     status.textContent = t("Text draft restored.", "已恢复文字草稿。");
   }
+  const formDraft = () => ({ fields: fields.map(field => field.value), choices: options?.read() });
+  let current = stored;
+  let savedForm = JSON.stringify(formDraft());
   clear.hidden = !hasTextDraft(saved);
-  let lastSaved = hasTextDraft(saved) ? saved : undefined;
+  load.hidden = replace.hidden = true;
+
+  function resolved(message, hasDraft) {
+    status.textContent = message;
+    clear.hidden = !hasDraft;
+    load.hidden = replace.hidden = true;
+    savedForm = JSON.stringify(formDraft());
+  }
+
+  function matches(expected) {
+    const { stored } = readDraft(key);
+    if (stored === undefined) status.textContent = unavailable();
+    else if (stored === expected) return true;
+    else {
+      const message = t("Auto-save paused. The saved draft changed in another tab.", "自动保存已暂停。已保存的草稿在另一个标签页中发生了变化。");
+      if (status.textContent !== message) status.textContent = message;
+      load.hidden = stored === null;
+      replace.hidden = false;
+      clear.hidden = true;
+    }
+    return false;
+  }
+
+  function run(operation) {
+    return withDraftLock(key, () => {
+      if (form.isConnected) return operation();
+    }).catch(() => { status.textContent = unavailable(); });
+  }
+
+  function resetDraft(operation) {
+    const before = JSON.stringify(formDraft());
+    return run(() => {
+      if (JSON.stringify(formDraft()) === before) operation();
+    });
+  }
+
+  function persist() {
+    const draft = formDraft();
+    if (write(key, draft)) {
+      current = JSON.stringify(draft);
+      resolved(t("Text draft saved on this browser.", "文字草稿已保存在此浏览器。"), true);
+    } else status.textContent = unavailable();
+  }
 
   function save() {
-    const draft = { fields: fields.map((field) => field.value), choices: options?.read() };
-    if (write(key, draft)) {
-      lastSaved = draft;
-      status.textContent = t("Text draft saved on this browser.", "文字草稿已保存在此浏览器。");
-      clear.hidden = false;
-    } else status.textContent = unavailable();
+    return run(() => {
+      if (matches(current)) persist();
+    });
   }
   function onInput(event) {
     if (fields.includes(event.target) || options?.contains(event.target)) save();
   }
   form.addEventListener("input", onInput);
   form.addEventListener("change", onInput);
-  clear.onclick = () => {
+  clear.onclick = () => resetDraft(() => {
+    if (!matches(current)) return;
     if (!write(key)) {
       status.textContent = unavailable();
       return;
     }
-    restore(defaults);
-    lastSaved = undefined;
+    current = null;
+    restore();
     fields[0].dispatchEvent(new Event("draftreset", { bubbles: true }));
-    status.textContent = t("Text draft cleared.", "文字草稿已清除。");
-    clear.hidden = true;
+    resolved(t("Text draft cleared.", "文字草稿已清除。"), false);
+  });
+  load.onclick = () => {
+    if (!window.confirm(t("Load the saved draft and replace the draft fields in this tab?", "载入已保存草稿并替换此标签页中的草稿字段？"))) return;
+    return resetDraft(() => {
+      const { stored, draft } = readDraft(key);
+      const available = hasTextDraft(draft);
+      if (stored !== null && !available) {
+        status.textContent = unavailable();
+        return;
+      }
+      restore(draft?.fields, draft?.choices);
+      current = stored;
+      fields[0].dispatchEvent(new Event("draftreset", { bubbles: true }));
+      resolved(available ? t("Text draft restored.", "已恢复文字草稿。")
+        : t("Text draft cleared.", "文字草稿已清除。"), available);
+    });
+  };
+  replace.onclick = async () => {
+    const { stored } = readDraft(key);
+    if (stored === undefined) {
+      status.textContent = unavailable();
+      return;
+    }
+    if (stored !== null) {
+      if (!window.confirm(t("Replace the existing draft in this browser?", "替换此浏览器中已有的草稿？"))) return;
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return run(() => {
+      if (matches(stored)) persist();
+    });
   };
   return {
     save,
-    snapshot: () => JSON.stringify(lastSaved),
-    published(submittedDraft) {
-      // This or another tab may have edited the draft while the request was pending.
-      if (JSON.stringify(read(key)) === submittedDraft) write(key);
+    snapshot() {
+      const submitted = JSON.stringify(formDraft());
+      return run(() => {
+        if (submitted === savedForm && readDraft(key).stored === current) return current;
+      });
     },
+    published: (submittedDraft) => run(() => {
+      if (typeof submittedDraft === "string" && readDraft(key).stored === submittedDraft) write(key);
+    }),
   };
 }
 

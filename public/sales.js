@@ -37,9 +37,10 @@ export function createSale() {
       progress.textContent=t('Publishing…','正在发布…');
       const value=id=>main.querySelector(id).value.trim();
       const pickupWindow = readPickupWindow(form.querySelector('#sale-pickup-start'), form.querySelector('#sale-pickup-end'));
-      const submittedDraft = draft.snapshot();
-      const sale=await api('/api/sales',{title:value('#sale-title'),description:value('#sale-description'),pickupLocation:value('#pickup-location'),pickupWindow,signature:value('#sale-name'),images,...visibility.payload(position),retentionAccepted:main.querySelector('#sale-retention').checked});
-      draft.published(submittedDraft);
+      const payload = {title:value('#sale-title'),description:value('#sale-description'),pickupLocation:value('#pickup-location'),pickupWindow,signature:value('#sale-name'),images,...visibility.payload(position),retentionAccepted:main.querySelector('#sale-retention').checked};
+      const submittedDraft = await draft.snapshot();
+      const sale=await api('/api/sales', payload);
+      await draft.published(submittedDraft);
       history.replaceState(null, "", localizedPath(`/sale/${sale.id}/manage?created=1`));
       await salePage(sale.id, { manage: true, password: sale.manageKey, published: sale });
     } catch(e) { showError(error,e); progress.textContent=''; button.disabled=false; } finally { publishing=false; }

@@ -75,8 +75,7 @@ export function createTask() {
       const value = (id) => main.querySelector(id).value.trim();
       const { password, authKey, contactPublicKey, encryptedPrivateKey } =
         await createTaskCredentials();
-      const submittedDraft = draft.snapshot();
-      const task = await api("/api/tasks", {
+      const payload = {
         title: value("#task-title"),
         description: value("#task-description"),
         reward: value("#task-reward"),
@@ -87,8 +86,10 @@ export function createTask() {
         authKey,
         contactPublicKey,
         encryptedPrivateKey,
-      });
-      draft.published(submittedDraft);
+      };
+      const submittedDraft = await draft.snapshot();
+      const task = await api("/api/tasks", payload);
+      await draft.published(submittedDraft);
       history.replaceState(null, "", localizedPath(`/task/${task.id}/manage?created=1`));
       await taskPage(task.id, {
         manage: true,

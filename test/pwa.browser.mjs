@@ -299,6 +299,70 @@ test("the browser restores public draft text and keeps saved post links locally"
   assert.equal(await page.getByLabel("The question").inputValue(), "Newer edit before the response");
 });
 
+test("a stale draft keeps local edits and requires a choice before replacing saved text", async (t) => {
+  const { page, context, origin } = await fixture(t);
+  const other = await context.newPage();
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("Shared starting draft");
+  await page.getByText("Text draft saved on this browser.").waitFor();
+  await other.goto(`${origin}/create`);
+  await other.getByLabel("The question").fill("Newer saved draft");
+  await other.getByLabel("Post visibility").selectOption("unlisted");
+  await other.getByText("Text draft saved on this browser.").waitFor();
+  const key = "scaletag-text-draft-poll";
+  const read = () => page.evaluate(key => localStorage.getItem(key), key);
+  const saved = await read();
+  await page.getByLabel("The question").fill("Unmerged local edit");
+  const load = page.getByRole("button", { name: "Load saved draft", exact: true });
+  const keep = page.getByRole("button", { name: "Replace saved draft", exact: true });
+  await keep.waitFor({ timeout: 5000 });
+  assert.equal(await read(), saved);
+  assert.equal(await page.getByLabel("The question").inputValue(), "Unmerged local edit");
+
+  page.once("dialog", dialog => dialog.dismiss());
+  await keep.click();
+  assert.equal(await read(), saved);
+  page.once("dialog", dialog => dialog.accept());
+  await load.click();
+  await page.getByText("Text draft restored.").waitFor();
+  assert.equal(await page.getByLabel("The question").inputValue(), "Newer saved draft");
+  assert.equal(await page.getByLabel("Post visibility").inputValue(), "unlisted");
+  assert.equal(await page.locator(".post-location-fields").isHidden(), true);
+
+  await other.getByLabel("The question").fill("Still newer saved draft");
+  await page.getByLabel("The question").fill("Explicit replacement");
+  await keep.waitFor();
+  page.once("dialog", dialog => dialog.accept());
+  await keep.click();
+  await page.getByText("Text draft saved on this browser.").waitFor();
+  assert.match(await read(), /Explicit replacement/);
+});
+
+test("clearing or publishing from a stale create tab preserves another tab's draft", async (t) => {
+  const { page, context, origin } = await fixture(t);
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("Old tab poll to publish");
+  await page.getByLabel("Option 1", { exact: true }).fill("First choice");
+  await page.getByLabel("Option 2", { exact: true }).fill("Second choice");
+  await page.getByLabel("Your signature").fill("Draft test");
+  await page.getByLabel("Post visibility").selectOption("unlisted");
+  const other = await context.newPage();
+  await other.goto(`${origin}/create`);
+  await other.getByLabel("The question").fill("Keep this newer draft");
+  await other.getByText("Text draft saved on this browser.").waitFor();
+  const read = () => other.evaluate(() => localStorage.getItem("scaletag-text-draft-poll"));
+  const newer = await read();
+
+  await page.getByRole("button", { name: "Clear draft", exact: true }).click();
+  assert.equal(await read(), newer);
+  assert.equal(await page.getByLabel("The question").inputValue(), "Old tab poll to publish");
+  await page.getByRole("button", { name: "Replace saved draft", exact: true }).waitFor({ timeout: 5000 });
+  await page.locator("#retention").check();
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  await page.getByRole("heading", { name: "Manage this poll" }).waitFor();
+  assert.equal(await read(), newer);
+});
+
 test("owners can copy public text to a new draft without copying publication details", { timeout: 40000 }, async (t) => {
   const { page, origin, store, errors, context } = await fixture(t);
   const poll = await store.create({
