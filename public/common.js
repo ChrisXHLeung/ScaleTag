@@ -408,3 +408,14 @@ export function mountNativeShare(anchor, { title, url } = {}) {
   };
   anchor.before(btn);
 }
+
+export function showFormError(node, error, { focus = true } = {}) {
+  const msg = typeof error === "string" ? error : (error?.message ?? "");
+  node.textContent = msg;
+  node.hidden = !msg;
+  if (msg && focus) {
+    node.tabIndex = -1;
+    node.scrollIntoView?.({ block: "nearest" });
+    node.focus?.({ preventScroll: true });
+  }
+}

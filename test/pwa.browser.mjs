@@ -1258,3 +1258,98 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "form error focus and locate button feedback across giveaway and task forms",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin } = f;
+
+    // 1. /create/sale: #sale-location-status has aria-live="polite", locate button toggles Try again / Refresh location
+    await page.goto(`${origin}/create/sale`);
+    await page.locator("#sale-form").waitFor();
+    assert.equal(
+      await page.locator("#sale-location-status").getAttribute("aria-live"),
+      "polite",
+    );
+
+    await page.evaluate(() => {
+      window.__origGetCurrentPosition =
+        navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+      navigator.geolocation.getCurrentPosition = (_success, error) => {
+        error({ code: 1, PERMISSION_DENIED: 1 });
+      };
+    });
+    await page.locator("#sale-locate").click();
+    await page.getByRole("button", { name: "Try again", exact: true }).waitFor();
+    assert.equal(await page.locator("#sale-locate").textContent(), "Try again");
+    assert.equal(await page.locator("#sale-locate").isDisabled(), false);
+
+    await page.evaluate(() => {
+      navigator.geolocation.getCurrentPosition = window.__origGetCurrentPosition;
+    });
+    await page.locator("#sale-locate").click();
+    await page.getByRole("button", { name: "Refresh location", exact: true }).waitFor();
+    assert.equal(
+      await page.locator("#sale-locate").textContent(),
+      "Refresh location",
+    );
+    assert.equal(await page.locator("#sale-locate").isDisabled(), false);
+
+    // 2. /create/sale submission error focuses #sale-error with tabIndex === -1
+    await page.locator("#sale-title").fill("Free desk lamp");
+    await page.locator("#sale-description").fill("Works well, warm bulb included.");
+    await page.locator("#pickup-location").fill("Outside north entrance");
+    await page.locator("#sale-pickup-start").fill("2026-06-10T15:00");
+    await page.locator("#sale-pickup-end").fill("2026-06-10T14:00");
+    await page.locator("#sale-map-consent").check();
+    await page.locator("#sale-retention").check();
+    await page.locator("#publish-sale").click();
+
+    const saleErrorState = await page.evaluate(() => {
+      const node = document.querySelector("#sale-error");
+      return {
+        hidden: node.hidden,
+        text: node.textContent,
+        tabIndex: node.tabIndex,
+        isFocused: document.activeElement === node,
+      };
+    });
+    assert.equal(saleErrorState.hidden, false);
+    assert.equal(
+      saleErrorState.text,
+      "Choose a pickup start and end time in order.",
+    );
+    assert.equal(saleErrorState.tabIndex, -1);
+    assert.equal(saleErrorState.isFocused, true);
+
+    // 3. /create/task locate button toggles Try again / Refresh location
+    await page.goto(`${origin}/create/task`);
+    await page.locator("#task-form").waitFor();
+    await page.evaluate(() => {
+      window.__origGetCurrentPosition =
+        navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+      navigator.geolocation.getCurrentPosition = (_success, error) => {
+        error({ code: 1, PERMISSION_DENIED: 1 });
+      };
+    });
+    await page.locator("#task-locate").click();
+    await page.getByRole("button", { name: "Try again", exact: true }).waitFor();
+    assert.equal(await page.locator("#task-locate").textContent(), "Try again");
+    assert.equal(await page.locator("#task-locate").isDisabled(), false);
+
+    await page.evaluate(() => {
+      navigator.geolocation.getCurrentPosition = window.__origGetCurrentPosition;
+    });
+    await page.locator("#task-locate").click();
+    await page.getByRole("button", { name: "Refresh location", exact: true }).waitFor();
+    assert.equal(
+      await page.locator("#task-locate").textContent(),
+      "Refresh location",
+    );
+    assert.equal(await page.locator("#task-locate").isDisabled(), false);
+
+    assert.deepEqual(f.errors, []);
+  },
+);

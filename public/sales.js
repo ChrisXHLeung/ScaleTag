@@ -1,5 +1,5 @@
 import { localizedPath } from '/locale.js';
-import { main, api, escape, icons, date, locate, toast, t, bindPostVisibility, postVisibilityFields, managementPasswordForm, managementDetails, bindManagementCopy, mountNativeShare } from '/common.js';
+import { main, api, escape, icons, date, locate, toast, t, bindPostVisibility, postVisibilityFields, managementPasswordForm, managementDetails, bindManagementCopy, mountNativeShare, showFormError } from '/common.js';
 import { mountSocial } from '/social.js';
 import { mountPosterActions } from '/poster.js';
 import { mountOwnerEdit, refreshOwnerPreview } from '/owner-edit.js';
@@ -11,12 +11,11 @@ export function saleStateLabel(state) {
   if (state === 'reserved') return t('Reserved', '已保留');
   return state === 'closed' ? t('Unavailable', '已下架') : t('Available', '可领取');
 }
-const showError = (node, error) => { node.textContent = error.message; node.hidden = false; };
 
 export function createSale() {
   document.title = t('Give something away — ScaleTag', '发布闲置赠予 — ScaleTag');
   document.querySelector('[data-nav="create"]').classList.add('active');
-  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t('← Back to home','← 返回首页')}</a><span class="eyebrow">${t('PASS SOMETHING ON','让闲置遇到需要的人')}</span><h1>${t('Give it a <br>new home.', '让闲置物品<br>找到新主人。')}</h1><p>${t('Share something free for someone nearby to pick up.', '把闲置物品免费分享给附近有需要的人。')}</p><div class="rules"><p>${icons.clock} ${t('Available for 72 hours.','发布后保留 72 小时。')}</p><p>${icons.shield} ${t('Save your management URL and password to take it down.','保存管理网址和密码，物品被拿走后即可下架。')}</p></div></aside><form id="sale-form" class="form-card"><div class="post-kind-switch" aria-label="${t('Post type','发布类型')}"><a href="/create">${t('Poll','投票')}</a><a href="/create/task">${t('Task','任务')}</a><a href="/create/sale" aria-current="page">${t('Free Giveaways','闲置赠予')}</a><a href="/secrex">${t('Secrex','Secrex 阅后即焚')}</a></div><div class="form-heading"><h2>${t('Give something away','发布闲置赠予')}</h2></div><label for="sale-title">${t('Item title','物品名称')}</label><input id="sale-title" maxlength="140" required><label for="sale-description">${t('Description and condition','物品介绍与成色')}</label><textarea id="sale-description" maxlength="4000" rows="5" required></textarea><label for="pickup-location">${t('Pickup location (public)','领取地点（公开）')}</label><input id="pickup-location" maxlength="300" required placeholder="${t('e.g. Outside the north library entrance','例如：图书馆北门外')}"><p class="field-hint">${t('Give enough detail to find the item. Anyone who can open the post can see this location. Leave out contact details.','请写清楚物品在哪里。能打开帖子的人都能看到领取地点。请勿填写联系方式。')}</p>${pickupWindowFields('sale')}<label for="sale-images">${t('Photos (optional)','物品照片（选填）')}</label><input id="sale-images" type="file" accept="image/jpeg,image/png,image/webp" multiple><p class="field-hint">${t('Up to 2 JPEG, PNG or WebP photos, each original at most 1 MiB. Photos are public.','最多上传 2 张 JPEG、PNG 或 WebP 照片，每张原图不超过 1 MiB。照片会公开显示。')}</p><label for="sale-name">${t('Your name (optional, unverified)','你的名字（选填，未经验证）')}</label><input id="sale-name" maxlength="60">${postVisibilityFields()}<fieldset class="post-location-fields"><legend class="sr-only">${t("Post location", "帖子位置")}</legend><div class="location-box"><div><strong>${icons.pin} ${t('Show the approximate area on the map','在地图上显示大致区域')}</strong><p id="sale-location-status">${t('Location permission is required.','发布时需要获取位置。')}</p></div><button id="sale-locate" class="button secondary small" type="button">${t('Enable location','获取位置')}</button></div><label class="checkbox-row"><input id="sale-map-consent" type="checkbox" required><span>${t('I agree to show the approximate area publicly on the map.','我同意在地图上公开显示大致区域。')}</span></label></fieldset><label class="checkbox-row"><input id="sale-retention" type="checkbox" required><span>${t('I understand this post and photos are hidden after 72 hours and removed from active storage after 30 days. Daily backups are kept for up to 90 days after creation.','我了解帖子和照片在 72 小时后不再公开，发布 30 天后从当前存储中移除；每日备份从创建之日起最多保留 90 天。')}</span></label><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button id="publish-sale" class="button publish-button" type="submit">${t('Publish giveaway','发布闲置赠予')} ${icons.arrow}</button><p id="sale-progress" role="status"></p><p id="sale-error" class="form-error" role="alert" hidden></p></form></section>`;
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t('← Back to home','← 返回首页')}</a><span class="eyebrow">${t('PASS SOMETHING ON','让闲置遇到需要的人')}</span><h1>${t('Give it a <br>new home.', '让闲置物品<br>找到新主人。')}</h1><p>${t('Share something free for someone nearby to pick up.', '把闲置物品免费分享给附近有需要的人。')}</p><div class="rules"><p>${icons.clock} ${t('Available for 72 hours.','发布后保留 72 小时。')}</p><p>${icons.shield} ${t('Save your management URL and password to take it down.','保存管理网址和密码，物品被拿走后即可下架。')}</p></div></aside><form id="sale-form" class="form-card"><div class="post-kind-switch" aria-label="${t('Post type','发布类型')}"><a href="/create">${t('Poll','投票')}</a><a href="/create/task">${t('Task','任务')}</a><a href="/create/sale" aria-current="page">${t('Free Giveaways','闲置赠予')}</a><a href="/secrex">${t('Secrex','Secrex 阅后即焚')}</a></div><div class="form-heading"><h2>${t('Give something away','发布闲置赠予')}</h2></div><label for="sale-title">${t('Item title','物品名称')}</label><input id="sale-title" maxlength="140" required><label for="sale-description">${t('Description and condition','物品介绍与成色')}</label><textarea id="sale-description" maxlength="4000" rows="5" required></textarea><label for="pickup-location">${t('Pickup location (public)','领取地点（公开）')}</label><input id="pickup-location" maxlength="300" required placeholder="${t('e.g. Outside the north library entrance','例如：图书馆北门外')}"><p class="field-hint">${t('Give enough detail to find the item. Anyone who can open the post can see this location. Leave out contact details.','请写清楚物品在哪里。能打开帖子的人都能看到领取地点。请勿填写联系方式。')}</p>${pickupWindowFields('sale')}<label for="sale-images">${t('Photos (optional)','物品照片（选填）')}</label><input id="sale-images" type="file" accept="image/jpeg,image/png,image/webp" multiple><p class="field-hint">${t('Up to 2 JPEG, PNG or WebP photos, each original at most 1 MiB. Photos are public.','最多上传 2 张 JPEG、PNG 或 WebP 照片，每张原图不超过 1 MiB。照片会公开显示。')}</p><label for="sale-name">${t('Your name (optional, unverified)','你的名字（选填，未经验证）')}</label><input id="sale-name" maxlength="60">${postVisibilityFields()}<fieldset class="post-location-fields"><legend class="sr-only">${t("Post location", "帖子位置")}</legend><div class="location-box"><div><strong>${icons.pin} ${t('Show the approximate area on the map','在地图上显示大致区域')}</strong><p id="sale-location-status" aria-live="polite">${t('Location permission is required.','发布时需要获取位置。')}</p></div><button id="sale-locate" class="button secondary small" type="button">${t('Enable location','获取位置')}</button></div><label class="checkbox-row"><input id="sale-map-consent" type="checkbox" required><span>${t('I agree to show the approximate area publicly on the map.','我同意在地图上公开显示大致区域。')}</span></label></fieldset><label class="checkbox-row"><input id="sale-retention" type="checkbox" required><span>${t('I understand this post and photos are hidden after 72 hours and removed from active storage after 30 days. Daily backups are kept for up to 90 days after creation.','我了解帖子和照片在 72 小时后不再公开，发布 30 天后从当前存储中移除；每日备份从创建之日起最多保留 90 天。')}</span></label><p class="field-hint" role="note">${t("Disclaimer: Posts are supplied by users and are not verified by ScaleTag. Publishers are responsible for their content; users should exercise their own judgment. ScaleTag does not participate in transactions.", "免责声明：信息由用户发布，ScaleTag 不对内容进行核实。发布者对其内容负责，使用者应自行判断；ScaleTag 不参与交易。")}</p><button id="publish-sale" class="button publish-button" type="submit">${t('Publish giveaway','发布闲置赠予')} ${icons.arrow}</button><p id="sale-progress" role="status"></p><p id="sale-error" class="form-error" role="alert" hidden></p></form></section>`;
   let position, locatedAt = 0, publishing = false;
   const form = main.querySelector('#sale-form');
   const draft = bindTextDraft(form, 'sale', [
@@ -24,8 +23,8 @@ export function createSale() {
   ]);
   const visibility = bindPostVisibility(form);
   const locationButton = main.querySelector('#sale-locate');
-  async function getLocation() { position = await locate(); locatedAt = Date.now(); main.querySelector('#sale-location-status').textContent = t('Location ready.','位置已获取。'); }
-  locationButton.onclick = async () => { locationButton.disabled = true; try { await getLocation(); } catch (e) { position = undefined; main.querySelector('#sale-location-status').textContent = e.message; } finally { locationButton.disabled = false; } };
+  async function getLocation() { position = await locate(); locatedAt = Date.now(); main.querySelector('#sale-location-status').textContent = t('Location ready.','位置已获取。'); locationButton.textContent = t("Refresh location", "刷新位置"); }
+  locationButton.onclick = async () => { locationButton.disabled = true; locationButton.textContent = t("Locating…", "正在定位…"); try { await getLocation(); } catch (e) { position = undefined; main.querySelector('#sale-location-status').textContent = e.message; locationButton.textContent = t("Try again", "重试"); } finally { locationButton.disabled = false; } };
   form.onsubmit = async event => {
     event.preventDefault(); if (publishing) return;
     const error=main.querySelector('#sale-error'), button=main.querySelector('#publish-sale'), progress=main.querySelector('#sale-progress'); error.hidden=true; button.disabled=true; publishing=true;
@@ -43,7 +42,7 @@ export function createSale() {
       await draft.published(submittedDraft);
       history.replaceState(null, "", localizedPath(`/sale/${sale.id}/manage?created=1`));
       await salePage(sale.id, { manage: true, password: sale.manageKey, published: sale });
-    } catch(e) { showError(error,e); progress.textContent=''; button.disabled=false; } finally { publishing=false; }
+    } catch(e) { showFormError(error,e); progress.textContent=''; button.disabled=false; } finally { publishing=false; }
   };
 }
 
@@ -164,7 +163,7 @@ export async function salePage(id, { manage = false, password, published } = {})
             main.innerHTML = `<section class="empty-page"><h1>${t('This giveaway is no longer available.','这条闲置赠予已下架。')}</h1><a class="button" href="/PostList">${t('Back to PostList','返回帖子列表')}</a></section>`;
           else renderAvailability(updated);
         } catch (e) {
-          showError(error, e);
+          showFormError(error, e);
         } finally {
           buttons.forEach(button => { button.disabled = false; });
         }
@@ -173,7 +172,7 @@ export async function salePage(id, { manage = false, password, published } = {})
         event.preventDefault();
         const time = readLocalDateTime(main.querySelector('#sale-hold-until'));
         if (!Number.isSafeInteger(time)) {
-          showError(error, new Error(t('Choose a future hold time within the giveaway lifetime.', '请选择赠予有效期内的未来保留时间。')));
+          showFormError(error, new Error(t('Choose a future hold time within the giveaway lifetime.', '请选择赠予有效期内的未来保留时间。')));
           return;
         }
         updateState('reserved', time);

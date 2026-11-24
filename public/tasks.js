@@ -18,6 +18,7 @@ import {
   managementDetails,
   bindManagementCopy,
   mountNativeShare,
+  showFormError,
 } from "/common.js";
 import { mountSocial } from "/social.js";
 import { mountPosterActions } from "/poster.js";
@@ -53,11 +54,13 @@ export function createTask() {
   }
   locateButton.onclick = async () => {
     locateButton.disabled = true;
+    locateButton.textContent = t("Locating…", "正在定位…");
     try {
       await getLocation();
     } catch (e) {
       position = undefined;
       main.querySelector("#task-location-status").textContent = e.message;
+      locateButton.textContent = t("Try again", "重试");
     } finally {
       locateButton.disabled = false;
     }
@@ -99,8 +102,7 @@ export function createTask() {
         published: { ...task, encryptedPrivateKey, replies: task.replies ?? [] },
       });
     } catch (e) {
-      error.textContent = e.message;
-      error.hidden = false;
+      showFormError(error, e);
       button.disabled = false;
     } finally {
       publishing = false;
@@ -268,7 +270,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     button.disabled = changing;
     parent.append(button);
   }
-  async function refreshPrivateReplies() {
+  async function refreshPrivateReplies(manual = false) {
     if (!manage || loadingContacts || changing) return;
     const version = managementVersion;
     loadingContacts = true;
@@ -285,8 +287,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     } catch (e) {
       const error = main.querySelector("#private-replies-error");
       if (error) {
-        error.textContent = e.message;
-        error.hidden = false;
+        showFormError(error, e, { focus: manual });
       }
     } finally {
       loadingContacts = false;
@@ -311,8 +312,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         const updated = await api(`/api/tasks/${id}/assignment`, { authKey: requestAuthKey, replyId });
         task = { ...task, ...updated, taskAssigned: Boolean(updated.taskAssigned) };
       } catch (e) {
-        error.textContent = e.message;
-        error.hidden = false;
+        showFormError(error, e);
       } finally {
         changing = false;
         if (main.querySelector("#task-state")) renderState(task.taskState);
@@ -320,8 +320,8 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         social?.refresh();
       }
     };
-    main.querySelector("#refresh-private-replies").onclick =
-      refreshPrivateReplies;
+    main.querySelector("#refresh-private-replies").onclick = () =>
+      refreshPrivateReplies(true);
     mountOwnerEdit(main.querySelector(".manage-card"), task, `/api/tasks/${id}/edit`,
       requestAuthKey, (updated) => {
         task = { ...task, ...updated };
@@ -364,8 +364,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
           toast(t(`Task marked ${stateLabel(task.taskState)}.`, `任务已标记为${stateLabel(task.taskState)}。`));
           social?.refresh();
         } catch (e) {
-          error.textContent = e.message;
-          error.hidden = false;
+          showFormError(error, e);
         } finally {
           changing = false;
           renderState(task.taskState);

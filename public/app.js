@@ -23,6 +23,7 @@ import {
   managementDetails,
   managementPasswordForm,
   mountNativeShare,
+  showFormError,
 } from "/common.js";
 import { mountOwnerEdit } from "/owner-edit.js";
 import { mountSocial } from "/social.js";
@@ -198,9 +199,7 @@ function createPoll() {
       history.replaceState(null, "", address);
       await votePage(poll.id, { ownerKey: manageKey, published });
     } catch (e) {
-      error.textContent = e.message;
-      error.hidden = false;
-      error.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      showFormError(error, e);
       publish.disabled = false;
       publish.innerHTML = `${t("Publish my poll", "发布投票")} ${icons.arrow}`;
     }
@@ -286,8 +285,7 @@ function renderPollManager(poll, key, message = "", openEditor = false) {
             <a class="button" href="/PostList">${t("Back to PostList", "返回帖子列表")}</a></section>`;
         } else renderPollManager(updated, key);
       } catch (e) {
-        error.textContent = e.message;
-        error.hidden = false;
+        showFormError(error, e);
       } finally {
         stateButtons.forEach(control => { control.disabled = false; });
       }
@@ -452,8 +450,7 @@ async function votePage(id, { ownerKey, published } = {}) {
       });
       toast(t("Your vote is in. Thank you!", "投票已提交，谢谢参与！"));
     } catch (e) {
-      error.textContent = e.message;
-      error.hidden = false;
+      showFormError(error, e);
       try {
         poll = await api(`/api/polls/${id}`);
       } catch {}
