@@ -78,7 +78,7 @@ test("the sixth browser report blocks new requests and clears open post and mana
       manager.setDefaultTimeout(5000);
       await manager.goto(`${url}/manage`);
       await manager.locator("#manage-password").fill(taskCredentials?.password ?? post.manageKey);
-      await manager.locator("#manage-password-form button").click();
+      await manager.locator('#manage-password-form button[type="submit"]').click();
       await manager.getByRole("heading", { name: post.title }).waitFor();
       await manager.getByText(reportedLabel, { exact: true }).waitFor();
       opened.push(manager);
