@@ -158,6 +158,7 @@ test("task contact privacy: zero-knowledge request bodies, password unlock, wron
   assert.equal(await contactLinks.count(), 2);
   const contactTexts = await contactLinks.allTextContents();
   assert.deepEqual(contactTexts, [`Phone: ${phone}`, `Email: ${email}`]);
+  assert.equal(await contactLinks.nth(1).getAttribute("href"), `mailto:${email}`);
 
   // 4. Assert no management password or contact plaintext appears in any captured browser request bodies (or URLs)
   const createReq = requests.find(

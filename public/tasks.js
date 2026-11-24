@@ -130,7 +130,7 @@ export function privateRepliesHtml(replies = []) {
   return replies
     .map(
       (r) =>
-        `<article class="reply-card private-reply"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)}</span></div><p class="reply-message">${escape(r.message)}</p><div class="reply-contacts">${r.phone ? `<a href="tel:${escape(r.phone.replace(/[^+0-9]/g, ""))}">${t("Phone", "电话")}: ${escape(r.phone)}</a>` : ""}${r.email ? `<a href="mailto:${escape(encodeURIComponent(r.email))}">${t("Email", "电子邮箱")}: ${escape(r.email)}</a>` : ""}${!r.phone && !r.email ? `<span class="field-hint">${t("No private contact details were provided.", "未提供私人联系方式。")}</span>` : ""}</div></article>`,
+        `<article class="reply-card private-reply"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)}</span></div><p class="reply-message">${escape(r.message)}</p><div class="reply-contacts">${r.phone ? `<a href="tel:${escape(r.phone.replace(/[^+0-9]/g, ""))}">${t("Phone", "电话")}: ${escape(r.phone)}</a>` : ""}${r.email ? `<a href="mailto:${escape(encodeURIComponent(r.email.trim()).replaceAll("%40", "@"))}">${t("Email", "电子邮箱")}: ${escape(r.email)}</a>` : ""}${!r.phone && !r.email ? `<span class="field-hint">${t("No private contact details were provided.", "未提供私人联系方式。")}</span>` : ""}</div></article>`,
     )
     .join("");
 }

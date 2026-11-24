@@ -320,7 +320,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     ${uploadedPhotosHtml(uploadedImages, "Poll photo", "投票照片")}
     ${externalImages.length ? `<div class="external-images"><button class="button secondary small" id="load-images">${t(`Show ${externalImages.length} external image${externalImages.length > 1 ? "s" : ""}`, `显示 ${externalImages.length} 张外部图片`)}</button><p class="field-hint">${t("Images load from third-party hosts, which may receive your IP address.", "图片从第三方服务器加载，该服务可能接收你的 IP 地址。")}</p><div id="poll-images"></div></div>` : ""}
     <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
-    <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes"></span></div><div id="results"></div><p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
+    <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes" aria-live="polite"></span></div><div id="results"></div><p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
     <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link" type="button">${t("Copy poll link", "复制投票链接")}</button>${pollLinkFallback("public-poll-link")}</section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   if (ownerKey) {
     const owner = document.createElement("section");
@@ -369,6 +369,7 @@ async function votePage(id, { ownerKey, published } = {}) {
   const updateResultCard = mountResultCard(
     main.querySelector(".results-section"), id, () => api(`/api/polls/${id}`),
   );
+  let lastResultsHtml;
   function render() {
     updateResultCard(poll);
     const title = main.querySelector(".poll-title");
@@ -384,14 +385,22 @@ async function votePage(id, { ownerKey, published } = {}) {
       poll.endsAt,
       poll.serverTime,
     );
-    document.querySelector("#total-votes").textContent =
+    // Only write when changed so unchanged 15s polls don't re-announce the
+    // aria-live total or wipe the user's text selection in the results.
+    const totalVotes = document.querySelector("#total-votes");
+    const totalText =
       poll.resultsHidden ? "" : t(`${count(poll.totalVotes)} ${poll.totalVotes === 1 ? "vote" : "votes"}`, `${count(poll.totalVotes)} 票`);
-    document.querySelector("#results").innerHTML = poll.resultsHidden ? "" : poll.options
+    if (totalVotes.textContent !== totalText) totalVotes.textContent = totalText;
+    const results = document.querySelector("#results");
+    const resultsHtml = poll.resultsHidden ? "" : poll.options
       .map(
         (o) =>
           `<div class="result-row"><div><span>${escape(o.label)}</span><strong>${percent(o.votes, poll.totalVotes)}% <small>${t(`${count(o.votes)} ${o.votes === 1 ? "vote" : "votes"}`, `${count(o.votes)} 票`)}</small></strong></div><progress value="${o.votes}" max="${poll.totalVotes || 1}" aria-label="${escape(o.label)}: ${percent(o.votes, poll.totalVotes)} percent"></progress></div>`,
       )
       .join("");
+    // Compare against the last markup we wrote (not the browser-serialized
+    // innerHTML, which may normalise entities/attributes differently).
+    if (resultsHtml !== lastResultsHtml) results.innerHTML = lastResultsHtml = resultsHtml;
     const options = document.querySelector("#vote-options");
     const updatedBallot = pollBallotOptions(poll.options);
     if (ballotMarkup !== updatedBallot) options.innerHTML = ballotMarkup = updatedBallot;
@@ -402,19 +411,22 @@ async function votePage(id, { ownerKey, published } = {}) {
       : poll.hasVoted
         ? t("Your vote is counted ✓", "你的投票已计入 ✓")
         : `${t("Cast my vote", "提交投票")} ${icons.arrow}`;
-    document.querySelector("#vote-message").textContent = closed
+    const voteMessage = document.querySelector("#vote-message");
+    const voteMessageText = closed
       ? t("This poll has ended. You can still view the results and share its QR code until deletion.", "投票已结束。在投票被移除前，你仍可查看结果和分享二维码。")
       : poll.hasVoted
         ? t("Thanks for adding your voice. This browser has already voted.", "这个浏览器已经投过票，感谢参与。")
         : poll.resultsHidden
           ? t("Results will appear when voting closes.", "投票截止后公布结果。")
           : t("Results are visible to everyone, before and after voting.", "投票前后所有人均可查看结果。");
-    if (poll.resultsHidden)
-      document.querySelector("#results-updated").textContent =
-        t("Results will appear when voting closes.", "投票截止后公布结果。");
-    if (closed)
-      document.querySelector("#results-updated").textContent =
-        t("Final results. This poll is no longer accepting votes.", "投票已结束，以下是最终结果。");
+    if (voteMessage.textContent !== voteMessageText) voteMessage.textContent = voteMessageText;
+    // Always reset so a transient "Could not refresh" error clears on the next
+    // successful refresh.
+    document.querySelector("#results-updated").textContent = closed
+      ? t("Final results. This poll is no longer accepting votes.", "投票已结束，以下是最终结果。")
+      : poll.resultsHidden
+        ? t("Results will appear when voting closes.", "投票截止后公布结果。")
+        : t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。");
   }
   render();
   let submitting = false;
@@ -444,8 +456,27 @@ async function votePage(id, { ownerKey, published } = {}) {
   };
   mountSocial(id, false);
   let fetching = false;
+  let timer;
+  let stopped = false;
+  function stopPolling() {
+    clearInterval(timer);
+    timer = undefined;
+  }
+  function startPolling() {
+    if (stopped || timer) return;
+    timer = setInterval(refresh, 15000);
+  }
+  function onPageHide() {
+    stopPolling();
+  }
+  function onPageShow(event) {
+    if (event.persisted && !stopped) {
+      startPolling();
+      void refresh();
+    }
+  }
   async function refresh() {
-    if (document.hidden || submitting || fetching) return;
+    if (stopped || document.hidden || submitting || fetching) return;
     fetching = true;
     try {
       poll = await api(`/api/polls/${id}`);
@@ -453,8 +484,12 @@ async function votePage(id, { ownerKey, published } = {}) {
       render();
     } catch (e) {
       if (e.status === 404) {
-        clearInterval(timer);
+        stopped = true;
+        stopPolling();
         document.removeEventListener("visibilitychange", refresh);
+        window.removeEventListener("online", refresh);
+        window.removeEventListener("pagehide", onPageHide);
+        window.removeEventListener("pageshow", onPageShow);
         showError(e);
       } else
         document.querySelector("#results-updated").textContent =
@@ -463,13 +498,12 @@ async function votePage(id, { ownerKey, published } = {}) {
       fetching = false;
     }
   }
-  const timer = setInterval(refresh, 15000);
+  startPolling();
   document.addEventListener("visibilitychange", refresh);
   window.addEventListener("online", refresh);
   if (published) void refresh();
-  window.addEventListener("pagehide", () => clearInterval(timer), {
-    once: true,
-  });
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("pageshow", onPageShow);
 }
 
 function postList() {

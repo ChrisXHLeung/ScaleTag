@@ -888,3 +888,117 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "vote page polling skips unchanged DOM writes, recovers its hint, survives bfcache and stops after 404",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+    const poll = await store.create({
+      title: "Polling regression poll", description: "", signature: "Tester",
+      options: ["Yes", "No"], visibility: "unlisted", votingHours: 6, images: [],
+      location: { latitude: 0, longitude: 0 },
+    });
+    const apiPath = `/api/polls/${poll.id}`;
+    let apiRequests = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === apiPath) apiRequests++;
+    });
+    // Track the vote page's 15s refresh interval so the test can fire it on
+    // demand instead of waiting in real time.
+    await page.addInitScript(() => {
+      const setI = window.setInterval;
+      const clearI = window.clearInterval;
+      window.__pollTimers = new Map();
+      window.setInterval = function (fn, ms, ...rest) {
+        const handle = setI.call(this, fn, ms, ...rest);
+        // mountSocial also registers a 15s `refresh` (for /api/posts/:id/social);
+        // only track the vote page's own poller, which fetches /api/polls/:id.
+        if (
+          ms === 15000 &&
+          fn?.name === "refresh" &&
+          String(fn).includes("/api/polls/")
+        )
+          window.__pollTimers.set(handle, fn);
+        return handle;
+      };
+      window.clearInterval = function (handle) {
+        window.__pollTimers.delete(handle);
+        return clearI.call(this, handle);
+      };
+      window.__tickPoll = () => {
+        for (const fn of window.__pollTimers.values()) void fn();
+        return window.__pollTimers.size;
+      };
+    });
+    const tick = async () => {
+      const response = page.waitForResponse(
+        (r) => new URL(r.url()).pathname === apiPath,
+      );
+      assert.equal(await page.evaluate(() => window.__tickPoll()), 1);
+      await response;
+      await page.waitForTimeout(250);
+    };
+    const hint = "Results refresh every 15 seconds while this page is visible.";
+
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    await page.locator("#results progress").first().waitFor();
+    assert.equal(await page.locator("#total-votes").getAttribute("aria-live"), "polite");
+    assert.equal(await page.locator("#results-updated").textContent(), hint);
+
+    // 1. Unchanged data on a 15s refresh does not touch #total-votes/#results.
+    await page.evaluate(() => {
+      window.__mutations = 0;
+      const observer = new MutationObserver((records) => {
+        window.__mutations += records.length;
+      });
+      for (const selector of ["#total-votes", "#results"])
+        observer.observe(document.querySelector(selector), {
+          childList: true, subtree: true, characterData: true, attributes: true,
+        });
+    });
+    await tick();
+    await tick();
+    assert.equal(await page.evaluate(() => window.__mutations), 0);
+
+    // 2. A single failed refresh shows the error; the next success restores the hint.
+    f.setUnavailablePath(apiPath);
+    await tick();
+    await page.locator("#results-updated").getByText(/Could not refresh results/).waitFor();
+    f.setUnavailablePath(undefined);
+    await tick();
+    await page.locator("#results-updated").getByText(hint).waitFor();
+
+    // 3. pagehide(persisted) stops polling; pageshow(persisted) resumes it and refreshes.
+    await page.evaluate(() =>
+      dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })),
+    );
+    assert.equal(await page.evaluate(() => window.__pollTimers.size), 0);
+    const resumed = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === apiPath,
+    );
+    await page.evaluate(() =>
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })),
+    );
+    await resumed;
+    assert.equal(await page.evaluate(() => window.__pollTimers.size), 1);
+    await page.waitForTimeout(250);
+
+    // 4. After a 404 polling stops for good: no timer and `online` sends nothing.
+    f.advance(30 * DAY);
+    await tick();
+    await page.getByRole("heading", { name: "This page is unavailable." }).waitFor();
+    assert.equal(await page.evaluate(() => window.__pollTimers.size), 0);
+    const before = apiRequests;
+    await page.evaluate(() => {
+      dispatchEvent(new Event("online"));
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    await page.waitForTimeout(500);
+    assert.equal(apiRequests, before);
+    assert.equal(await page.evaluate(() => window.__pollTimers.size), 0);
+    assert.deepEqual(f.errors, []);
+  },
+);
