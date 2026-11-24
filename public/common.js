@@ -320,22 +320,35 @@ export function managementPasswordForm(unlock) {
   main.innerHTML = `<section class="empty-page"><form id="manage-password-form" class="form-card">
     <h1>${t("Manage this post", "管理此帖子")}</h1>
     <label for="manage-password">${t("Management password", "管理密码")}</label>
-    <input id="manage-password" type="password" autocomplete="off" maxlength="64" required>
+    <div class="manage-password-input">
+      <input id="manage-password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" required>
+      <button id="manage-password-toggle" type="button" class="button secondary small" aria-controls="manage-password">${t("Show password", "显示密码")}</button>
+    </div>
     <button class="button" type="submit">${t("Unlock", "解锁")}</button>
     <p class="form-error" role="alert" hidden></p>
   </form></section>`;
   const form = main.querySelector("#manage-password-form");
   const input = form.querySelector("input");
-  const submit = form.querySelector("button");
+  const submit = form.querySelector('[type="submit"]');
+  const toggle = form.querySelector("#manage-password-toggle");
   const error = form.querySelector(".form-error");
+  function setVisible(visible) {
+    input.type = visible ? "text" : "password";
+    toggle.textContent = visible ? t("Hide password", "隐藏密码") : t("Show password", "显示密码");
+  }
+  const mask = () => setVisible(false);
+  toggle.onclick = () => setVisible(input.type === "password");
+  window.addEventListener("pagehide", mask);
   form.onsubmit = async (event) => {
     event.preventDefault();
     if (submit.disabled) return;
-    submit.disabled = true;
+    mask();
+    submit.disabled = toggle.disabled = true;
     error.hidden = true;
     try {
       await unlock(input.value.trim());
       input.value = "";
+      window.removeEventListener("pagehide", mask);
     } catch (e) {
       error.textContent = e.status === 403
         ? t("The management password is invalid.", "管理密码不正确。")
@@ -343,7 +356,7 @@ export function managementPasswordForm(unlock) {
       error.hidden = false;
       input.select();
     } finally {
-      submit.disabled = false;
+      submit.disabled = toggle.disabled = false;
     }
   };
 }

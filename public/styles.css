@@ -12,6 +12,21 @@
   margin-top: 12px;
   text-align: start;
 }
+.manage-password-input {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.manage-password-input input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-size: 16px;
+}
+.empty-page .manage-password-input .button {
+  margin: 0;
+}
 
 .local-post-controls,
 .saved-posts li {

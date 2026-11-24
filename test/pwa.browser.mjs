@@ -747,6 +747,58 @@ test("poll readers can manually copy a public URL when clipboard access is denie
     [true, 0, publicUrl.length]);
 });
 
+test("the management password can be checked and is masked on submit and navigation", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Inspect password controls", options: ["Yes", "No"], visibility: "unlisted" });
+  const manage = `${origin}/vote/${poll.id}/manage`;
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(manage);
+  const input = page.getByLabel("Management password", { exact: true });
+  const show = page.getByRole("button", { name: "Show password", exact: true });
+  const hide = page.getByRole("button", { name: "Hide password", exact: true });
+  await show.waitFor({ timeout: 5000 });
+  assert.equal(await input.getAttribute("type"), "password");
+  assert.equal(await show.getAttribute("aria-controls"), "manage-password");
+  await input.fill("0".repeat(64));
+  const geometry = async () => input.evaluate(element => {
+    const { width, height } = element.getBoundingClientRect();
+    return { width, height };
+  });
+  const maskedSize = await geometry();
+  await show.focus();
+  await page.keyboard.press("Enter");
+  await hide.waitFor();
+  assert.equal(await input.getAttribute("type"), "text");
+  assert.equal(await input.inputValue(), "0".repeat(64));
+  assert.deepEqual(await geometry(), maskedSize);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  assert.equal(await hide.evaluate(button => document.activeElement === button), true);
+  await hide.click();
+  assert.equal(await input.getAttribute("type"), "password");
+  await show.click();
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+  assert.equal(await input.getAttribute("type"), "password");
+  await show.click();
+  let release;
+  const delayed = new Promise(resolve => { release = resolve; });
+  await page.route(`${origin}/api/polls/${poll.id}/manage`, async route => {
+    await delayed;
+    await route.continue();
+  });
+  try {
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    assert.equal(await show.isDisabled(), true);
+    assert.equal(await input.getAttribute("type"), "password");
+  } finally { release(); }
+  await page.getByText("The management password is invalid.", { exact: true }).waitFor();
+  assert.equal(await input.getAttribute("type"), "password");
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await input.fill(poll.manageKey);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  await page.getByRole("heading", { name: "Manage this poll", exact: true }).waitFor();
+  assert.equal(await input.count(), 0);
+});
+
 test("a poll owner can share the public URL directly from the management page", async (t) => {
   const { page, context, origin, store } = await fixture(t);
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });

@@ -561,6 +561,7 @@ main {
 }
 input[type="text"],
 input:not([type]),
+.manage-password-input input,
 textarea {
   display: block;
   width: 100%;
