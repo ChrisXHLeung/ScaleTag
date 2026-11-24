@@ -506,6 +506,15 @@ export const TRANSLATIONS = {
     de: "Suche leeren",
     it: "Cancella ricerca",
   },
+  "Clear all filters": {
+    ja: "すべての絞り込みを解除",
+    ko: "모든 필터 지우기",
+    fr: "Effacer tous les filtres",
+    pt: "Limpar todos os filtros",
+    es: "Borrar todos los filtros",
+    de: "Alle Filter zurücksetzen",
+    it: "Cancella tutti i filtri",
+  },
   "No posts match your search.": {
     ja: "検索条件に一致する投稿はありません。",
     ko: "검색 조건에 맞는 게시물이 없습니다.",

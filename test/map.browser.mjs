@@ -106,6 +106,44 @@ async function mapReady(page) {
   );
 }
 
+test("empty list and map results can clear filters without changing the view", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const poll = await store.create(input);
+  const view = mode => page.getByRole("button", { name: mode, exact: true });
+  const reset = page.getByRole("button", { name: "Clear all filters", exact: true });
+  const search = page.locator("#post-query");
+  const apply = async () => {
+    await page.locator("#content-type").selectOption("task");
+    await page.getByRole("button", { name: "Ended", exact: true }).click();
+    await search.fill("Nonmatching keyword");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+  };
+  await page.goto(`${origin}/PostList`);
+  await page.locator(`#poll-list a[href="/vote/${poll.id}"]`).waitFor();
+  assert.equal(await reset.count(), 0);
+  await page.locator("#nearby").click();
+  await page.locator("#nearby[aria-pressed=true]").waitFor();
+  await page.locator("#nearby-radius").selectOption("10");
+  await apply();
+  await page.getByText("No posts match your search.", { exact: true }).waitFor();
+  await reset.click({ timeout: 5000 });
+  await page.locator(`#poll-list a[href="/vote/${poll.id}"]`).waitFor();
+  assert.equal(await search.inputValue(), "");
+  assert.equal(await page.locator("#content-type").inputValue(), "all");
+  assert.equal(await page.locator("#nearby").getAttribute("aria-pressed"), "false");
+  assert.equal(await page.locator("#nearby-radius").inputValue(), "100");
+  assert.equal(await view("List").getAttribute("aria-pressed"), "true");
+
+  await apply();
+  await view("Map").click();
+  await page.getByText("No mapped posts match these filters.", { exact: false }).waitFor();
+  await reset.click({ timeout: 5000 });
+  await page.locator(`#mapped-poll-links a[href="/vote/${poll.id}"]`).waitFor({ state: "attached" });
+  assert.equal(await view("Map").getAttribute("aria-pressed"), "true");
+  assert.equal(await page.getByRole("button", { name: "All posts", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(page.url(), `${origin}/PostList`);
+});
+
 test("map is opt-in, renders real MapLibre markers, filters and provides accessible poll links", async (t) => {
   const f = await fixture(t);
   const poll = await f.store.create(f.input);
