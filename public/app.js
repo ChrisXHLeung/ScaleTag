@@ -551,6 +551,7 @@ function postList() {
     cursor,
     loaded = 0,
     request = 0,
+    listReturnRequest,
     locating = false,
     locationRequest = 0,
     mode = "list",
@@ -575,6 +576,7 @@ function postList() {
   const mapClear = document.querySelector("#clear-map-filters");
   const mapCount = document.querySelector("#map-count");
   const typeSelect = document.querySelector("#content-type");
+  const list = document.querySelector("#poll-list");
   const pickupTime = document.querySelector("#pickup-time");
   const pickupFilter = document.querySelector("#pickup-time-filter");
   const statusButtons = [...document.querySelectorAll("[data-filter]")];
@@ -593,17 +595,39 @@ function postList() {
     if (pickupFilter.hidden) pickupTime.value = "";
   }
 
+  function replaceDiscoveryHistory(state) {
+    try {
+      history.replaceState(state, "");
+    } catch {
+      // Browsers can limit history writes. Browsing still works without restoration.
+    }
+  }
+
   function rememberDiscovery() {
     const existing = history.state;
     const previous = existing?.scaleTagPostList;
     const pickup = pickupOption();
     if (previous?.mode === mode && previous.type === contentType && previous.status === status && previous.pickup === pickup.pickup) return;
-    try {
-      history.replaceState({ ...existing, scaleTagPostList: { mode, type: contentType, status, ...pickup } }, "");
-    } catch {
-      // Browsers can limit history writes. Browsing still works without restoration.
-    }
+    replaceDiscoveryHistory({ ...existing, scaleTagPostList: { mode, type: contentType, status, ...pickup } });
   }
+
+  function takeListPosition() {
+    const { scaleTagReturnToPost: position, ...state } = history.state ?? {};
+    if (position) replaceDiscoveryHistory(state);
+    return position;
+  }
+
+  list.addEventListener("click", event => {
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest("a.poll-list-card");
+    if (!link || link.target || link.origin !== window.location.origin) return;
+    if (query || location) {
+      takeListPosition();
+      return;
+    }
+    const index = Array.prototype.indexOf.call(list.children, link);
+    replaceDiscoveryHistory({ ...history.state, scaleTagReturnToPost: { path: link.pathname, index } });
+  });
 
   function updateListCaption() {
     document.querySelector("#list-caption").textContent = mode === "map"
@@ -787,6 +811,7 @@ function postList() {
   window.addEventListener("pageshow", (event) => {
     if (!event.persisted) return;
     suspended = false;
+    takeListPosition();
     if (mode === "map") {
       if (!document.hidden) loadMap(!mapView || mapNeedsFit, { background: true });
     } else if (pickupTime.value) load(true, true);
@@ -890,13 +915,17 @@ function postList() {
     }
     if (Number.isFinite(earliest)) listHoldTimer = setTimeout(() => refreshHoldBadges(list), earliest - now);
   }
-  async function load(reset = true, background = false, visibleCount = loaded) {
+  async function load(reset = true, background = false, visibleCount = loaded, returnTo) {
     if (mode === "map") return loadMap();
+    if (background && listReturnRequest === request) return;
     clearTimeout(listPickupTimer);
     const current = ++request;
-    const list = document.querySelector("#poll-list");
+    if (returnTo) listReturnRequest = current;
     const more = document.querySelector("#load-more");
     const desiredCount = background ? Math.max(20, visibleCount) : 20;
+    const returnId = returnTo?.path.split("/").pop();
+    // Allow one extra page in case new posts pushed the result past its previous page.
+    let returnPages = returnTo ? Math.floor(returnTo.index / 20) + 2 : 0;
     let deadline = reset ? Infinity : listPickupDeadline;
     let next = reset ? undefined : cursor;
     document.querySelector("#list-error").hidden = true;
@@ -911,14 +940,23 @@ function postList() {
       const filters = { status, type: contentType, query, ...nearbyOptions(), ...pickupOption() };
       do {
         const started = Date.now();
-        const data = await api("/api/posts/search", { ...filters, ...(next ? { cursor: next } : {}) });
+        let data;
+        try {
+          data = await api("/api/posts/search", { ...filters, ...(next ? { cursor: next } : {}) });
+        } catch (error) {
+          if (!returnTo || !next) throw error;
+          // Keep the results already fetched and let the reader retry Load more.
+          break;
+        }
         if (current !== request) return;
         if (Number.isSafeInteger(data.refreshAfterMs)) deadline = Math.min(deadline, started + data.refreshAfterMs);
         if (!reset && deadline <= Date.now()) return load(true, true, loaded + 20);
         posts.push(...(filters.pickup ? data.polls.filter(post =>
           pickupDeadline(post, filters.pickup) > post.serverTime + Date.now() - started) : data.polls));
         next = data.nextCursor;
-      } while (background && next && posts.length < desiredCount);
+      } while (next && ((background && posts.length < desiredCount)
+        || (returnTo && --returnPages > 0 && !posts.some(post => post.id === returnId))));
+      if (current !== request) return;
       const focused = background && list.contains(document.activeElement) ? document.activeElement : null;
       if (reset) {
         loaded = 0;
@@ -948,6 +986,11 @@ function postList() {
         t(`${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`, `显示 ${count(loaded)} 条帖子`);
       more.hidden = !cursor;
       if (focused) ([...list.querySelectorAll("a")].find(link => link.getAttribute("href") === focused.getAttribute("href")) ?? pickupTime).focus({ preventScroll: true });
+      if (returnTo && document.activeElement === document.body) {
+        const link = [...list.querySelectorAll("a.poll-list-card")].find(item => item.pathname === returnTo.path);
+        link?.focus({ preventScroll: true });
+        link?.scrollIntoView({ block: "nearest", behavior: "instant" });
+      }
       listPickupDeadline = deadline;
       if (pickupTime.value && !document.hidden && !suspended && Number.isFinite(deadline)) {
         listPickupTimer = setTimeout(() => load(true, true), Math.max(100, deadline - Date.now()));
@@ -961,6 +1004,7 @@ function postList() {
         list.innerHTML =
           `<div class="list-empty">${t("Could not load posts. Select a filter to try again.", "无法加载帖子，请选择筛选条件重试。")}</div>`;
     } finally {
+      if (listReturnRequest === current) listReturnRequest = undefined;
       if (current === request) more.disabled = false;
     }
   }
@@ -1025,6 +1069,7 @@ function postList() {
   document.querySelector("#load-more").onclick = () => load(false);
   const returned = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
   const prior = returned ? history.state?.scaleTagPostList : undefined;
+  const position = takeListPosition();
   if (prior) {
     if ([...typeSelect.options].some(option => option.value === prior.type)) {
       contentType = typeSelect.value = prior.type;
@@ -1038,7 +1083,10 @@ function postList() {
     }
   }
   rememberDiscovery();
-  load();
+  const returnTo = returned && typeof position?.path === "string"
+    && /^\/(vote|task|sale)\/[a-f0-9]{24}$/.test(position.path)
+    && Number.isSafeInteger(position.index) && position.index >= 0 ? position : undefined;
+  load(true, false, 0, returnTo);
 }
 
 function privacy() {

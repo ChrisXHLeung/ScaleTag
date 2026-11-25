@@ -415,6 +415,69 @@ test("a non-cached Back navigation restores the discovery view and public filter
   assert.equal(await page.locator("#content-type").inputValue(), "all");
 });
 
+test("Back restores the activated public result after loading more posts", async (t) => {
+  const { page, origin, store, input, advance } = await fixture(t);
+  const viewport = { width: 390, height: 720 };
+  await page.setViewportSize(viewport);
+  const post = await store.create({ ...input, title: "Previously opened post" });
+  for (let index = 0; index < 24; index++) {
+    advance(1000);
+    await store.create({ ...input, title: `Public result ${index}` });
+  }
+  const path = `/vote/${post.id}`;
+  await page.goto(`${origin}/PostList`);
+  const result = page.locator(`#poll-list a[href="${path}"]`);
+  const more = page.getByRole("button", { name: "Load more posts", exact: true });
+  await more.waitFor();
+  assert.equal(await result.count(), 0);
+  await more.click();
+  await result.press("Enter");
+  await page.getByRole("heading", { name: post.title, exact: true }).waitFor();
+
+  await page.goBack();
+  await result.waitFor({ timeout: 5000 });
+  assert.equal(await result.evaluate(link => document.activeElement === link), true);
+  const bounds = await result.boundingBox();
+  assert.ok(bounds.y < viewport.height && bounds.y + bounds.height > 0);
+  assert.equal(await page.locator("#post-query").inputValue(), "");
+  assert.equal(await page.locator("#nearby").getAttribute("aria-pressed"), "false");
+  assert.equal(page.url(), `${origin}/PostList`);
+
+  await page.reload();
+  await more.waitFor();
+  assert.equal(await result.count(), 0);
+
+  await more.click();
+  await result.press("Enter");
+  await page.getByRole("heading", { name: post.title, exact: true }).waitFor();
+  let blockNextPage = true;
+  await page.route("**/api/posts/search", route => {
+    if (blockNextPage && route.request().postDataJSON().cursor) {
+      blockNextPage = false;
+      return route.fulfill({ status: 503, json: {} });
+    }
+    return route.continue();
+  });
+  await page.goBack();
+  await more.waitFor();
+  assert.equal(blockNextPage, false);
+  assert.equal(await page.locator("#poll-list a.poll-list-card").count(), 20);
+  await more.click();
+  await result.waitFor();
+
+  const search = page.locator("#post-query");
+  await search.fill(post.title);
+  await search.press("Enter");
+  await page.getByText("1 post shown", { exact: true }).waitFor();
+  await result.press("Enter");
+  await page.getByRole("heading", { name: post.title, exact: true }).waitFor();
+  const restored = page.waitForRequest(`${origin}/api/posts/search`);
+  await page.goBack();
+  assert.deepEqual((await restored).postDataJSON(), { status: "all", type: "all", query: "" });
+  await more.waitFor();
+  assert.equal(await result.count(), 0);
+});
+
 test("Back restores the upcoming pickup selection while reload resets it", async (t) => {
   const { page, origin, store, input } = await fixture(t);
   const now = store.clock();
