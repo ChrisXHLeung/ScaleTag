@@ -778,6 +778,17 @@ test("Saved links can be opened offline from the fallback and refresh on reconne
   await context.setOffline(false);
   await row.getByText("Open for votes", { exact: true }).waitFor();
   assert.equal(page.url(), `${origin}/saved`);
+
+  const replyPath = `/task/${"a".repeat(24)}#reply-${"b".repeat(24)}`;
+  await page.evaluate(path => localStorage.setItem("scaletag-saved-posts", JSON.stringify([
+    { path, title: "Saved task reply" },
+  ])), replyPath);
+  await context.setOffline(true);
+  await page.goto(`${origin}/saved?lang=ja`);
+  const reply = page.locator(`.saved-posts a[href="${replyPath}"]`);
+  await reply.waitFor();
+  assert.match(await reply.textContent(), /公開返信/u);
+  assert.equal(await page.locator(".saved-post-status").count(), 0);
 });
 
 test("a server outage can use cached static assets for the offline Saved page", async (t) => {

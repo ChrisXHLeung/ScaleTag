@@ -4,6 +4,8 @@ import { api } from "/common.js";
 const savedKey = "scaletag-saved-posts";
 const savedLimit = 100;
 const postPath = /^\/(?:vote|task|sale)\/[a-f0-9]{24}(?:\/manage)?$/;
+const replyPath = /^\/task\/[a-f0-9]{24}#reply-[a-f0-9]{24}$/;
+const isSavedPath = path => postPath.test(path) || replyPath.test(path);
 
 function read(key, fallback) {
   try {
@@ -27,7 +29,7 @@ function savedPosts() {
   const items = read(savedKey, []);
   if (!Array.isArray(items)) return [];
   return items.filter((item) => typeof item?.path === "string" &&
-    postPath.test(item.path) && typeof item.title === "string").slice(0, savedLimit);
+    isSavedPath(item.path) && typeof item.title === "string").slice(0, savedLimit);
 }
 
 function savedLinksChanged(event) {
@@ -269,8 +271,8 @@ export function bindTextDraft(form, kind, selectors, options) {
   };
 }
 
-export function mountSavedPost(host, { path, title }) {
-  if (!host || !postPath.test(path)) return;
+export function mountSavedPost(host, { path, title, sync = true }) {
+  if (!host || !isSavedPath(path)) return;
   const control = button("");
   control.dataset.savedPostPath = path;
   const status = notice("");
@@ -285,18 +287,21 @@ export function mountSavedPost(host, { path, title }) {
     syncSavedButtons();
   });
   host.append(control, status);
-  syncSavedButtons();
+  if (sync) syncSavedButtons();
 }
 
-function syncSavedButtons() {
+export function syncSavedButtons(host = document) {
   const paths = new Set(savedPosts().map(item => item.path));
-  for (const control of document.querySelectorAll("button[data-saved-post-path]")) {
+  for (const control of host.querySelectorAll("button[data-saved-post-path]")) {
     const path = control.dataset.savedPostPath;
     const selected = paths.has(path);
-    control.setAttribute("aria-pressed", String(selected));
-    control.textContent = selected
+    const pressed = String(selected);
+    if (control.getAttribute("aria-pressed") !== pressed) control.setAttribute("aria-pressed", pressed);
+    const label = selected
       ? t("Remove from saved links", "从已保存链接移除")
-      : path.endsWith("/manage") ? t("Save management link", "保存管理网址") : t("Save post", "保存帖子");
+      : path.endsWith("/manage") ? t("Save management link", "保存管理网址")
+        : replyPath.test(path) ? t("Save reply link", "收藏回复链接") : t("Save post", "保存帖子");
+    if (control.textContent !== label) control.textContent = label;
   }
 }
 
@@ -495,7 +500,8 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       link.textContent = title;
       const management = path.endsWith("/manage");
       if (management) link.append(` · ${t("Management URL", "管理网址")}`);
-      const [, kind, id] = path.split("/");
+      if (replyPath.test(path)) link.append(` · ${t("Public reply", "公开回复")}`);
+      const [, kind, id] = path.split("#", 1)[0].split("/");
       const type = kind === "vote" ? "poll" : kind;
       row.dataset.postType = type;
       row.dataset.searchTitle = normalize(title);

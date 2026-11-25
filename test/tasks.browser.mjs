@@ -252,6 +252,37 @@ test("a public task reply link opens and focuses the same reply in another tab",
   assert.equal(await other.getByText("private-helper@example.com", { exact: true }).count(), 0);
   assert.ok(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
+  await other.getByRole("button", { name: "Save post", exact: true }).click();
+  await other.getByRole("button", { name: "Remove from saved links", pressed: true }).waitFor();
+  await card.getByRole("button", { name: "Save reply link", exact: true }).click({ timeout: 5000 });
+  await card.getByRole("button", { name: "Remove from saved links", pressed: true }).waitFor();
+  await f.page.bringToFront();
+  await f.page.locator(shared.hash).getByRole("button", { name: "Remove from saved links", pressed: true }).waitFor();
+  await other.bringToFront();
+  const bookmarks = await other.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts")));
+  assert.deepEqual(bookmarks.map(item => item.path), [`/task/${task.id}${shared.hash}`, `/task/${task.id}`]);
+  assert.match(bookmarks[0].title, /Public helper/u);
+  assert.doesNotMatch(JSON.stringify(bookmarks), /private-helper@example\.com|Available on Saturday\./u);
+  await other.evaluate(({ id, hash }) => {
+    const key = "scaletag-saved-posts";
+    localStorage.setItem(key, JSON.stringify([
+      ...JSON.parse(localStorage.getItem(key)),
+      { path: `/task/${id}/manage${hash}`, title: "Invalid private reply" },
+      { path: `/vote/${id}${hash}`, title: "Invalid poll reply" },
+    ]));
+  }, { id: task.id, hash: shared.hash });
+  const statusLookup = other.waitForRequest(`${f.origin}/api/posts/statuses`);
+  await other.goto(`${f.origin}/saved`);
+  assert.deepEqual((await statusLookup).postDataJSON(), { posts: [{ type: "task", id: task.id }] });
+  const replyBookmark = other.locator(`.saved-posts a[href="/task/${task.id}${shared.hash}"]`);
+  await replyBookmark.waitFor();
+  assert.match(await replyBookmark.textContent(), /Public reply/u);
+  assert.equal(await other.locator(".saved-posts li").count(), 2);
+  await replyBookmark.click();
+  await card.waitFor();
+  assert.ok(await card.evaluate(reply => document.activeElement === reply));
+  assert.equal(other.url(), copied);
+
   f.advance(60000);
   await f.page.bringToFront();
   await f.page.locator("#reply-email").fill("private-helper@example.com");
@@ -261,9 +292,11 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await secondReply.waitFor();
   assert.equal(await view.getAttribute("href"), `#${await secondReply.getAttribute("id")}`);
   await other.bringToFront();
+  const savedReply = card.getByRole("button", { name: "Remove from saved links", pressed: true });
+  await savedReply.focus();
   await other.evaluate(() => window.dispatchEvent(new Event("online")));
   await other.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
-  assert.ok(await card.evaluate(reply => document.activeElement === reply));
+  assert.ok(await savedReply.evaluate(button => document.activeElement === button));
   await order.waitFor({ timeout: 5000 });
   const replies = other.locator("#reply-list .reply-message");
   assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);

@@ -394,5 +394,6 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
       if (manage && (assignmentChanged || data.replies?.length !== privateReplies.length))
         refreshPrivateReplies();
     },
+    task.title,
   );
 }

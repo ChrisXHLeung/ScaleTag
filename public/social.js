@@ -1,8 +1,9 @@
 import { api, escape, date, count, toast, t, showFormError, bindLinkCopy, linkCopyFallback } from "/common.js";
 import { localizedPath } from "/locale.js";
+import { mountSavedPost, syncSavedButtons } from "/local-posts.js";
 import { encryptReplyContact } from "/task-crypto.js";
 
-export function mountSocial(id, allowReplies, onUnavailable, onState) {
+export function mountSocial(id, allowReplies, onUnavailable, onState, taskTitle) {
   const host = document.querySelector("#social");
   // Name and message are public. Phone/email are private to whoever holds the
   // task's management link; legacy tasks without a link collect no contacts and accept no replies.
@@ -70,21 +71,35 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   function renderReplies(replies) {
     if (replyOrder) replyOrder.parentElement.hidden = replies.length < 2;
     const ordered = replyOrder?.value === "newest" ? [...replies].reverse() : replies;
+    const replyTitles = new Map();
     const html = ordered.length ? ordered.map(reply => {
       const target = linkReplies && /^[a-f0-9]{24}$/.test(reply.id) ? `reply-${reply.id}` : "";
       const time = date(reply.createdAt);
+      if (target) replyTitles.set(target, `${taskTitle} · ${reply.name} · ${time}`);
       const byline = target
         ? `<a class="reply-permalink" href="#${target}"><span class="sr-only">${t("Link to this reply", "链接到此回复")} </span>${time}</a>`
         : `<span>${time}</span>`;
-      return `<article class="reply-card"${target ? ` id="${target}" tabindex="-1"` : ""}><div class="reply-byline"><strong>${escape(reply.name)}</strong>${byline}</div><p class="reply-message">${escape(reply.message)}</p></article>`;
+      const saveControl = target ? '<div class="local-post-controls reply-actions"></div>' : "";
+      return `<article class="reply-card"${target ? ` id="${target}" tabindex="-1"` : ""}><div class="reply-byline"><strong>${escape(reply.name)}</strong>${byline}</div><p class="reply-message">${escape(reply.message)}</p>${saveControl}</article>`;
     }).join("") : `<p class="field-hint">${t("No replies yet. Start the conversation.", "还没有回复，来说两句吧。")}</p>`;
     if (html !== lastRepliesHtml) {
       const active = document.activeElement;
       const focused = replyList.contains(active) ? active.closest(".reply-card[id]") : null;
       replyList.innerHTML = lastRepliesHtml = html;
+      if (linkReplies) {
+        for (const [target, title] of replyTitles) {
+          mountSavedPost(document.getElementById(target)?.querySelector(".reply-actions"), {
+            path: `${publicTaskPath}#${target}`,
+            title,
+            sync: false,
+          });
+        }
+        syncSavedButtons(replyList);
+      }
       if (focused) {
         const updated = document.getElementById(focused.id);
-        (active === focused ? updated : updated?.querySelector(".reply-permalink"))?.focus({ preventScroll: true });
+        const selector = active.matches("button[data-saved-post-path]") ? "button[data-saved-post-path]" : ".reply-permalink";
+        (active === focused ? updated : updated?.querySelector(selector))?.focus({ preventScroll: true });
       }
     }
     if (linkReplies) focusLinkedReply();
