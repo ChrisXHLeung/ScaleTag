@@ -687,6 +687,56 @@ test("saved links can be copied directly and manually when clipboard access is d
   assert.equal(new URL(page.url()).pathname, "/saved");
 });
 
+test("Saved link removal can be undone by keyboard without replacing changes from another tab", async (t) => {
+  const { page, context, origin } = await fixture(t);
+  const entries = [
+    { path: `/vote/${"a".repeat(24)}`, title: "First vote" },
+    { path: `/task/${"b".repeat(24)}/manage`, title: "Saved task" },
+    { path: `/sale/${"c".repeat(24)}`, title: "Last giveaway" },
+  ];
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), entries);
+  await page.goto(`${origin}/saved`);
+  const row = page.locator(".saved-posts li").filter({ hasText: "Saved task" });
+  const remove = row.getByRole("button", { name: "Remove", exact: true });
+  const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+  await remove.press("Enter");
+  await undo.waitFor({ timeout: 5000 });
+  const next = page.getByRole("link", { name: "Last giveaway", exact: true });
+  assert.equal(await next.evaluate(link => link === document.activeElement), true);
+  assert.equal(await row.count(), 0);
+
+  const extra = { path: `/vote/${"d".repeat(24)}`, title: "Saved from another tab" };
+  const other = await context.newPage();
+  await other.goto(origin);
+  await other.evaluate(item => new Promise(acquired => {
+    const key = "scaletag-saved-posts";
+    void navigator.locks.request(key, async () => {
+      const before = JSON.parse(localStorage.getItem(key));
+      await new Promise(release => {
+        window.releaseSavedWrite = release;
+        acquired();
+      });
+      localStorage.setItem(key, JSON.stringify([item, ...before]));
+    });
+  }), extra);
+  await page.bringToFront();
+  try {
+    await undo.press("Enter");
+    await page.waitForFunction(async () => (
+      await navigator.locks.query()
+    ).pending.some(lock => lock.name === "scaletag-saved-posts"), undefined, { timeout: 5000 });
+  } finally {
+    await other.evaluate(() => window.releaseSavedWrite());
+  }
+  await page.getByText("Saved link restored.", { exact: true }).waitFor();
+  assert.equal(await undo.isVisible(), false);
+  assert.equal(await row.getByRole("link").evaluate(link => link === document.activeElement), true);
+  assert.deepEqual(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))),
+    [extra, ...entries],
+  );
+});
+
 test("Saved links can be opened offline from the fallback and refresh on reconnect", async (t) => {
   const { store, page, context, origin } = await fixture(t);
   const poll = await store.create({ title: "Local garden vote", options: ["Yes", "No"] });
@@ -712,6 +762,13 @@ test("Saved links can be opened offline from the fallback and refresh on reconne
   await row.getByRole("button", { name: "Copy management URL", exact: true }).click({ timeout: 5000 });
   await row.getByText("Link copied.", { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${origin}${path}`);
+  await row.getByRole("button", { name: "Remove", exact: true }).press("Enter");
+  await page.getByText("You have no saved links.", { exact: true }).waitFor();
+  const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+  assert.equal(await undo.evaluate(button => button === document.activeElement), true);
+  await undo.press("Enter");
+  await row.getByRole("link").waitFor();
+  assert.equal(await row.getByRole("link").getAttribute("href"), path);
   assert.deepEqual(requests, []);
   assert.deepEqual(await cachedPaths(page), [...STATIC_ASSETS].sort());
   await context.setOffline(false);

@@ -71,7 +71,8 @@
   min-width: 0;
 }
 
-.saved-copy-status:empty {
+.saved-copy-status:empty,
+.saved-recovery-status:empty {
   margin: 0;
 }
 

@@ -2,6 +2,7 @@ import { localizedPath, t } from "/locale.js";
 import { api } from "/common.js";
 
 const savedKey = "scaletag-saved-posts";
+const savedLimit = 100;
 const postPath = /^\/(?:vote|task|sale)\/[a-f0-9]{24}(?:\/manage)?$/;
 
 function read(key, fallback) {
@@ -26,7 +27,7 @@ function savedPosts() {
   const items = read(savedKey, []);
   if (!Array.isArray(items)) return [];
   return items.filter((item) => typeof item?.path === "string" &&
-    postPath.test(item.path) && typeof item.title === "string").slice(0, 100);
+    postPath.test(item.path) && typeof item.title === "string").slice(0, savedLimit);
 }
 
 function savedLinksChanged(event) {
@@ -63,8 +64,8 @@ function readDraft(key) {
   }
 }
 
-async function withDraftLock(key, operation) {
-  // Use one lock per origin and post type where the browser supports Web Locks.
+async function withLocalLock(key, operation) {
+  // Serialize updates to the same storage key across tabs when Web Locks is available.
   if (navigator.locks) return navigator.locks.request(key, operation);
   return operation();
 }
@@ -115,7 +116,7 @@ export function mountDraftCopy(host, getPost) {
       .map(([selector, name]) => [selector, post[name]]));
     const choices = post.type === "poll" ? post.options.map(({ label }) => label) : undefined;
     try {
-      const saved = await withDraftLock(key, () => {
+      const saved = await withLocalLock(key, () => {
         if (readDraft(key).stored === stored) return write(key, { fields, choices });
         explain(t("The draft changed in another tab. Try again.", "草稿已在其他标签页中修改，请重试。"));
       });
@@ -183,7 +184,7 @@ export function bindTextDraft(form, kind, selectors, options) {
   }
 
   function run(operation) {
-    return withDraftLock(key, () => {
+    return withLocalLock(key, () => {
       if (form.isConnected) return operation();
     }).catch(() => { status.textContent = unavailable(); });
   }
@@ -274,15 +275,15 @@ export function mountSavedPost(host, { path, title }) {
   control.dataset.savedPostPath = path;
   const status = notice("");
   status.hidden = true;
-  control.onclick = () => {
+  control.onclick = () => withLocalLock(savedKey, () => {
     const items = savedPosts();
     const index = items.findIndex((item) => item.path === path);
     if (index >= 0) items.splice(index, 1);
     else items.unshift({ path, title });
-    status.hidden = write(savedKey, items.slice(0, 100));
+    status.hidden = write(savedKey, items.slice(0, savedLimit));
     status.textContent = status.hidden ? "" : unavailable();
     syncSavedButtons();
-  };
+  });
   host.append(control, status);
   syncSavedButtons();
 }
@@ -311,6 +312,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   page.className = "list-page";
   const heading = document.createElement("h1");
   heading.textContent = t("Saved links", "已保存链接");
+  heading.tabIndex = -1;
   const description = notice(t("These links stay in this browser. Management passwords are not saved here.", "这些链接仅保存在此浏览器。管理密码不会保存在这里。"));
   const filters = document.createElement("div");
   filters.className = "post-search saved-filters";
@@ -340,6 +342,14 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   const statusFilter = filters.querySelector("#saved-status-filter");
   const clear = button(t("Clear all filters", "清除所有筛选"));
   filters.append(clear);
+  const recovery = document.createElement("div");
+  recovery.className = "local-post-controls";
+  const recoveryStatus = notice("");
+  recoveryStatus.classList.add("saved-recovery-status");
+  const undo = button(t("Undo removal", "撤销移除"));
+  undo.hidden = true;
+  recovery.append(recoveryStatus, undo);
+  let lastRemoval;
   const list = document.createElement("ul");
   list.className = "saved-posts";
   const noBookmarks = t("You have no saved links.", "暂无已保存链接。");
@@ -348,7 +358,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   empty.classList.add("saved-filter-message");
   page.append(heading, description);
   if (offline) page.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
-  page.append(filters, list, empty);
+  page.append(filters, recovery, list, empty);
   host.replaceChildren(page);
 
   const normalize = value => value.normalize("NFKC").toLowerCase().trim();
@@ -380,6 +390,31 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     search.focus();
     applyFilters();
   };
+  undo.onclick = () => withLocalLock(savedKey, () => {
+    if (!lastRemoval) return;
+    const { path, title, previousPath, nextPath } = lastRemoval;
+    const items = savedPosts();
+    if (!items.some(item => item.path === path)) {
+      if (items.length >= savedLimit) {
+        recoveryStatus.textContent = t("Could not restore the link because this browser’s saved links are full.", "此浏览器的收藏已满，暂时无法恢复链接。");
+        return;
+      }
+      const next = items.findIndex(item => item.path === nextPath);
+      const previous = items.findIndex(item => item.path === previousPath);
+      const position = next >= 0 ? next : previous >= 0 ? previous + 1 : items.length;
+      items.splice(position, 0, { path, title });
+      if (!write(savedKey, items)) {
+        recoveryStatus.textContent = unavailable();
+        return;
+      }
+    }
+    lastRemoval = undefined;
+    undo.hidden = true;
+    recoveryStatus.textContent = t("Saved link restored.", "已恢复保存的链接。");
+    render();
+    const link = list.querySelector(`li:not([hidden]) a[href="${path}"]`);
+    (link ?? statusFilter ?? search).focus();
+  });
 
   const labels = new Map([
     ["poll_open", t("Open for votes", "投票进行中")],
@@ -507,9 +542,29 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         }
       };
       const remove = button(t("Remove", "移除"));
-      remove.onclick = () => {
-        if (!write(savedKey, savedPosts().filter(item => item.path !== path))) {
+      remove.onclick = () => withLocalLock(savedKey, () => {
+        const items = savedPosts();
+        const index = items.findIndex(item => item.path === path);
+        if (index < 0) {
+          render();
+          (filters.hidden ? heading : search).focus();
+          return;
+        }
+        if (!write(savedKey, items.filter(item => item.path !== path))) {
           description.textContent = unavailable();
+          return;
+        }
+        lastRemoval = {
+          path,
+          title: items.findLast(item => item.path === path).title,
+          previousPath: items[index - 1]?.path,
+          nextPath: items.slice(index + 1).find(item => item.path !== path)?.path,
+        };
+        recoveryStatus.textContent = t("Saved link removed.", "已移除保存的链接。");
+        undo.hidden = false;
+        if (!row.isConnected) {
+          render();
+          undo.focus();
           return;
         }
         const lookup = lookups.get(tag);
@@ -518,9 +573,13 @@ export function renderSavedPosts(host, { offline = false } = {}) {
           if (!lookup.labels.size) lookups.delete(tag);
         }
         if (!lookups.size) cancelStatusRefresh();
+        const visible = [...list.children].filter(item => !item.hidden);
+        const position = visible.indexOf(row);
+        const neighbor = visible[position + 1] ?? visible[position - 1];
         row.remove();
         applyFilters();
-      };
+        (neighbor?.querySelector("a") ?? undo).focus();
+      });
       controls.append(copy, remove);
       details.append(feedback);
       row.append(details, controls, fallback);
