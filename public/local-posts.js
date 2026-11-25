@@ -325,8 +325,19 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         <option value="sale">${t("Free Giveaways", "闲置赠予")}</option>
       </select>
     </div>`;
+  if (!offline) filters.insertAdjacentHTML("beforeend", `
+    <div class="content-filter">
+      <label for="saved-status-filter">${t("Link status", "链接状态")}</label>
+      <select id="saved-status-filter">
+        <option value="all">${t("All link statuses", "全部链接状态")}</option>
+        <option value="available">${t("Post link available", "帖子链接可用")}</option>
+        <option value="unavailable">${t("Post link unavailable", "帖子链接不可用")}</option>
+        <option value="unverified">${t("Status not verified", "状态尚未核验")}</option>
+      </select>
+    </div>`);
   const search = filters.querySelector("input");
-  const typeFilter = filters.querySelector("select");
+  const typeFilter = filters.querySelector("#saved-type-filter");
+  const statusFilter = filters.querySelector("#saved-status-filter");
   const clear = button(t("Clear all filters", "清除所有筛选"));
   filters.append(clear);
   const list = document.createElement("ul");
@@ -344,21 +355,28 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   function applyFilters() {
     const query = normalize(search.value);
     const type = typeFilter.value;
+    const status = statusFilter?.value ?? "all";
+    const focusedRow = document.activeElement?.closest(".saved-posts li");
     let matched = false;
     for (const row of list.children) {
-      row.hidden = (type !== "all" && type !== row.dataset.postType) || !row.dataset.searchTitle.includes(query);
+      row.hidden = (type !== "all" && type !== row.dataset.postType)
+        || (status !== "all" && status !== row.dataset.linkStatus)
+        || !row.dataset.searchTitle.includes(query);
       matched ||= !row.hidden;
     }
+    if (focusedRow?.hidden && list.contains(focusedRow)) statusFilter?.focus();
     filters.hidden = !list.childElementCount;
-    clear.hidden = !search.value && type === "all";
+    clear.hidden = !search.value && type === "all" && status === "all";
     const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
     if (empty.textContent !== message) empty.textContent = message;
   }
   search.oninput = applyFilters;
   typeFilter.onchange = applyFilters;
+  if (statusFilter) statusFilter.onchange = applyFilters;
   clear.onclick = () => {
     search.value = "";
     typeFilter.value = "all";
+    if (statusFilter) statusFilter.value = "all";
     search.focus();
     applyFilters();
   };
@@ -411,14 +429,21 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         hadError = true;
         // An unavailable connection does not change the saved links.
       }
-      if (!signal.aborted) batch.forEach((lookup, index) => {
-        for (const output of lookup.labels) output.textContent = labels.get(statuses[index]) ?? failed;
+      if (signal.aborted) return;
+      batch.forEach((lookup, index) => {
+        const status = statuses[index];
+        const label = labels.get(status);
+        const linkStatus = !label ? "unverified" : status === "unavailable" ? status : "available";
+        hadError ||= !label;
+        for (const output of lookup.labels) {
+          output.textContent = label ?? failed;
+          output.closest("li").dataset.linkStatus = linkStatus;
+        }
       });
+      applyFilters();
     }
     if (!signal.aborted && lookups.size) {
-      const delay = Number.isFinite(nextRefresh)
-        ? Math.max(100, nextRefresh - performance.now())
-        : hadError ? 30000 : Infinity;
+      const delay = Math.min(Math.max(100, nextRefresh - performance.now()), hadError ? 30000 : Infinity);
       if (Number.isFinite(delay)) refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
     }
   }
@@ -443,6 +468,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       let status;
       details.append(link);
       if (!offline) {
+        row.dataset.linkStatus = "unverified";
         status = document.createElement("span");
         status.className = "field-hint saved-post-status";
         status.id = `saved-status-${list.childElementCount}`;
@@ -510,6 +536,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   });
   document.addEventListener("visibilitychange", refreshStatuses);
   window.addEventListener("online", refreshStatuses);
+  window.addEventListener("offline", refreshStatuses);
   window.addEventListener("pagehide", cancelStatusRefresh);
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) render();

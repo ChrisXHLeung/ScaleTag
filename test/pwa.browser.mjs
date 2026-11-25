@@ -554,13 +554,33 @@ test("saved links show current public status and stay usable if status checks fa
   assert.equal(await rows.first().locator("a").getAttribute("href"), managePath);
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
 
+  const statusFilter = page.getByLabel("Link status", { exact: true });
+  const visibleRows = page.locator(".saved-posts li:visible");
+  await statusFilter.selectOption("unavailable", { timeout: 5000 });
+  assert.deepEqual(await visibleRows.locator("a").evaluateAll(links => links.map(link => link.getAttribute("href"))), [gonePath]);
+  await statusFilter.selectOption("available");
+  assert.equal(await visibleRows.locator("a").getAttribute("href"), managePath);
+  await page.getByLabel("Post type", { exact: true }).selectOption("task");
+  assert.equal(await visibleRows.count(), 0);
+  await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
+  assert.equal(await visibleRows.count(), 2);
+
   setUnavailablePath("/api/posts/statuses");
   await page.reload();
   await rows.first().getByText("Could not check post status.", { exact: true }).waitFor();
   assert.equal(await rows.first().locator("a").getAttribute("href"), managePath);
+  await statusFilter.selectOption("unavailable");
+  assert.equal(await visibleRows.count(), 0);
+  await statusFilter.selectOption("unverified");
+  assert.equal(await visibleRows.count(), 2);
+  await rows.first().locator("a").focus();
   setUnavailablePath(undefined);
   await page.evaluate(() => dispatchEvent(new Event("online")));
+  await page.getByText("No saved links match these filters.", { exact: true }).waitFor();
+  assert.equal(await statusFilter.evaluate(select => select === document.activeElement), true);
+  await statusFilter.selectOption("all");
   await rows.first().getByText("Open for votes", { exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
   await rows.last().getByRole("button", { name: "Remove" }).click();
   assert.equal(await rows.count(), 1);
 
@@ -571,6 +591,33 @@ test("saved links show current public status and stay usable if status checks fa
   await page.bringToFront();
   await rows.last().getByText("Final results", { exact: true }).waitFor();
   assert.equal(await rows.last().locator("a").getAttribute("href"), managePath);
+});
+
+test("Saved link status filters update while a later batch is still pending", async (t) => {
+  const { page, origin } = await fixture(t);
+  const entries = Array.from({ length: 21 }, (_, index) => ({
+    path: `/task/${index.toString(16).padStart(24, "0")}`,
+    title: `Saved task ${index}`,
+  }));
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), entries);
+  let releaseFirstBatch, releaseLastBatch;
+  const firstBatch = new Promise(resolve => { releaseFirstBatch = resolve; });
+  const lastBatch = new Promise(resolve => { releaseLastBatch = resolve; });
+  await page.route("**/api/posts/statuses", async route => {
+    await (route.request().postDataJSON().posts.length === 1 ? lastBatch : firstBatch);
+    await route.continue();
+  });
+  try {
+    await page.goto(`${origin}/saved`);
+    await page.getByLabel("Link status", { exact: true }).selectOption("unavailable");
+    releaseFirstBatch();
+    await page.getByRole("link", { name: "Saved task 0", exact: true }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator(".saved-posts li:visible").count(), 20);
+  } finally {
+    releaseFirstBatch();
+    releaseLastBatch();
+  }
+  await page.getByRole("link", { name: "Saved task 20", exact: true }).waitFor();
 });
 
 test("Saved links filter by local title and type without changing data or requesting again", async (t) => {
@@ -658,6 +705,7 @@ test("Saved links can be opened offline from the fallback and refresh on reconne
   const row = page.locator(".saved-posts li");
   assert.equal(await row.getByRole("link").getAttribute("href"), path);
   assert.equal(await row.locator(".saved-post-status").count(), 0);
+  assert.equal(await page.getByLabel("Link status", { exact: true }).count(), 0);
   await page.getByLabel("Search saved links", { exact: true }).fill("Garden");
   assert.equal(await row.isVisible(), true);
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
