@@ -279,10 +279,12 @@ test("the browser restores public draft text and keeps saved post links locally"
   assert.equal(await page.locator("#results meter, #results progress").count(), 0);
   const path = new URL(page.url()).pathname;
   await page.getByRole("button", { name: "Save post" }).click();
+  await page.getByRole("button", { name: "Remove from saved links", pressed: true }).waitFor();
   await page.goto(`${origin}/saved`);
-  assert.equal(await page.getByRole("link", { name: "Neighborhood draft" }).getAttribute("href"), path);
+  const savedLink = page.getByRole("link", { name: "Neighborhood draft" });
+  assert.equal(await savedLink.getAttribute("href"), path);
   await page.getByRole("button", { name: "Remove" }).click();
-  assert.equal(await page.getByRole("link", { name: "Neighborhood draft" }).count(), 0);
+  await savedLink.waitFor({ state: "detached" });
   await page.goto(`${origin}/create`);
   assert.equal(await page.getByLabel("The question").inputValue(), "");
 
@@ -581,7 +583,9 @@ test("saved links show current public status and stay usable if status checks fa
   await statusFilter.selectOption("all");
   await rows.first().getByText("Open for votes", { exact: true }).waitFor();
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
-  await rows.last().getByRole("button", { name: "Remove" }).click();
+  const oldTask = rows.filter({ hasText: "Old task" });
+  await oldTask.getByRole("button", { name: "Remove" }).click();
+  await oldTask.waitFor({ state: "detached" });
   assert.equal(await rows.count(), 1);
 
   const other = await context.newPage();
