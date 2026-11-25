@@ -2,6 +2,24 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Reply posted.": {
+    ja: "返信を投稿しました。",
+    ko: "답글을 게시했습니다.",
+    fr: "Réponse publiée.",
+    pt: "Resposta publicada.",
+    es: "Respuesta publicada.",
+    de: "Antwort veröffentlicht.",
+    it: "Risposta pubblicata.",
+  },
+  "View your reply": {
+    ja: "自分の返信を表示",
+    ko: "내 답글 보기",
+    fr: "Voir votre réponse",
+    pt: "Ver sua resposta",
+    es: "Ver tu respuesta",
+    de: "Eigene Antwort ansehen",
+    it: "Vedi la tua risposta",
+  },
   "Copy public filter link": {
     ja: "公開フィルターのリンクをコピー",
     ko: "공개 필터 링크 복사",

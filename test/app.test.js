@@ -967,11 +967,15 @@ test("task replies require privacy consent; phone-only, email-only and both work
     assert.equal(r.status, 201);
     assert.equal(r.headers.get("cache-control"), "no-store, max-age=0");
     // The unauthenticated reply response is public social data.
-    assertNoContacts(await r.text(), "POST replies");
+    const body = await r.text();
+    assertNoContacts(body, "POST replies");
+    const result = JSON.parse(body);
+    assert.equal(result.createdReplyId, result.replies.at(-1).id);
     f.advance(60000);
   }
   // Public text, counts and order are preserved.
   const state = await (await f.request(`/api/posts/${task.id}/social`)).json();
+  assert.equal(state.createdReplyId, undefined);
   assert.equal(state.replies.length, 3);
   assert.deepEqual(Object.keys(state.replies[0]).sort(), [
     "createdAt",

@@ -1,4 +1,5 @@
 import { api, escape, date, count, toast, t, showFormError } from "/common.js";
+import { localizedPath } from "/locale.js";
 import { encryptReplyContact } from "/task-crypto.js";
 
 export function mountSocial(id, allowReplies, onUnavailable, onState) {
@@ -24,10 +25,14 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   let state,
     liking = false,
     replying = false,
+    replyVersion = 0,
     reporting = false,
     reported = false,
     fetching = false,
+    refreshPending = false,
+    stopped = false,
     expired = false;
+  const isMounted = () => !stopped && host.isConnected;
   function error(message) {
     const target = host.querySelector("#social-error");
     target.textContent = message;
@@ -157,22 +162,28 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       reportError.hidden = false;
     } finally {
       reporting = false;
-      if (!expired) render();
+      if (isMounted() && !expired) render();
+      if (refreshPending) void refresh();
     }
   };
   like.onclick = async () => {
     if (liking || !state || state.hasLiked) return;
     liking = true;
+    const version = replyVersion;
     like.disabled = true;
     host.querySelector("#social-error").hidden = true;
     try {
-      state = await api(`/api/posts/${id}/likes`, {});
+      const updated = await api(`/api/posts/${id}/likes`, {});
+      if (!isMounted()) return;
+      state = version === replyVersion && !replying ? updated
+        : { ...state, hasLiked: updated.hasLiked, totalLikes: updated.totalLikes };
       render();
     } catch (e) {
-      error(e.message);
+      if (isMounted()) error(e.message);
     } finally {
       liking = false;
-      if (state) render();
+      if (isMounted() && state) render();
+      if (refreshPending) void refresh();
     }
   };
   if (allowReplies) {
@@ -184,6 +195,12 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     const messageInput = form.querySelector("#reply-message");
     const length = form.querySelector("#reply-message-length span");
     const lengthStatus = form.querySelector("#reply-message-limit-status");
+    form.insertAdjacentHTML("afterend", `<div id="reply-confirmation" class="success-banner" hidden>
+      <p role="status" id="reply-confirmation-message">${t("Reply posted.", "回复已发布。")}</p>
+      <a class="button secondary small" aria-describedby="reply-confirmation-message" hidden>${t("View your reply", "查看你的回复")}</a>
+    </div>`);
+    const confirmation = host.querySelector("#reply-confirmation");
+    const viewReply = confirmation.querySelector("a");
     function updateReplyLength() {
       const used = messageInput.value.length;
       const max = messageInput.maxLength;
@@ -217,6 +234,9 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
         return;
       }
       clearContactError();
+      const returnFocus = form.contains(document.activeElement);
+      confirmation.hidden = true;
+      ++replyVersion;
       replying = true;
       render();
       try {
@@ -226,53 +246,73 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
           { phone, email },
           id,
         );
-        state = await api(`/api/posts/${id}/replies`, {
+        const posted = await api(`/api/posts/${id}/replies`, {
           name: value("#reply-name"),
           message: value("#reply-message"),
           encryptedContact,
           privacyAccepted: host.querySelector("#contact-consent").checked,
         });
+        if (!isMounted()) return;
+        state = posted;
         event.target.reset();
         updateReplyLength();
         render();
+        const replyId = state.createdReplyId;
+        const hasPublicReply = typeof replyId === "string" && /^[a-f0-9]{24}$/.test(replyId)
+          && state.replies.some(reply => reply.id === replyId);
+        if (hasPublicReply) {
+          const fragment = `#reply-${replyId}`;
+          viewReply.href = linkReplies ? fragment : localizedPath(publicTaskPath + fragment);
+        }
+        viewReply.hidden = !hasPublicReply;
+        confirmation.hidden = false;
+        if (hasPublicReply && returnFocus
+          && (form.contains(document.activeElement) || document.activeElement === document.body)) viewReply.focus();
         toast(
           t("Your name and message are public. Your contact details are visible only to the task creator.", "你的姓名和留言会公开；联系方式已加密，只有使用任务管理密码才能解密。"),
         );
       } catch (e) {
+        if (!isMounted()) return;
         showFormError(target, e);
         // A 409 can mean the task was completed or closed meanwhile.
-        if (e.status === 409) setTimeout(refresh);
+        if (e.status === 409) refreshPending = true;
       } finally {
         replying = false;
-        render();
+        ++replyVersion;
+        if (isMounted()) render();
+        if (refreshPending) void refresh();
       }
     };
   }
   async function refresh() {
-    if (stopped || !host.isConnected) return;
+    if (!isMounted()) return;
     if (document.hidden || fetching || liking || replying || reporting || expired) return;
     fetching = true;
+    refreshPending = false;
+    const version = replyVersion;
     try {
-      state = await api(`/api/posts/${id}/social`);
-      if (stopped) return;
+      const updated = await api(`/api/posts/${id}/social`);
+      if (!isMounted()) return;
+      if (version !== replyVersion) return;
+      state = updated;
       host.querySelector("#social-error").hidden = true;
       render();
       onState?.(state);
     } catch (e) {
-      if (stopped) return;
+      if (!isMounted()) return;
       if (e.status === 404) {
         expired = true;
         stop();
         host.innerHTML =
           `<p role="status">${t("This post and its replies are no longer available.", "此帖子及其回复已不可用。")}</p>`;
         onUnavailable?.();
-      } else error(e.message);
+      } else if (version === replyVersion) error(e.message);
     } finally {
       fetching = false;
+      if (refreshPending) void refresh();
     }
   }
   let timer;
-  let stopped = false;
   function startPolling() {
     if (stopped || timer) return;
     timer = setInterval(refresh, 15000);

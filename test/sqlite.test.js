@@ -35,8 +35,11 @@ test("SQLite shares fresh discovery, counters, contacts and deduplication betwee
   const creds = await createTaskCredentials();
   const task = await b.create({ ...input, type: "task", options: [], reward: "Coffee", authKey: creds.authKey, contactPublicKey: creds.contactPublicKey, encryptedPrivateKey: creds.encryptedPrivateKey });
   const encryptedContact = await encryptReplyContact(creds.contactPublicKey, { email: "helper@example.com" }, task.id);
-  await a.reply(task.id, "helper", { message: "Available", encryptedContact });
-  assert.equal((await b.getSocial(task.id)).replies[0].email, undefined);
+  const receipt = await a.reply(task.id, "helper", { message: "Available", encryptedContact });
+  const publicState = await b.getSocial(task.id);
+  assert.equal(receipt.createdReplyId, publicState.replies[0].id);
+  assert.equal(publicState.createdReplyId, undefined);
+  assert.equal(publicState.replies[0].email, undefined);
   const managed = await b.manageTask(task.id, creds.authKey);
   assert.equal((await decryptReplyContacts(creds.password, managed, task.id))[0].email, "helper@example.com");
   await assert.rejects(b.reply(task.id, "helper", { message: "Again", encryptedContact }), { status: 429 });

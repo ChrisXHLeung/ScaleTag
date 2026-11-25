@@ -164,6 +164,12 @@ test("anonymous task publication, persistent likes and private email reply work 
     .locator("#reply-list")
     .getByText("I can help on Saturday.", { exact: true })
     .waitFor();
+  const managementReceipt = f.page.getByRole("link", { name: "View your reply", exact: true });
+  const publicReply = new URL(await managementReceipt.getAttribute("href"), f.page.url());
+  assert.equal(publicReply.origin, f.origin);
+  assert.equal(publicReply.pathname, `/task/${id}`);
+  assert.equal(publicReply.search, "");
+  assert.match(publicReply.hash, /^#reply-[a-f0-9]{24}$/u);
   assert.match(await length.textContent(), /0 \/ 2,000/u);
   assert.equal(
     await f.page.locator("#private-reply-list .reply-contacts a").textContent(),
@@ -194,7 +200,16 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await f.page.locator("#reply-message").fill("Available on Saturday.");
   await f.page.locator("#reply-email").fill("private-helper@example.com");
   await f.page.locator("#contact-consent").check();
-  await submit.click();
+  const posted = f.page.waitForResponse(`${f.origin}/api/posts/${task.id}/replies`);
+  await submit.press("Enter");
+  const response = await posted;
+  const { createdReplyId } = await response.json();
+  assert.equal(response.status(), 201);
+  assert.match(createdReplyId, /^[a-f0-9]{24}$/u);
+  const view = f.page.getByRole("link", { name: "View your reply", exact: true });
+  await view.waitFor();
+  assert.equal(await view.getAttribute("href"), `#reply-${createdReplyId}`);
+  assert.ok(await view.evaluate(link => document.activeElement === link));
   const link = f.page.getByRole("link", { name: /Link to this reply/u });
   await link.waitFor({ timeout: 5000 });
   const shared = new URL(await link.getAttribute("href"), f.page.url());
@@ -202,8 +217,9 @@ test("a public task reply link opens and focuses the same reply in another tab",
   assert.equal(shared.search, "?lang=en");
   assert.match(shared.hash, /^#reply-[a-f0-9]{24}$/u);
   await f.page.locator("#reply-message").fill("Unsaved second reply.");
-  await link.click();
+  await view.click();
   assert.equal(f.page.url(), shared.href);
+  assert.ok(await f.page.locator(shared.hash).evaluate(reply => document.activeElement === reply));
   assert.equal(await f.page.locator("#reply-message").inputValue(), "Unsaved second reply.");
 
   const other = await f.context.newPage();
@@ -223,7 +239,9 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await f.page.locator("#reply-email").fill("private-helper@example.com");
   await f.page.locator("#contact-consent").check();
   await submit.click();
-  await f.page.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
+  const secondReply = f.page.locator("#reply-list .reply-card").filter({ hasText: "Unsaved second reply." });
+  await secondReply.waitFor();
+  assert.equal(await view.getAttribute("href"), `#${await secondReply.getAttribute("id")}`);
   await other.bringToFront();
   await other.evaluate(() => window.dispatchEvent(new Event("online")));
   await other.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
@@ -237,6 +255,45 @@ test("a public task reply link opens and focuses the same reply in another tab",
   assert.equal(await card.getByRole("link").getAttribute("href"), shared.hash);
   await order.selectOption("oldest");
   assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);
+  assert.deepEqual(f.errors, []);
+});
+
+test("task closure during a reply retries refresh after a delayed social response", { timeout: 25000 }, async (t) => {
+  const f = await fixture(t);
+  const credentials = await createTaskCredentials();
+  const task = await f.store.create({
+    ...f.input, authKey: credentials.authKey, contactPublicKey: credentials.contactPublicKey,
+    encryptedPrivateKey: credentials.encryptedPrivateKey,
+  });
+  await f.page.goto(`${f.origin}/task/${task.id}`);
+  const submit = f.page.locator("#send-reply");
+  await f.page.locator("#send-reply:enabled").waitFor();
+  const social = `${f.origin}/api/posts/${task.id}/social`;
+  let received, release;
+  const captured = new Promise(resolve => { received = resolve; });
+  const held = new Promise(resolve => { release = resolve; });
+  await f.page.route(social, async route => {
+    const snapshot = await route.fetch();
+    received();
+    await held;
+    await route.fulfill({ response: snapshot });
+  }, { times: 1 });
+  try {
+    await f.page.evaluate(() => dispatchEvent(new Event("online")));
+    await captured;
+    await f.store.setTaskState(task.id, credentials.authKey, "closed");
+    await f.page.locator("#reply-message").fill("I can help.");
+    await f.page.locator("#reply-email").fill("helper@example.com");
+    await f.page.locator("#contact-consent").check();
+    await submit.press("Enter");
+    await f.page.locator("#reply-error").filter({ hasText: "no longer accepts replies" }).waitFor();
+    assert.equal(await f.page.locator("#reply-message").inputValue(), "I can help.");
+    assert.equal(await f.page.getByRole("link", { name: "View your reply", exact: true }).count(), 0);
+  } finally {
+    release();
+  }
+  await f.page.locator("#replies-closed").waitFor({ timeout: 5000 });
+  assert.equal(await f.page.locator("#reply-form").isHidden(), true);
   assert.deepEqual(f.errors, []);
 });
 

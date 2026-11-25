@@ -682,7 +682,7 @@ export class PollStore {
           429,
           "Please wait a minute before posting another reply to this task.",
         );
-      p.replies.push({
+      const reply = {
         id: randomBytes(12).toString("hex"),
         name: input.name ?? "Anonymous",
         message: input.message,
@@ -692,10 +692,11 @@ export class PollStore {
           ...(input.email ? { email: input.email } : {}),
         }),
         createdAt: now,
-      });
+      };
+      p.replies.push(reply);
       p.replyAuthors[hash] = now;
       await this.write(db);
-      return this.social(p, token);
+      return { ...this.social(p, token), createdReplyId: reply.id };
     });
   }
 
