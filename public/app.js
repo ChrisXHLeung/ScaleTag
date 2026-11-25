@@ -222,22 +222,25 @@ function mountPollManagementDetails(host, poll, key) {
   mountSavedPost(host, { path, title: poll.title });
 }
 
-function pollLinkFallback(inputId) {
+function linkCopyFallback(inputId) {
   return `<div hidden><label for="${inputId}">${t("Public link", "公开链接")}</label><input id="${inputId}" readonly></div>`;
 }
 
-function bindPollLinkCopy(control, id) {
-  const link = `${location.origin}/vote/${id}`;
+function bindLinkCopy(control, getLink, copiedMessage) {
   const fallback = control.nextElementSibling;
   const input = fallback.querySelector("input");
+  let copyRequest = 0;
   control.onclick = async () => {
+    const request = ++copyRequest;
+    const link = getLink();
+    const current = () => request === copyRequest && control.isConnected && getLink() === link;
     try {
       await navigator.clipboard.writeText(link);
-      if (!control.isConnected) return;
+      if (!current()) return;
       fallback.hidden = true;
-      toast(t("Poll link copied.", "投票链接已复制。"));
+      toast(copiedMessage);
     } catch {
-      if (!control.isConnected) return;
+      if (!current()) return;
       input.value = link;
       fallback.hidden = false;
       input.focus();
@@ -245,6 +248,10 @@ function bindPollLinkCopy(control, id) {
       toast(t("Copy the selected link.", "请复制选中的链接。"));
     }
   };
+}
+
+function bindPollLinkCopy(control, id) {
+  bindLinkCopy(control, () => `${location.origin}/vote/${id}`, t("Poll link copied.", "投票链接已复制。"));
 }
 
 async function pollManagePage(id, key) {
@@ -261,7 +268,7 @@ function renderPollManager(poll, key, message = "", openEditor = false) {
     <h1>${t("Manage this poll", "管理此投票")}</h1><h2>${escape(poll.title)}</h2>
     <p>${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
     <div><a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>
-    <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${pollLinkFallback("owner-public-link")}</div>
+    <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${linkCopyFallback("owner-public-link")}</div>
     ${poll.status === "open" ? `<button type="button" class="button secondary small" data-poll-state="closed">${t("End voting now", "立即结束投票")}</button>` : ""}
     <button type="button" class="button secondary small" data-poll-state="withdrawn">${t("Take down", "下架帖子")}</button>
     <p class="form-error" role="alert" hidden></p>
@@ -329,7 +336,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     ${externalImages.length ? `<div class="external-images"><button class="button secondary small" id="load-images">${t(`Show ${externalImages.length} external image${externalImages.length > 1 ? "s" : ""}`, `显示 ${externalImages.length} 张外部图片`)}</button><p class="field-hint">${t("Images load from third-party hosts, which may receive your IP address.", "图片从第三方服务器加载，该服务可能接收你的 IP 地址。")}</p><div id="poll-images"></div></div>` : ""}
     <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
     <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes" aria-live="polite"></span></div><div id="results"></div><p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
-    <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link" type="button">${t("Copy poll link", "复制投票链接")}</button>${pollLinkFallback("public-poll-link")}</section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
+    <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link" type="button">${t("Copy poll link", "复制投票链接")}</button>${linkCopyFallback("public-poll-link")}</section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   if (ownerKey) {
     const owner = document.createElement("section");
     owner.className = "manage-card";
@@ -525,6 +532,8 @@ function postList() {
   document.title = t("PostList — ScaleTag", "帖子列表 — ScaleTag");
   setActiveNav("list");
   const nav = window.navigation;
+  const incoming = new URLSearchParams(window.location.search);
+  const filterKeys = ["type", "status", "pickup"];
   markDiscoveryEntry();
   const searchForm = `<form class="post-search" id="post-search" role="search">
     <label for="post-query">${t("Search posts", "搜索帖子")}
@@ -582,6 +591,16 @@ function postList() {
   const pickupTime = document.querySelector("#pickup-time");
   const pickupFilter = document.querySelector("#pickup-time-filter");
   const statusButtons = [...document.querySelectorAll("[data-filter]")];
+  const share = document.createElement("div");
+  share.hidden = true;
+  share.innerHTML = `<div class="local-post-controls">
+    <button type="button" class="button secondary small" aria-describedby="share-filters-hint">${t("Copy public filter link", "复制公开筛选链接")}</button>
+    ${linkCopyFallback("public-filter-link")}
+  </div><p class="field-hint" id="share-filters-hint">${t("The link includes only post type, status and pickup time.", "链接仅包含帖子类型、状态和领取时段。")}</p>`;
+  document.querySelector("#list-error").before(share);
+  const copyFilters = share.querySelector("button");
+  const filterLinkInput = share.querySelector("input");
+  bindLinkCopy(copyFilters, shareableFilterLink, t("Link copied.", "链接已复制。"));
   const nearbyOptions = () => location ? { location, radiusKm, sort } : {};
   const pickupOption = () => pickupTime.value ? { pickup: pickupTime.value } : {};
   const hasFilters = () => Boolean(query || contentType !== "all" || status !== "all" || location);
@@ -608,21 +627,47 @@ function postList() {
     }
   }
 
-  function replaceDiscoveryHistory(state) {
+  function replaceDiscoveryHistory(state, url) {
     try {
-      history.replaceState(state, "");
+      history.replaceState(state, "", url);
       markDiscoveryEntry();
     } catch {
       // Browsers can limit history writes. Browsing still works without restoration.
     }
   }
 
+  function publicFilterParameters() {
+    const parameters = new URLSearchParams();
+    if (contentType !== "all") parameters.set("type", contentType);
+    if (status !== "all") parameters.set("status", status);
+    if (pickupTime.value) parameters.set("pickup", pickupTime.value);
+    return parameters;
+  }
+
+  function shareableFilterLink() {
+    const url = new URL("/PostList", window.location.origin);
+    url.search = publicFilterParameters().toString();
+    return url.href;
+  }
+
   function rememberDiscovery() {
     const existing = history.state;
     const previous = existing?.scaleTagPostList;
     const pickup = pickupOption();
-    if (previous?.mode === mode && previous.type === contentType && previous.status === status && previous.pickup === pickup.pickup) return;
-    replaceDiscoveryHistory({ ...existing, scaleTagPostList: { mode, type: contentType, status, ...pickup } });
+    const parameters = publicFilterParameters();
+    share.hidden = !parameters.toString();
+    if (filterLinkInput.value !== shareableFilterLink()) filterLinkInput.parentElement.hidden = true;
+    const url = new URL(window.location.href);
+    const previousSearch = url.search;
+    if (filterKeys.some(key => url.searchParams.has(key))) {
+      for (const key of filterKeys) {
+        if (parameters.has(key)) url.searchParams.set(key, parameters.get(key));
+        else url.searchParams.delete(key);
+      }
+    }
+    const changedLink = url.search !== previousSearch;
+    if (!changedLink && previous?.mode === mode && previous.type === contentType && previous.status === status && previous.pickup === pickup.pickup) return;
+    replaceDiscoveryHistory({ ...existing, scaleTagPostList: { mode, type: contentType, status, ...pickup } }, changedLink ? url : undefined);
   }
 
   function takeListPosition() {
@@ -1082,7 +1127,10 @@ function postList() {
   };
   document.querySelector("#load-more").onclick = () => load(false);
   const returned = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
-  const prior = returned ? history.state?.scaleTagPostList : undefined;
+  const previousFilters = returned ? history.state?.scaleTagPostList : undefined;
+  const prior = previousFilters ?? (filterKeys.some(key => incoming.has(key)) && {
+    type: incoming.get("type"), status: incoming.get("status"), pickup: incoming.get("pickup"),
+  });
   const position = takeListPosition();
   if (prior) {
     if ([...typeSelect.options].some(option => option.value === prior.type)) {

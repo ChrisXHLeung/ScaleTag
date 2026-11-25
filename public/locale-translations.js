@@ -2,6 +2,24 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Copy public filter link": {
+    ja: "公開フィルターのリンクをコピー",
+    ko: "공개 필터 링크 복사",
+    fr: "Copier le lien des filtres publics",
+    pt: "Copiar link dos filtros públicos",
+    es: "Copiar enlace de los filtros públicos",
+    de: "Link zu öffentlichen Filtern kopieren",
+    it: "Copia il link dei filtri pubblici",
+  },
+  "The link includes only post type, status and pickup time.": {
+    ja: "リンクに含まれるのは投稿の種類、状態、受け取り時間のみです。",
+    ko: "링크에는 게시물 유형, 상태 및 수령 시간만 포함됩니다.",
+    fr: "Le lien contient uniquement le type de publication, le statut et le créneau de retrait.",
+    pt: "O link inclui apenas o tipo de publicação, o status e o horário de retirada.",
+    es: "El enlace solo incluye el tipo de publicación, el estado y el horario de recogida.",
+    de: "Der Link enthält nur Beitragstyp, Status und Abholzeit.",
+    it: "Il link include solo il tipo di post, lo stato e la fascia oraria di ritiro.",
+  },
   "Reconnect to open posts and check their current status.": {
     ja: "再接続すると投稿を開いて最新の状態を確認できます。",
     ko: "다시 연결하면 게시물을 열고 최신 상태를 확인할 수 있습니다.",

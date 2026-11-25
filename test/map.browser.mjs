@@ -541,6 +541,75 @@ test("the detail-page back link uses the preceding PostList entry, with a normal
   }
 });
 
+test("a copied public filter link restores only the shareable selections in a new browser", async (t) => {
+  const { page, context, browser, origin, store, input } = await fixture(t);
+  await context.grantPermissions(["geolocation", "clipboard-read", "clipboard-write"], { origin });
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("sale");
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.locator("#pickup-time").selectOption("upcoming");
+  await page.locator("#nearby").click();
+  await page.locator("#nearby[aria-pressed=true]").waitFor();
+  const search = page.locator("#post-query");
+  await search.fill("private search phrase");
+  await search.press("Enter");
+
+  const copy = page.getByRole("button", { name: "Copy public filter link", exact: true });
+  await copy.click({ timeout: 5000 });
+  await page.getByText("Link copied.", { exact: true }).waitFor();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  assert.equal(copied, `${origin}/PostList?type=sale&status=open&pickup=upcoming`);
+  assert.equal(page.url(), `${origin}/PostList`);
+
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  await copy.click();
+  const manual = page.getByRole("textbox", { name: "Public link", exact: true });
+  await manual.waitFor();
+  assert.equal(await manual.inputValue(), copied);
+  assert.equal(await manual.evaluate(input => document.activeElement === input && input.selectionEnd === input.value.length), true);
+
+  const recipientContext = await browser.newContext();
+  const recipient = await recipientContext.newPage();
+  const incoming = recipient.waitForRequest(`${origin}/api/posts/search`);
+  await recipient.goto(copied);
+  assert.deepEqual((await incoming).postDataJSON(), { status: "open", type: "sale", query: "", pickup: "upcoming" });
+  assert.equal(await recipient.locator("#post-query").inputValue(), "");
+  assert.equal(await recipient.locator("#nearby").getAttribute("aria-pressed"), "false");
+  assert.equal(await recipient.locator("#pickup-time").inputValue(), "upcoming");
+
+  await recipient.locator("#content-type").selectOption("task");
+  assert.equal(recipient.url(), `${origin}/PostList?type=task&status=open`);
+  await recipient.reload();
+  assert.equal(await recipient.locator("#content-type").inputValue(), "task");
+  assert.equal(await recipient.locator("#pickup-time").inputValue(), "");
+
+  await recipient.goto(`${origin}/PostList?lang=en&type=bogus&type=sale&status=closed&pickup=now`);
+  assert.equal(await recipient.locator("#content-type").inputValue(), "all");
+  assert.equal(await recipient.getByRole("button", { name: "Ended", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await recipient.locator("#pickup-time").inputValue(), "");
+  assert.equal(recipient.url(), `${origin}/PostList?lang=en&status=closed`);
+  await recipient.getByRole("button", { name: "All posts", exact: true }).click();
+  assert.equal(recipient.url(), `${origin}/PostList?lang=en`);
+  await recipient.locator("#content-type").selectOption("task");
+  assert.equal(recipient.url(), `${origin}/PostList?lang=en`);
+  await recipient.reload();
+  assert.equal(await recipient.locator("#content-type").inputValue(), "all");
+
+  const poll = await store.create(input);
+  const publicPolls = `${origin}/PostList?type=poll&status=open`;
+  await recipient.goto(publicPolls);
+  const card = recipient.locator(`#poll-list a[href="/vote/${poll.id}"]`);
+  await card.click();
+  await recipient.getByRole("link", { name: "← Back to PostList", exact: true }).click();
+  await recipient.waitForURL(publicPolls);
+  await card.waitFor();
+  assert.equal(await recipient.locator("#content-type").inputValue(), "poll");
+  assert.equal(await recipient.getByRole("button", { name: "Open", exact: true }).getAttribute("aria-pressed"), "true");
+  await recipientContext.close();
+});
+
 test("Back restores the upcoming pickup selection while reload resets it", async (t) => {
   const { page, origin, store, input } = await fixture(t);
   const now = store.clock();
