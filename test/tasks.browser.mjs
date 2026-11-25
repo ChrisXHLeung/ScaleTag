@@ -170,6 +170,16 @@ test("anonymous task publication, persistent likes and private email reply work 
   assert.equal(publicReply.pathname, `/task/${id}`);
   assert.equal(publicReply.search, "");
   assert.match(publicReply.hash, /^#reply-[a-f0-9]{24}$/u);
+  const managementConfirmation = f.page.locator("#reply-confirmation");
+  await f.page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException("Denied", "NotAllowedError"); };
+  });
+  await managementConfirmation.getByRole("button", { name: "Copy reply link", exact: true }).click({ timeout: 5000 });
+  const manualLink = managementConfirmation.getByRole("textbox", { name: "Public link", exact: true });
+  await manualLink.waitFor();
+  assert.equal(await manualLink.inputValue(), publicReply.href);
+  assert.ok(await manualLink.evaluate(input => document.activeElement === input
+    && input.selectionStart === 0 && input.selectionEnd === input.value.length));
   assert.match(await length.textContent(), /0 \/ 2,000/u);
   assert.equal(
     await f.page.locator("#private-reply-list .reply-contacts a").textContent(),
@@ -200,6 +210,7 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await f.page.locator("#reply-message").fill("Available on Saturday.");
   await f.page.locator("#reply-email").fill("private-helper@example.com");
   await f.page.locator("#contact-consent").check();
+  await f.page.locator("#send-reply:enabled").waitFor();
   const posted = f.page.waitForResponse(`${f.origin}/api/posts/${task.id}/replies`);
   await submit.press("Enter");
   const response = await posted;
@@ -210,6 +221,13 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await view.waitFor();
   assert.equal(await view.getAttribute("href"), `#reply-${createdReplyId}`);
   assert.ok(await view.evaluate(link => document.activeElement === link));
+  await f.page.evaluate(() => {
+    navigator.clipboard.writeText = async value => { window.lastCopiedReply = value; };
+  });
+  await f.page.getByRole("button", { name: "Copy reply link", exact: true }).click({ timeout: 5000 });
+  await f.page.waitForFunction(() => Boolean(window.lastCopiedReply));
+  const copied = await f.page.evaluate(() => window.lastCopiedReply);
+  assert.equal(copied, `${url}#reply-${createdReplyId}`);
   const link = f.page.getByRole("link", { name: /Link to this reply/u });
   await link.waitFor({ timeout: 5000 });
   const shared = new URL(await link.getAttribute("href"), f.page.url());
@@ -224,7 +242,7 @@ test("a public task reply link opens and focuses the same reply in another tab",
 
   const other = await f.context.newPage();
   await other.setViewportSize({ width: 320, height: 900 });
-  await other.goto(shared.href);
+  await other.goto(copied);
   const card = other.locator(shared.hash);
   await card.getByText("Available on Saturday.", { exact: true }).waitFor();
   const order = other.getByRole("combobox", { name: "Reply order", exact: true });
@@ -251,7 +269,7 @@ test("a public task reply link opens and focuses the same reply in another tab",
   assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);
   await order.selectOption("newest");
   assert.deepEqual(await replies.allTextContents(), ["Unsaved second reply.", "Available on Saturday."]);
-  assert.equal(other.url(), shared.href);
+  assert.equal(other.url(), copied);
   assert.equal(await card.getByRole("link").getAttribute("href"), shared.hash);
   await order.selectOption("oldest");
   assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);

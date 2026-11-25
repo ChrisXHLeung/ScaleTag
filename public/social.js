@@ -1,4 +1,4 @@
-import { api, escape, date, count, toast, t, showFormError } from "/common.js";
+import { api, escape, date, count, toast, t, showFormError, bindLinkCopy, linkCopyFallback } from "/common.js";
 import { localizedPath } from "/locale.js";
 import { encryptReplyContact } from "/task-crypto.js";
 
@@ -197,10 +197,18 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     const lengthStatus = form.querySelector("#reply-message-limit-status");
     form.insertAdjacentHTML("afterend", `<div id="reply-confirmation" class="success-banner" hidden>
       <p role="status" id="reply-confirmation-message">${t("Reply posted.", "回复已发布。")}</p>
-      <a class="button secondary small" aria-describedby="reply-confirmation-message" hidden>${t("View your reply", "查看你的回复")}</a>
+      <div class="local-post-controls">
+        <a class="button secondary small" aria-describedby="reply-confirmation-message" hidden>${t("View your reply", "查看你的回复")}</a>
+        <button class="button secondary small" type="button" hidden>${t("Copy reply link", "复制回复链接")}</button>
+        ${linkCopyFallback("posted-reply-link")}
+      </div>
     </div>`);
     const confirmation = host.querySelector("#reply-confirmation");
     const viewReply = confirmation.querySelector("a");
+    const copyReply = confirmation.querySelector("button");
+    const copyFallback = copyReply.nextElementSibling;
+    let publicReplyLink;
+    bindLinkCopy(copyReply, () => publicReplyLink, t("Link copied.", "链接已复制。"));
     function updateReplyLength() {
       const used = messageInput.value.length;
       const max = messageInput.maxLength;
@@ -236,6 +244,8 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       clearContactError();
       const returnFocus = form.contains(document.activeElement);
       confirmation.hidden = true;
+      copyFallback.hidden = true;
+      publicReplyLink = undefined;
       ++replyVersion;
       replying = true;
       render();
@@ -262,9 +272,11 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
           && state.replies.some(reply => reply.id === replyId);
         if (hasPublicReply) {
           const fragment = `#reply-${replyId}`;
-          viewReply.href = linkReplies ? fragment : localizedPath(publicTaskPath + fragment);
+          const path = publicTaskPath + fragment;
+          viewReply.href = linkReplies ? fragment : localizedPath(path);
+          publicReplyLink = new URL(path, location.origin).href;
         }
-        viewReply.hidden = !hasPublicReply;
+        copyReply.hidden = viewReply.hidden = !hasPublicReply;
         confirmation.hidden = false;
         if (hasPublicReply && returnFocus
           && (form.contains(document.activeElement) || document.activeElement === document.body)) viewReply.focus();

@@ -20,6 +20,8 @@ import {
   bindPhotoInput,
   uploadedPhotosHtml,
   bindManagementCopy,
+  bindLinkCopy,
+  linkCopyFallback,
   managementDetails,
   managementPasswordForm,
   mountNativeShare,
@@ -220,34 +222,6 @@ function mountPollManagementDetails(host, poll, key) {
   host.insertAdjacentHTML("afterbegin", managementDetails(url));
   bindManagementCopy(url, key);
   mountSavedPost(host, { path, title: poll.title });
-}
-
-function linkCopyFallback(inputId) {
-  return `<div hidden><label for="${inputId}">${t("Public link", "公开链接")}</label><input id="${inputId}" readonly></div>`;
-}
-
-function bindLinkCopy(control, getLink, copiedMessage) {
-  const fallback = control.nextElementSibling;
-  const input = fallback.querySelector("input");
-  let copyRequest = 0;
-  control.onclick = async () => {
-    const request = ++copyRequest;
-    const link = getLink();
-    const current = () => request === copyRequest && control.isConnected && getLink() === link;
-    try {
-      await navigator.clipboard.writeText(link);
-      if (!current()) return;
-      fallback.hidden = true;
-      toast(copiedMessage);
-    } catch {
-      if (!current()) return;
-      input.value = link;
-      fallback.hidden = false;
-      input.focus();
-      input.select();
-      toast(t("Copy the selected link.", "请复制选中的链接。"));
-    }
-  };
 }
 
 function bindPollLinkCopy(control, id) {

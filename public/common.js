@@ -372,6 +372,35 @@ export function managementDetails(url) {
     </div>`;
 }
 
+export function linkCopyFallback(inputId) {
+  return `<div hidden><label for="${inputId}">${t("Public link", "公开链接")}</label><input id="${inputId}" readonly></div>`;
+}
+
+export function bindLinkCopy(control, getLink, copiedMessage) {
+  const fallback = control.nextElementSibling;
+  const input = fallback.querySelector("input");
+  let copyRequest = 0;
+  control.onclick = async () => {
+    const link = getLink();
+    if (!link) return;
+    const request = ++copyRequest;
+    const current = () => request === copyRequest && control.isConnected && getLink() === link;
+    try {
+      await navigator.clipboard.writeText(link);
+      if (!current()) return;
+      fallback.hidden = true;
+      toast(copiedMessage);
+    } catch {
+      if (!current()) return;
+      input.value = link;
+      fallback.hidden = false;
+      input.focus();
+      input.select();
+      toast(t("Copy the selected link.", "请复制选中的链接。"));
+    }
+  };
+}
+
 export function bindManagementCopy(url, key) {
   main.querySelector("#copy-manage-link").onclick = async () => {
     const message = t(`Management URL: ${url}\nManagement password: ${key}`, `管理网址：${url}\n管理密码：${key}`);

@@ -11,6 +11,15 @@ export const TRANSLATIONS = {
     de: "Antwort veröffentlicht.",
     it: "Risposta pubblicata.",
   },
+  "Copy reply link": {
+    ja: "返信リンクをコピー",
+    ko: "답글 링크 복사",
+    fr: "Copier le lien de la réponse",
+    pt: "Copiar link da resposta",
+    es: "Copiar enlace de la respuesta",
+    de: "Link zur Antwort kopieren",
+    it: "Copia il link della risposta",
+  },
   "View your reply": {
     ja: "自分の返信を表示",
     ko: "내 답글 보기",
