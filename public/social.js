@@ -1,11 +1,11 @@
-import { api, escape, date, count, toast, t } from "/common.js";
+import { api, escape, date, count, toast, t, showFormError } from "/common.js";
 import { encryptReplyContact } from "/task-crypto.js";
 
 export function mountSocial(id, allowReplies, onUnavailable, onState) {
   const host = document.querySelector("#social");
   // Name and message are public. Phone/email are private to whoever holds the
   // task's management link; legacy tasks without a link collect no contacts and accept no replies.
-  const replyForm = `<form id="reply-form"><h3>${t("Leave a reply", "写回复")}</h3><div class="reply-privacy-note" role="note"><strong>${t("Your name and message are public.", "你的姓名和留言会公开显示。")}</strong> ${t("Anyone can read them. Never put a phone number, email address or other contact details in them.", "任何人都能看到。请勿在这里填写电话、邮箱或其他联系方式。")}</div><label for="reply-name">${t("Public name ", "公开姓名 ")}<span class="optional">${t("optional, unverified, shown to everyone", "选填，未经验证，所有人可见")}</span></label><input id="reply-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}" autocomplete="off"><label for="reply-message">${t("Public message ", "公开留言 ")}<span class="optional">${t("shown to everyone", "所有人可见")}</span></label><textarea id="reply-message" maxlength="2000" rows="4" required aria-describedby="reply-message-hint"></textarea><p id="reply-message-hint" class="field-hint">${t("Do not include contact details here. Messages that look like they contain a phone number or email address are rejected.", "请勿填写联系方式。系统会拒绝疑似包含电话或邮箱的留言。")}</p><fieldset id="private-contact-fields" class="contact-fields"><legend>${t("Private contact for the task creator", "留给任务发布者的联系方式")}</legend><p class="field-hint">${t("Add a phone number or email address, or both. These are ", "请填写电话、邮箱，或两者都填。这些信息")}<strong>${t("not shown publicly", "不会公开显示")}</strong>. ${t("They are encrypted in your browser and can be decrypted with the task management password.", "这些信息会在浏览器中加密，只有使用任务管理密码才能解密。")}</p><label for="reply-phone">${t("Phone ", "电话 ")}<span class="optional">${t("private · optional if you provide email", "私人信息 · 已提供邮箱时可不填")}</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">${t("Email ", "电子邮箱 ")}<span class="optional">${t("private · optional if you provide phone", "私人信息 · 已提供电话时可不填")}</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span id="consent-private">${t("I understand that my name and message are public until this task leaves the website, 30 days after it was published. My phone/email is not public: it is encrypted and can be decrypted with the task management password; encrypted backups are kept for up to 90 days. I have not put contact details in my name or message.", "我了解我的姓名和消息会公开，直到任务在发布 30 天后从网站移除。我的电话和邮箱不会公开：这些信息会加密保存，只有使用任务管理密码才能解密；加密备份最多保留 90 天。我没有在姓名或消息中填写联系方式。")}</span></label><p class="field-hint">${t("ScaleTag does not handle payments or transactions. Names, messages and contact details are unverified.", "ScaleTag 不处理付款或交易。姓名、消息和联系方式未经验证。")}</p><button id="send-reply" class="button" type="submit" disabled>${t("Post reply", "发布回复")}</button><p id="reply-error" class="form-error" role="alert" hidden></p></form>`;
+  const replyForm = `<form id="reply-form"><h3>${t("Leave a reply", "写回复")}</h3><div class="reply-privacy-note" role="note"><strong>${t("Your name and message are public.", "你的姓名和留言会公开显示。")}</strong> ${t("Anyone can read them. Never put a phone number, email address or other contact details in them.", "任何人都能看到。请勿在这里填写电话、邮箱或其他联系方式。")}</div><label for="reply-name">${t("Public name ", "公开姓名 ")}<span class="optional">${t("optional, unverified, shown to everyone", "选填，未经验证，所有人可见")}</span></label><input id="reply-name" maxlength="60" placeholder="${t("Anonymous", "匿名")}" autocomplete="off"><label for="reply-message">${t("Public message ", "公开留言 ")}<span class="optional">${t("shown to everyone", "所有人可见")}</span></label><textarea id="reply-message" maxlength="2000" rows="4" required aria-describedby="reply-message-hint"></textarea><p id="reply-message-hint" class="field-hint">${t("Do not include contact details here. Messages that look like they contain a phone number or email address are rejected.", "请勿填写联系方式。系统会拒绝疑似包含电话或邮箱的留言。")}</p><fieldset id="private-contact-fields" class="contact-fields"><legend>${t("Private contact for the task creator", "留给任务发布者的联系方式")}</legend><p class="field-hint">${t("Add a phone number or email address, or both. These are ", "请填写电话、邮箱，或两者都填。这些信息")}<strong>${t("not shown publicly", "不会公开显示")}</strong>. ${t("They are encrypted in your browser and can be decrypted with the task management password.", "这些信息会在浏览器中加密，只有使用任务管理密码才能解密。")}</p><p id="reply-contact-error" class="form-error" role="alert" hidden></p><label for="reply-phone">${t("Phone ", "电话 ")}<span class="optional">${t("private · optional if you provide email", "私人信息 · 已提供邮箱时可不填")}</span></label><input id="reply-phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+1 416 555 0123"><label for="reply-email">${t("Email ", "电子邮箱 ")}<span class="optional">${t("private · optional if you provide phone", "私人信息 · 已提供电话时可不填")}</span></label><input id="reply-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com"></fieldset><label class="checkbox-row"><input id="contact-consent" type="checkbox" required><span id="consent-private">${t("I understand that my name and message are public until this task leaves the website, 30 days after it was published. My phone/email is not public: it is encrypted and can be decrypted with the task management password; encrypted backups are kept for up to 90 days. I have not put contact details in my name or message.", "我了解我的姓名和消息会公开，直到任务在发布 30 天后从网站移除。我的电话和邮箱不会公开：这些信息会加密保存，只有使用任务管理密码才能解密；加密备份最多保留 90 天。我没有在姓名或消息中填写联系方式。")}</span></label><p class="field-hint">${t("ScaleTag does not handle payments or transactions. Names, messages and contact details are unverified.", "ScaleTag 不处理付款或交易。姓名、消息和联系方式未经验证。")}</p><p id="reply-error" class="form-error" role="alert" hidden></p><button id="send-reply" class="button" type="submit" disabled>${t("Post reply", "发布回复")}</button></form>`;
   const reportControl = `<label class="content-filter" id="report-reason-control" for="report-reason" hidden>
     ${t("Report reason", "举报理由")}<select id="report-reason" disabled>
       <option value="">${t("Select a reason", "选择理由")}</option>
@@ -175,21 +175,35 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
       if (state) render();
     }
   };
-  if (allowReplies)
-    host.querySelector("#reply-form").onsubmit = async (event) => {
+  if (allowReplies) {
+    const form = host.querySelector("#reply-form");
+    const target = form.querySelector("#reply-error");
+    const phoneInput = form.querySelector("#reply-phone");
+    const emailInput = form.querySelector("#reply-email");
+    const contactError = form.querySelector("#reply-contact-error");
+    function clearContactError() {
+      showFormError(contactError, "");
+      phoneInput.removeAttribute("aria-describedby");
+      emailInput.removeAttribute("aria-describedby");
+    }
+    form.addEventListener("input", (event) => {
+      if ((event.target === phoneInput || event.target === emailInput) && event.target.value.trim()) clearContactError();
+    });
+    form.onsubmit = async (event) => {
       event.preventDefault();
       if (replying || !state) return;
-      const target = host.querySelector("#reply-error");
-      target.hidden = true;
-      const value = (key) => host.querySelector(key).value.trim();
-      const phone = value("#reply-phone");
-      const email = value("#reply-email");
+      showFormError(target, "");
+      const value = (key) => form.querySelector(key).value.trim();
+      const phone = phoneInput.value.trim();
+      const email = emailInput.value.trim();
       if (!phone && !email) {
-        target.textContent =
-          t("Provide a phone number or email address, or both. Only the task creator can see them.", "请填写电话或邮箱，也可以都填。只有使用任务管理密码才能解密。");
-        target.hidden = false;
+        showFormError(contactError, t("Provide a phone number or email address, or both. Only the task creator can see them.", "请填写电话或邮箱，也可以都填。只有使用任务管理密码才能解密。"), { focus: false });
+        phoneInput.setAttribute("aria-describedby", contactError.id);
+        emailInput.setAttribute("aria-describedby", contactError.id);
+        phoneInput.focus();
         return;
       }
+      clearContactError();
       replying = true;
       render();
       try {
@@ -211,8 +225,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
           t("Your name and message are public. Your contact details are visible only to the task creator.", "你的姓名和留言会公开；联系方式已加密，只有使用任务管理密码才能解密。"),
         );
       } catch (e) {
-        target.textContent = e.message;
-        target.hidden = false;
+        showFormError(target, e);
         // A 409 can mean the task was completed or closed meanwhile.
         if (e.status === 409) setTimeout(refresh);
       } finally {
@@ -220,6 +233,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
         render();
       }
     };
+  }
   async function refresh() {
     if (stopped || !host.isConnected) return;
     if (document.hidden || fetching || liking || replying || reporting || expired) return;

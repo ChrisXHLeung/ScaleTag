@@ -127,11 +127,27 @@ test("anonymous task publication, persistent likes and private email reply work 
   await f.page.locator("#contact-consent").check();
   await f.page.locator("#send-reply").click();
   await f.page
-    .locator("#reply-error")
+    .locator("#reply-contact-error")
     .filter({ hasText: "Provide a phone" })
     .waitFor();
+  assert.equal(await f.page.locator("#reply-phone").evaluate(input => document.activeElement === input), true);
+  assert.equal(await f.page.locator("#reply-phone").getAttribute("aria-describedby"), "reply-contact-error");
+  assert.equal(await f.page.locator("#reply-email").getAttribute("aria-describedby"), "reply-contact-error");
   await f.page.locator("#reply-email").fill("helper@example.com");
+  assert.equal(await f.page.locator("#reply-contact-error").isVisible(), false);
+  assert.equal(await f.page.locator("#reply-phone").getAttribute("aria-describedby"), null);
+  assert.equal(await f.page.locator("#reply-email").getAttribute("aria-describedby"), null);
+  assert.equal(await f.page.locator("#reply-message").inputValue(), "I can help on Saturday.");
+  const replyUrl = `${f.origin}/api/posts/${id}/replies`;
+  await f.page.route(replyUrl, route => route.fulfill({ status: 503, json: { error: "Try again shortly." } }));
   await f.page.locator("#send-reply").click();
+  await f.page.locator("#reply-error").filter({ hasText: "Try again shortly." }).waitFor();
+  assert.equal(await f.page.locator("#reply-error").evaluate(error => document.activeElement === error), true);
+  assert.equal(await f.page.locator("#reply-email").inputValue(), "helper@example.com");
+  await f.page.unroute(replyUrl);
+  await f.page.keyboard.press("Tab");
+  assert.equal(await f.page.locator("#send-reply").evaluate(button => document.activeElement === button), true);
+  await f.page.keyboard.press("Enter");
   await f.page
     .locator("#reply-list")
     .getByText("I can help on Saturday.", { exact: true })
