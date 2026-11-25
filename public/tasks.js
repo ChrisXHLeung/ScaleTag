@@ -197,7 +197,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
   const shareCard = main.querySelector(".share-card");
   mountSavedPost(shareCard, {
     path: `/task/${id}${manage && !legacyKey ? "/manage" : ""}`,
-    title: task.title,
+    title: () => task.title,
   });
   const renderPoster = () => mountPosterActions(shareCard, {
     type: "task",
@@ -394,6 +394,6 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
       if (manage && (assignmentChanged || data.replies?.length !== privateReplies.length))
         refreshPrivateReplies();
     },
-    task.title,
+    () => task.title,
   );
 }

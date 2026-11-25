@@ -1823,3 +1823,142 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "saved link controls report unavailable Web Locks without unhandled rejections",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+    const unavailableText = "This browser cannot store this item.";
+    const savedKey = "scaletag-saved-posts";
+    await page.addInitScript(() => {
+      window.__rejections = [];
+      window.addEventListener("unhandledrejection", (event) => window.__rejections.push(String(event.reason)));
+    });
+    const denyLocks = () => page.evaluate(() => {
+      Object.defineProperty(navigator.locks, "request", {
+        configurable: true,
+        value: () => Promise.reject(new DOMException("Denied", "SecurityError")),
+      });
+    });
+    const allowLocks = () => page.evaluate(() => { delete navigator.locks.request; });
+    const rejections = () => page.evaluate(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return window.__rejections;
+    });
+    const readSaved = () => page.evaluate((key) => localStorage.getItem(key), savedKey);
+
+    const poll = await store.create({ title: "Locked saved poll", options: ["A", "B"], visibility: "unlisted" });
+    await page.goto(`${origin}/vote/${poll.id}`);
+    await page.getByRole("heading", { name: poll.title }).waitFor();
+    await denyLocks();
+    await page.getByRole("button", { name: "Save post", exact: true }).click();
+    await page.locator(".share-card").getByText(unavailableText, { exact: true }).waitFor();
+    assert.equal(await readSaved(), null);
+    assert.deepEqual(await rejections(), []);
+
+    const other = { path: `/task/${"1".repeat(24)}`, title: "Neighbouring saved task" };
+    const items = [{ path: `/vote/${poll.id}`, title: poll.title }, other];
+    await page.evaluate(([key, value]) => localStorage.setItem(key, JSON.stringify(value)), [savedKey, items]);
+    await page.goto(`${origin}/saved`);
+    const row = page.locator(".saved-posts li").filter({ hasText: poll.title });
+    await row.waitFor();
+    await denyLocks();
+    await row.getByRole("button", { name: "Remove", exact: true }).click();
+    await page.locator(".list-page > .field-hint").first().getByText(unavailableText, { exact: true }).waitFor();
+    assert.equal(await row.count(), 1);
+    assert.deepEqual(JSON.parse(await readSaved()), items);
+    assert.deepEqual(await rejections(), []);
+
+    await allowLocks();
+    await row.getByRole("button", { name: "Remove", exact: true }).click();
+    const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+    await undo.waitFor();
+    await row.waitFor({ state: "detached" });
+    await denyLocks();
+    await undo.click();
+    await page.locator(".saved-recovery-status").getByText(unavailableText, { exact: true }).waitFor();
+    assert.deepEqual(JSON.parse(await readSaved()), [other]);
+    assert.deepEqual(await rejections(), []);
+    assert.deepEqual(f.errors, []);
+  },
+);
+
+test(
+  "saving a removed link again in another tab clears the undo offer on /saved",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin } = f;
+    const savedKey = "scaletag-saved-posts";
+    const removed = { path: `/task/${"2".repeat(24)}`, title: "Saved again elsewhere" };
+    const kept = { path: `/sale/${"3".repeat(24)}`, title: "Still saved giveaway" };
+    await page.evaluate(([key, value]) => localStorage.setItem(key, JSON.stringify(value)), [savedKey, [removed, kept]]);
+    await page.goto(`${origin}/saved`);
+    const rows = page.locator(".saved-posts li");
+    const removedRow = rows.filter({ hasText: removed.title });
+    await removedRow.getByRole("button", { name: "Remove", exact: true }).click();
+    const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+    await undo.waitFor();
+    await removedRow.waitFor({ state: "detached" });
+    assert.equal(await page.locator(".saved-recovery-status").textContent(), "Saved link removed.");
+
+    // Another tab saves the same link again and this tab receives the storage event.
+    await page.evaluate(([key, value]) => {
+      localStorage.setItem(key, JSON.stringify(value));
+      window.dispatchEvent(new StorageEvent("storage", { key, storageArea: localStorage }));
+    }, [savedKey, [removed, kept]]);
+    await page.getByRole("link", { name: removed.title }).waitFor();
+    await undo.waitFor({ state: "hidden" });
+    assert.equal(await page.locator(".saved-recovery-status").textContent(), "");
+    assert.equal(await rows.count(), 2);
+    assert.deepEqual(f.errors, []);
+  },
+);
+
+test(
+  "management pages save the edited title to saved links",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+    const savedKey = "scaletag-saved-posts";
+
+    async function editTitleAndSave(newTitle, path) {
+      await page.getByText("Edit public details", { exact: true }).click();
+      await page.locator("#owner-title").fill(newTitle);
+      await page.getByRole("button", { name: "Save changes", exact: true }).click();
+      await page.getByText("Changes saved.", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Save management link", exact: true }).click();
+      await page.getByRole("button", { name: "Remove from saved links", pressed: true }).waitFor();
+      assert.deepEqual(
+        await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), savedKey),
+        [{ path, title: newTitle }],
+      );
+      await page.evaluate((key) => localStorage.removeItem(key), savedKey);
+    }
+
+    const { password, ...credentials } = await createTaskCredentials();
+    const task = await store.create({
+      ...credentials, type: "task", title: "Original task title", description: "Water the plants.",
+      signature: "Jules", reward: "Coffee", options: [], visibility: "unlisted",
+    });
+    await page.goto(`${origin}/task/${task.id}/manage`);
+    await page.getByLabel("Management password").fill(password);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.getByRole("heading", { name: "Manage this task" }).waitFor();
+    await editTitleAndSave("Edited task title", `/task/${task.id}/manage`);
+
+    const sale = await store.create({
+      type: "sale", giveawayVersion: 1, title: "Original giveaway title", description: "A small shelf.",
+      signature: "Jules", pickupLocation: "Front porch", options: [], visibility: "unlisted",
+    });
+    await page.goto(`${origin}/sale/${sale.id}/manage`);
+    await page.getByLabel("Management password").fill(sale.manageKey);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+    await editTitleAndSave("Edited giveaway title", `/sale/${sale.id}/manage`);
+    assert.deepEqual(f.errors, []);
+  },
+);

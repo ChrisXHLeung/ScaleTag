@@ -1359,7 +1359,7 @@ test("progress states: in progress accepts replies; completed and closed are fin
   assert.equal(data.deleteAt, task.deleteAt, "retention must not change");
   const rejected = await reply();
   assert.equal(rejected.status, 409);
-  assert.match((await rejected.json()).error, /no longer accepts replies/);
+  assert.equal((await rejected.json()).error, "This task is completed and no longer accepts replies.");
   for (const state of ["open", "in_progress", "closed"])
     assert.equal(
       (await setState(f, task.id, { key: task.manageKey, state })).status,
@@ -1384,16 +1384,13 @@ test("progress states: in progress accepts replies; completed and closed are fin
   const closed = await createTask(f);
   const closedSession = await socialSession(f, closed.id);
   await setState(f, closed.id, { key: closed.manageKey, state: "closed" });
-  assert.equal(
-    (
-      await f.request(
-        `/api/posts/${closed.id}/replies`,
-        await replyBody(task),
-        closedSession.cookie,
-      )
-    ).status,
-    409,
+  const closedReply = await f.request(
+    `/api/posts/${closed.id}/replies`,
+    await replyBody(task),
+    closedSession.cookie,
   );
+  assert.equal(closedReply.status, 409);
+  assert.equal((await closedReply.json()).error, "This task is closed and no longer accepts replies.");
   // Status filters and map reflect final states.
   const open = await (
     await f.request("/api/posts/search", { type: "task", status: "open" })

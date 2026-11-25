@@ -652,13 +652,14 @@ export class PollStore {
         p = db.data;
       if (!["task", "sale"].includes(p.type))
         throw new AppError(400, "Replies are available on tasks and sales only.");
-      if (postStatus(p, this.clock()) === "closed")
-        throw new AppError(409, "This post is closed and no longer accepts replies.");
+      // Check final task states first: postStatus also reports them as closed.
       if (FINAL_TASK_STATES.includes(taskStateOf(p)))
         throw new AppError(
           409,
           `This task is ${taskStateOf(p)} and no longer accepts replies.`,
         );
+      if (postStatus(p, this.clock()) === "closed")
+        throw new AppError(409, "This post is closed and no longer accepts replies.");
       if (!hasManageKey(p))
         throw new AppError(409, LEGACY_TASK_NO_REPLIES);
       if (p.type === "task" && p.assignedReplyId)

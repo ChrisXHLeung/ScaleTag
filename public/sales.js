@@ -82,7 +82,7 @@ export async function salePage(id, { manage = false, password, published } = {})
     });
   }
   const shareCard = main.querySelector('.share-card');
-  mountSavedPost(shareCard, { path: `/sale/${id}${manage && !legacyKey ? '/manage' : ''}`, title: sale.title });
+  mountSavedPost(shareCard, { path: `/sale/${id}${manage && !legacyKey ? '/manage' : ''}`, title: () => sale.title });
   const renderPoster = () => mountPosterActions(shareCard, {
     type: 'sale',
     id,

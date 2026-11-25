@@ -280,11 +280,16 @@ export function mountSavedPost(host, { path, title, sync = true }) {
   control.onclick = () => withLocalLock(savedKey, () => {
     const items = savedPosts();
     const index = items.findIndex((item) => item.path === path);
+    // Read the title at click time so edits made on the page are saved.
+    const currentTitle = typeof title === "function" ? title() : title;
     if (index >= 0) items.splice(index, 1);
-    else items.unshift({ path, title });
+    else items.unshift({ path, title: currentTitle });
     status.hidden = write(savedKey, items.slice(0, savedLimit));
     status.textContent = status.hidden ? "" : unavailable();
     syncSavedButtons();
+  }).catch(() => {
+    status.textContent = unavailable();
+    status.hidden = false;
   });
   host.append(control, status);
   if (sync) syncSavedButtons();
@@ -419,7 +424,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     render();
     const link = list.querySelector(`li:not([hidden]) a[href="${path}"]`);
     (link ?? statusFilter ?? search).focus();
-  });
+  }).catch(() => { recoveryStatus.textContent = unavailable(); });
 
   const labels = new Map([
     ["poll_open", t("Open for votes", "投票进行中")],
@@ -491,7 +496,14 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   function render() {
     lookups.clear();
     list.replaceChildren();
-    for (const [path, title] of new Map(savedPosts().map(item => [item.path, item.title]))) {
+    const items = savedPosts();
+    // Another tab may have saved the removed link again; the undo offer no longer applies.
+    if (lastRemoval && items.some(item => item.path === lastRemoval.path)) {
+      lastRemoval = undefined;
+      undo.hidden = true;
+      recoveryStatus.textContent = "";
+    }
+    for (const [path, title] of new Map(items.map(item => [item.path, item.title]))) {
       const row = document.createElement("li");
       const details = document.createElement("div");
       details.className = "saved-post-details";
@@ -585,7 +597,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         row.remove();
         applyFilters();
         (neighbor?.querySelector("a") ?? undo).focus();
-      });
+      }).catch(() => { description.textContent = unavailable(); });
       controls.append(copy, remove);
       details.append(feedback);
       row.append(details, controls, fallback);

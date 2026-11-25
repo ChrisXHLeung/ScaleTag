@@ -358,7 +358,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     qrUrl: `/api/polls/${id}/qr.png`,
     publicUrl: `${location.origin}/vote/${id}`,
   });
-  mountSavedPost(main.querySelector(".share-card"), { path: `/vote/${id}`, title: poll.title });
+  mountSavedPost(main.querySelector(".share-card"), { path: `/vote/${id}`, title: () => poll.title });
   const updateResultExports = mountResultExports(
     main.querySelector(".results-section"), id, () => api(`/api/polls/${id}`),
   );
@@ -1245,7 +1245,10 @@ function followPostListHistory(event) {
   if (previous?.getState()?.scaleTagPostList !== true) return;
 
   event.preventDefault();
-  void nav.traverseTo(previous.key).committed.catch(error => {
+  const { committed, finished } = nav.traverseTo(previous.key);
+  // A cancelled or failed traversal also rejects finished; handle it so it is not reported as unhandled.
+  finished?.catch(() => {});
+  void committed.catch(error => {
     if (error.name !== "AbortError" && nav.currentEntry?.key === current.key) location.assign(link.href);
   });
 }

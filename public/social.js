@@ -72,10 +72,12 @@ export function mountSocial(id, allowReplies, onUnavailable, onState, taskTitle)
     if (replyOrder) replyOrder.parentElement.hidden = replies.length < 2;
     const ordered = replyOrder?.value === "newest" ? [...replies].reverse() : replies;
     const replyTitles = new Map();
+    // Read the task title when the reply is saved so owner edits are reflected.
+    const currentTaskTitle = () => typeof taskTitle === "function" ? taskTitle() : taskTitle;
     const html = ordered.length ? ordered.map(reply => {
       const target = linkReplies && /^[a-f0-9]{24}$/.test(reply.id) ? `reply-${reply.id}` : "";
       const time = date(reply.createdAt);
-      if (target) replyTitles.set(target, `${taskTitle} · ${reply.name} · ${time}`);
+      if (target) replyTitles.set(target, () => `${currentTaskTitle()} · ${reply.name} · ${time}`);
       const byline = target
         ? `<a class="reply-permalink" href="#${target}"><span class="sr-only">${t("Link to this reply", "链接到此回复")} </span>${time}</a>`
         : `<span>${time}</span>`;
