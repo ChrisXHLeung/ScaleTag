@@ -156,6 +156,50 @@ test("anonymous task publication, persistent likes and private email reply work 
   assert.deepEqual(f.errors, []);
 });
 
+test("a public task reply link opens and focuses the same reply in another tab", async (t) => {
+  const f = await fixture(t), task = await f.createTask();
+  const url = `${f.origin}/task/${task.id}`;
+  await f.page.goto(`${url}?lang=en`);
+  const submit = f.page.locator("#send-reply");
+  await f.page.locator("#reply-name").fill("Public helper");
+  await f.page.locator("#reply-message").fill("Available on Saturday.");
+  await f.page.locator("#reply-email").fill("private-helper@example.com");
+  await f.page.locator("#contact-consent").check();
+  await submit.click();
+  const link = f.page.getByRole("link", { name: /Link to this reply/u });
+  await link.waitFor({ timeout: 5000 });
+  const shared = new URL(await link.getAttribute("href"), f.page.url());
+  assert.equal(shared.pathname, `/task/${task.id}`);
+  assert.equal(shared.search, "?lang=en");
+  assert.match(shared.hash, /^#reply-[a-f0-9]{24}$/u);
+  await f.page.locator("#reply-message").fill("Unsaved second reply.");
+  await link.click();
+  assert.equal(f.page.url(), shared.href);
+  assert.equal(await f.page.locator("#reply-message").inputValue(), "Unsaved second reply.");
+
+  const other = await f.context.newPage();
+  await other.setViewportSize({ width: 320, height: 900 });
+  await other.goto(shared.href);
+  const card = other.locator(shared.hash);
+  await card.getByText("Available on Saturday.", { exact: true }).waitFor();
+  assert.ok(await card.evaluate(reply => document.activeElement === reply));
+  assert.ok(await card.evaluate(reply => reply.getBoundingClientRect().top < innerHeight && reply.getBoundingClientRect().bottom > 0));
+  assert.equal(await other.getByText("private-helper@example.com", { exact: true }).count(), 0);
+  assert.ok(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+  f.advance(60000);
+  await f.page.bringToFront();
+  await f.page.locator("#reply-email").fill("private-helper@example.com");
+  await f.page.locator("#contact-consent").check();
+  await submit.click();
+  await f.page.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
+  await other.bringToFront();
+  await other.evaluate(() => window.dispatchEvent(new Event("online")));
+  await other.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
+  assert.ok(await card.evaluate(reply => document.activeElement === reply));
+  assert.deepEqual(f.errors, []);
+});
+
 test("phone-only and dual-contact replies are escaped; polls have likes without reply fields", async (t) => {
   const f = await fixture(t),
     task = await f.createTask();

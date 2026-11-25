@@ -429,6 +429,25 @@
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
 }
+.reply-card[id] {
+  scroll-margin-block: 24px;
+}
+.reply-card[id]:focus, .reply-card:target {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+}
+.reply-permalink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--blue);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 720px), (pointer: coarse) {
+  .reply-permalink { min-height: 44px; }
+}
 .reply-byline {
   display: flex;
   justify-content: space-between;

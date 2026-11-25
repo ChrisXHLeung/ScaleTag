@@ -5519,6 +5519,15 @@ export const TRANSLATIONS = {
     de: "Noch keine Antworten. Starte die Unterhaltung.",
     it: "Ancora nessuna risposta. Inizia la conversazione.",
   },
+  "Link to this reply": {
+    ja: "この返信へのリンク",
+    ko: "이 답글 링크",
+    fr: "Lien vers cette réponse",
+    pt: "Link para esta resposta",
+    es: "Enlace a esta respuesta",
+    de: "Link zu dieser Antwort",
+    it: "Link a questa risposta",
+  },
   "This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies.": {
     ja: "この古いタスクには非公開の管理リンクがないため、投稿者が連絡先を取得できません。新規の返信は受け付けていません。",
     ko: "이 이전 작업에는 비공개 관리 링크가 없어 작성자가 연락처를 확인할 수 없습니다. 더 이상 댓글을 받지 않습니다.",

@@ -33,6 +33,46 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     target.textContent = message;
     target.hidden = false;
   }
+  const publicTaskPath = `/task/${id}`;
+  const linkReplies = allowReplies && location.pathname === publicTaskPath;
+  const replyList = host.querySelector("#reply-list");
+  let pendingReplyHash = linkReplies ? location.hash : "";
+  let lastRepliesHtml;
+
+  function focusLinkedReply() {
+    if (!/^#reply-[a-f0-9]{24}$/.test(pendingReplyHash)) return;
+    const reply = document.getElementById(pendingReplyHash.slice(1));
+    if (!replyList.contains(reply)) return;
+    pendingReplyHash = "";
+    reply.focus({ preventScroll: true });
+    reply.scrollIntoView({ block: "nearest" });
+  }
+
+  function onReplyHashChange() {
+    pendingReplyHash = location.hash;
+    focusLinkedReply();
+  }
+
+  function renderReplies(replies) {
+    const html = replies.length ? replies.map(reply => {
+      const target = linkReplies && /^[a-f0-9]{24}$/.test(reply.id) ? `reply-${reply.id}` : "";
+      const time = date(reply.createdAt);
+      const byline = target
+        ? `<a class="reply-permalink" href="#${target}"><span class="sr-only">${t("Link to this reply", "链接到此回复")} </span>${time}</a>`
+        : `<span>${time}</span>`;
+      return `<article class="reply-card"${target ? ` id="${target}" tabindex="-1"` : ""}><div class="reply-byline"><strong>${escape(reply.name)}</strong>${byline}</div><p class="reply-message">${escape(reply.message)}</p></article>`;
+    }).join("") : `<p class="field-hint">${t("No replies yet. Start the conversation.", "还没有回复，来说两句吧。")}</p>`;
+    if (html !== lastRepliesHtml) {
+      const active = document.activeElement;
+      const focused = replyList.contains(active) ? active.closest(".reply-card[id]") : null;
+      replyList.innerHTML = lastRepliesHtml = html;
+      if (focused) {
+        const updated = document.getElementById(focused.id);
+        (active === focused ? updated : updated?.querySelector(".reply-permalink"))?.focus({ preventScroll: true });
+      }
+    }
+    if (linkReplies) focusLinkedReply();
+  }
   function render() {
     host.querySelector("#like-count").textContent = count(state.totalLikes);
     host.querySelector("#like-label").textContent = state.hasLiked
@@ -48,14 +88,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     if (!allowReplies) return;
     host.querySelector("#reply-count").textContent =
       t(`${count(state.replies.length)} ${state.replies.length === 1 ? "reply" : "replies"}`, `${count(state.replies.length)} 条回复`);
-    host.querySelector("#reply-list").innerHTML = state.replies.length
-      ? state.replies
-          .map(
-            (r) =>
-              `<article class="reply-card"><div class="reply-byline"><strong>${escape(r.name)}</strong><span>${date(r.createdAt)}</span></div><p class="reply-message">${escape(r.message)}</p></article>`,
-          )
-          .join("")
-      : `<p class="field-hint">${t("No replies yet. Start the conversation.", "还没有回复，来说两句吧。")}</p>`;
+    renderReplies(state.replies);
     // Contacts are collected only when the task has a private management link.
     const privateContacts = state.acceptsPrivateContacts === true;
     host.querySelector("#private-contact-fields").hidden = !privateContacts;
@@ -237,6 +270,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
     window.removeEventListener("offline", onOffline);
     window.removeEventListener("pagehide", onPageHide);
     window.removeEventListener("pageshow", onPageShow);
+    if (linkReplies) window.removeEventListener("hashchange", onReplyHashChange);
   }
   startPolling();
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -244,6 +278,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   window.addEventListener("offline", onOffline);
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("pageshow", onPageShow);
+  if (linkReplies) window.addEventListener("hashchange", onReplyHashChange);
   refresh();
   return { refresh, stop };
 }
