@@ -429,6 +429,13 @@
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
 }
+.reply-order {
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.reply-order select {
+  max-width: 100%;
+}
 .reply-card[id] {
   scroll-margin-block: 24px;
 }

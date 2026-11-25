@@ -182,6 +182,8 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await other.goto(shared.href);
   const card = other.locator(shared.hash);
   await card.getByText("Available on Saturday.", { exact: true }).waitFor();
+  const order = other.getByRole("combobox", { name: "Reply order", exact: true });
+  assert.equal(await order.isVisible(), false);
   assert.ok(await card.evaluate(reply => document.activeElement === reply));
   assert.ok(await card.evaluate(reply => reply.getBoundingClientRect().top < innerHeight && reply.getBoundingClientRect().bottom > 0));
   assert.equal(await other.getByText("private-helper@example.com", { exact: true }).count(), 0);
@@ -197,6 +199,15 @@ test("a public task reply link opens and focuses the same reply in another tab",
   await other.evaluate(() => window.dispatchEvent(new Event("online")));
   await other.locator("#reply-list").getByText("Unsaved second reply.", { exact: true }).waitFor();
   assert.ok(await card.evaluate(reply => document.activeElement === reply));
+  await order.waitFor({ timeout: 5000 });
+  const replies = other.locator("#reply-list .reply-message");
+  assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);
+  await order.selectOption("newest");
+  assert.deepEqual(await replies.allTextContents(), ["Unsaved second reply.", "Available on Saturday."]);
+  assert.equal(other.url(), shared.href);
+  assert.equal(await card.getByRole("link").getAttribute("href"), shared.hash);
+  await order.selectOption("oldest");
+  assert.deepEqual(await replies.allTextContents(), ["Available on Saturday.", "Unsaved second reply."]);
   assert.deepEqual(f.errors, []);
 });
 

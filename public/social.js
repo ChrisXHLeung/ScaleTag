@@ -36,6 +36,15 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   const publicTaskPath = `/task/${id}`;
   const linkReplies = allowReplies && location.pathname === publicTaskPath;
   const replyList = host.querySelector("#reply-list");
+  if (linkReplies) replyList.insertAdjacentHTML("beforebegin", `<div class="content-filter reply-order" hidden>
+    <label for="reply-order">${t("Reply order", "回复排序")}</label>
+    <select id="reply-order">
+      <option value="oldest">${t("Oldest first", "最早优先")}</option>
+      <option value="newest">${t("Newest first", "最新优先")}</option>
+    </select>
+  </div>`);
+  const replyOrder = host.querySelector("#reply-order");
+  if (replyOrder) replyOrder.onchange = () => renderReplies(state.replies);
   let pendingReplyHash = linkReplies ? location.hash : "";
   let lastRepliesHtml;
 
@@ -54,7 +63,9 @@ export function mountSocial(id, allowReplies, onUnavailable, onState) {
   }
 
   function renderReplies(replies) {
-    const html = replies.length ? replies.map(reply => {
+    if (replyOrder) replyOrder.parentElement.hidden = replies.length < 2;
+    const ordered = replyOrder?.value === "newest" ? [...replies].reverse() : replies;
+    const html = ordered.length ? ordered.map(reply => {
       const target = linkReplies && /^[a-f0-9]{24}$/.test(reply.id) ? `reply-${reply.id}` : "";
       const time = date(reply.createdAt);
       const byline = target
