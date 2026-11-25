@@ -436,6 +436,9 @@
 .reply-order select {
   max-width: 100%;
 }
+.reply-length-status:empty {
+  margin: 0;
+}
 .reply-card[id] {
   scroll-margin-block: 24px;
 }

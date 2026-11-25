@@ -123,7 +123,19 @@ test("anonymous task publication, persistent likes and private email reply work 
   await f.page.getByLabel("Management password").fill(password);
   await f.page.getByRole("button", { name: "Unlock" }).click();
   await f.page.locator('#like-post[aria-pressed="true"]').waitFor();
-  await f.page.locator("#reply-message").fill("I can help on Saturday.");
+  const replyInput = f.page.locator("#reply-message");
+  const length = f.page.locator("#reply-message-length");
+  const limitStatus = f.page.locator("#reply-message-limit-status");
+  await length.waitFor({ timeout: 5000 });
+  assert.equal(await replyInput.getAttribute("aria-describedby"), "reply-message-hint reply-message-length");
+  await replyInput.fill("a".repeat(1800));
+  assert.match(await length.textContent(), /1,800 \/ 2,000/u);
+  assert.equal(await limitStatus.textContent(), "You are close to the reply length limit.");
+  await replyInput.fill("😀".repeat(1000));
+  assert.match(await length.textContent(), /2,000 \/ 2,000/u);
+  assert.equal(await limitStatus.textContent(), "Reply length limit reached.");
+  await replyInput.fill("I can help on Saturday.");
+  assert.equal(await limitStatus.textContent(), "");
   await f.page.locator("#contact-consent").check();
   await f.page.locator("#send-reply").click();
   await f.page
@@ -152,6 +164,7 @@ test("anonymous task publication, persistent likes and private email reply work 
     .locator("#reply-list")
     .getByText("I can help on Saturday.", { exact: true })
     .waitFor();
+  assert.match(await length.textContent(), /0 \/ 2,000/u);
   assert.equal(
     await f.page.locator("#private-reply-list .reply-contacts a").textContent(),
     "Email: helper@example.com",
