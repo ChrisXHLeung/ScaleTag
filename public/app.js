@@ -524,6 +524,8 @@ async function votePage(id, { ownerKey, published } = {}) {
 function postList() {
   document.title = t("PostList — ScaleTag", "帖子列表 — ScaleTag");
   setActiveNav("list");
+  const nav = window.navigation;
+  markDiscoveryEntry();
   const searchForm = `<form class="post-search" id="post-search" role="search">
     <label for="post-query">${t("Search posts", "搜索帖子")}
       <input id="post-query" type="search" autocomplete="off" maxlength="240" placeholder="${t("Title or description", "标题或描述")}">
@@ -595,9 +597,21 @@ function postList() {
     if (pickupFilter.hidden) pickupTime.value = "";
   }
 
+  function markDiscoveryEntry() {
+    if (!nav?.currentEntry || typeof nav.updateCurrentEntry !== "function") return;
+    try {
+      // The site's referrer policy can hide URLs from other history entries.
+      const state = nav.currentEntry.getState();
+      if (state?.scaleTagPostList !== true) nav.updateCurrentEntry({ state: { ...state, scaleTagPostList: true } });
+    } catch {
+      // Detail pages still have a regular link to PostList.
+    }
+  }
+
   function replaceDiscoveryHistory(state) {
     try {
       history.replaceState(state, "");
+      markDiscoveryEntry();
     } catch {
       // Browsers can limit history writes. Browsing still works without restoration.
     }
@@ -1195,7 +1209,29 @@ async function showVisitCounts(path, title) {
   }
 }
 
+function followPostListHistory(event) {
+  if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  const link = event.target.closest("a[href]");
+  if (!link || link.target || link.hasAttribute("download") || link.origin !== location.origin || link.pathname !== "/PostList") return;
+  const nav = window.navigation;
+  const current = nav.currentEntry;
+  if (!current) return;
+  const entries = nav.entries();
+  let index = current.index - 1;
+  while (entries[index]?.sameDocument) index--;
+  const previous = entries[index];
+  if (previous?.getState()?.scaleTagPostList !== true) return;
+
+  event.preventDefault();
+  void nav.traverseTo(previous.key).committed.catch(error => {
+    if (error.name !== "AbortError" && nav.currentEntry?.key === current.key) location.assign(link.href);
+  });
+}
+
 const route = window.location.pathname;
+if (typeof window.navigation?.traverseTo === "function" && /^\/(vote|task|sale)\/[a-f0-9]{24}$/.test(route)) {
+  main.addEventListener("click", followPostListHistory);
+}
 const savedNav = document.querySelector('[data-nav="saved"]');
 if (savedNav) savedNav.textContent = t("Saved links", "已保存链接");
 try {

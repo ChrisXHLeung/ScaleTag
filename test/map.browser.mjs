@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { once } from "node:events";
 import { createApp } from "../src/app.js";
 import { PollStore, DAY } from "../src/store.js";
+import { createTaskCredentials } from "../public/task-crypto.js";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "scaletag-map-"));
@@ -476,6 +477,68 @@ test("Back restores the activated public result after loading more posts", async
   assert.deepEqual((await restored).postDataJSON(), { status: "all", type: "all", query: "" });
   await more.waitFor();
   assert.equal(await result.count(), 0);
+});
+
+test("the detail-page back link uses the preceding PostList entry, with a normal link for direct visits", async (t) => {
+  const { page, context, origin, store, input } = await fixture(t);
+  const poll = await store.create(input);
+  const detail = `${origin}/vote/${poll.id}`;
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#content-type").selectOption("poll");
+  assert.equal(await page.evaluate(() => navigation.currentEntry.getState()?.scaleTagPostList), true);
+  const card = page.locator(`#poll-list a[href="/vote/${poll.id}"]`);
+  await card.click();
+  await page.getByRole("heading", { name: poll.title, exact: true }).waitFor();
+  await page.evaluate(() => history.pushState(history.state, "", "#results"));
+  await page.getByRole("link", { name: "← Back to PostList", exact: true }).press("Enter");
+  await page.waitForURL(`${origin}/PostList`);
+  await card.waitFor();
+  assert.equal(await page.locator("#content-type").inputValue(), "poll");
+  assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0].type), "back_forward");
+
+  const direct = await context.newPage();
+  await direct.goto(detail);
+  const backLink = direct.getByRole("link", { name: "← Back to PostList", exact: true });
+  assert.equal(await backLink.getAttribute("href"), "/PostList");
+  await backLink.click();
+  await direct.waitForURL(`${origin}/PostList`);
+  assert.equal(await direct.locator("#content-type").inputValue(), "all");
+  assert.equal(await direct.evaluate(() => performance.getEntriesByType("navigation")[0].type), "navigate");
+
+  await direct.goto(`${origin}/privacy`);
+  await direct.goto(detail);
+  await backLink.click();
+  await direct.waitForURL(`${origin}/PostList`);
+  assert.equal(await direct.evaluate(() => performance.getEntriesByType("navigation")[0].type), "navigate");
+
+  const legacy = await context.newPage();
+  await legacy.addInitScript(() => Object.defineProperty(window, "navigation", { value: undefined }));
+  await legacy.goto(`${origin}/PostList`);
+  await legacy.locator("#content-type").selectOption("poll");
+  await legacy.locator(`#poll-list a[href="/vote/${poll.id}"]`).click();
+  await legacy.getByRole("link", { name: "← Back to PostList", exact: true }).click();
+  await legacy.waitForURL(`${origin}/PostList`);
+  assert.equal(await legacy.locator("#content-type").inputValue(), "all");
+  assert.equal(await legacy.evaluate(() => performance.getEntriesByType("navigation")[0].type), "navigate");
+
+  const { authKey, contactPublicKey, encryptedPrivateKey } = await createTaskCredentials();
+  const task = await store.create({
+    ...input, authKey, contactPublicKey, encryptedPrivateKey, type: "task", title: "Garden task", options: [], reward: "Coffee",
+  });
+  const sale = await store.create({
+    ...input, type: "sale", title: "Garden tools", options: [], giveawayVersion: 1, pickupLocation: "Library entrance",
+  });
+  await page.bringToFront();
+  for (const post of [task, sale]) {
+    await page.locator("#content-type").selectOption(post.type);
+    const postCard = page.locator(`#poll-list a[href="/${post.type}/${post.id}"]`);
+    await postCard.click();
+    await page.getByRole("heading", { name: post.title, exact: true }).waitFor();
+    await page.getByRole("link", { name: "← Back to PostList", exact: true }).click();
+    await page.waitForURL(`${origin}/PostList`);
+    await postCard.waitFor();
+    assert.equal(await page.locator("#content-type").inputValue(), post.type);
+  }
 });
 
 test("Back restores the upcoming pickup selection while reload resets it", async (t) => {
