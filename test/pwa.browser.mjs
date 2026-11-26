@@ -1716,19 +1716,19 @@ test(
     }
 
     const expectedRoutes = [
-      { path: "/PostList", activeNav: "list", waitSelector: ".list-page", expectedCount: 3 },
-      { path: "/saved", activeNav: "saved", waitSelector: "main h1", expectedCount: 3 },
-      { path: "/create", activeNav: "create", waitSelector: "#create-form", expectedCount: 3 },
-      { path: "/create/task", activeNav: "create", waitSelector: "#task-form", expectedCount: 3 },
-      { path: "/create/sale", activeNav: "create", waitSelector: "#sale-form", expectedCount: 3 },
-      { path: "/secrex", activeNav: "create", waitSelector: "#secrex-compose", expectedCount: 2 },
+      { path: "/PostList", activeNav: "list", waitSelector: ".list-page" },
+      { path: "/saved", activeNav: "saved", waitSelector: "main h1" },
+      { path: "/create", activeNav: "create", waitSelector: "#create-form" },
+      { path: "/create/task", activeNav: "create", waitSelector: "#task-form" },
+      { path: "/create/sale", activeNav: "create", waitSelector: "#sale-form" },
+      { path: "/secrex", activeNav: "create", waitSelector: "#secrex-compose" },
     ];
 
-    for (const { path, activeNav, waitSelector, expectedCount } of expectedRoutes) {
+    for (const { path, activeNav, waitSelector } of expectedRoutes) {
       await page.goto(`${origin}${path}`);
       await page.locator(waitSelector).waitFor();
       const state = await navState();
-      assert.equal(state.length, expectedCount, `Expected ${expectedCount} header nav links on ${path}`);
+      assert.deepEqual(state.map(item => item.nav), ["create", "saved", "list"], `Header navigation on ${path}`);
       for (const item of state) {
         if (item.nav === activeNav) {
           assert.equal(item.active, true, `${path} -> [data-nav="${item.nav}"] should have .active`);

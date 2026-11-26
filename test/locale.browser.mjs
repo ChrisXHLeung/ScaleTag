@@ -290,11 +290,6 @@ test('browser language, manual preference, storage fallback and offline switchin
     for (const [index, path] of ['/create', '/create/task', '/create/sale', '/secrex'].entries()) {
       if (index) await page.locator(`.post-kind-switch a[href="${path}"]`).click();
       assert.equal(new URL(page.url()).pathname, path);
-      const nav = page.locator('.site-header nav');
-      assert.deepEqual(await nav.locator('a').evaluateAll(links => links.map(link => link.pathname)),
-        ['/create', '/saved', '/PostList']);
-      await nav.getByRole('link', { name: locale === 'zh-CN' ? '已保存链接' : 'Saved links', exact: true }).waitFor();
-      assert.equal(await nav.locator('[aria-current="page"]').getAttribute('href'), '/create');
       const flow = page.locator('.section-intro .help-flow');
       await flow.waitFor();
       assert.equal(await flow.locator('li').first().textContent(), stepNames[index]);
@@ -305,7 +300,9 @@ test('browser language, manual preference, storage fallback and offline switchin
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await page.setViewportSize({ width: 1440, height: 900 });
     }
-    await page.locator('.site-header nav a[href="/saved"]').click();
+    const savedLink = page.locator('.site-header nav')
+      .getByRole('link', { name: locale === 'zh-CN' ? '已保存链接' : 'Saved links', exact: true });
+    await savedLink.click();
     assert.equal(new URL(page.url()).pathname, '/saved');
     await context.close();
   }
