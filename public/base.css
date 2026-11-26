@@ -1541,9 +1541,6 @@ meter::-moz-meter-bar {
     font-size: 37px;
     margin: 15px 0;
   }
-  .section-intro h1 br {
-    display: none;
-  }
   .section-intro > p br {
     display: none;
   }

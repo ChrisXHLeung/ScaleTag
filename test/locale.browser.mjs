@@ -306,12 +306,19 @@ test('browser language, manual preference, storage fallback and offline switchin
       assert.equal(new URL(page.url()).pathname, path);
       const flow = page.locator('.section-intro .help-flow');
       await flow.waitFor();
+      const accent = page.locator('.section-intro h1 em');
+      assert.equal(await accent.count(), 1, `Title accent on ${path}`);
+      assert.ok(await accent.evaluate(em => {
+        const heading = em.closest('h1');
+        return em.textContent.trim() && getComputedStyle(em).color !== getComputedStyle(heading).color;
+      }));
       const [firstAction, actors] = flows[index];
       assert.equal(await flow.locator('.help-step-action').first().textContent(), firstAction);
       assert.deepEqual(await flow.locator('.help-step-actor').allTextContents(), actors);
       assert.ok(await flow.evaluate(el =>
         el.getBoundingClientRect().right < document.querySelector('.form-card').getBoundingClientRect().left));
       await page.setViewportSize({ width: 360, height: 800 });
+      assert.notEqual(await page.locator('.section-intro h1 br').evaluate(br => getComputedStyle(br).display), 'none');
       assert.ok(await flow.isVisible());
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await page.setViewportSize({ width: 1440, height: 900 });

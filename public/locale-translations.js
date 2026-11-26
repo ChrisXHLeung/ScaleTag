@@ -4801,14 +4801,14 @@ export const TRANSLATIONS = {
     de: "ETWAS WEITERGEBEN",
     it: "PASSA QUALCOSA AD ALTRI",
   },
-  "Give it a <br>new home.": {
-    ja: "眠っている物に<br>新しい行き先を。",
-    ko: "안 쓰는 물건에<br>새 주인을 찾아주세요.",
-    fr: "Offrez-lui une<br>nouvelle vie.",
-    pt: "Dê um <br>novo lar.",
-    es: "Dale un <br>nuevo hogar.",
-    de: "Gib ihm ein <br>neues Zuhause.",
-    it: "Dagli una <br>nuova casa.",
+  "Give it a<br> <em>new home.</em>": {
+    ja: "眠っている物に<br><em>新しい行き先を。</em>",
+    ko: "안 쓰는 물건에<br> <em>새 주인을 찾아주세요.</em>",
+    fr: "Offrez-lui une<br> <em>nouvelle vie.</em>",
+    pt: "Dê um<br> <em>novo lar.</em>",
+    es: "Dale un<br> <em>nuevo hogar.</em>",
+    de: "Gib ihm ein<br> <em>neues Zuhause.</em>",
+    it: "Dagli una<br> <em>nuova casa.</em>",
   },
   "Share something free for someone nearby to pick up.": {
     ja: "近くで受け取れる人に、不用品を無料で譲ることができます。",
