@@ -49,6 +49,31 @@
   }
 }
 
+.intro-flow {
+  margin-block-start: 24px;
+  max-inline-size: 28rem;
+}
+.intro-flow h2 {
+  margin: 0;
+}
+.intro-flow .help-flow {
+  display: grid;
+  gap: 14px;
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+}
+.intro-flow .help-flow li {
+  padding: 6px 12px;
+  background: var(--paper);
+}
+.intro-flow .help-flow li + li::before {
+  content: "↓" / "";
+  top: -15px;
+  inset-inline-start: 16px;
+  transform: none;
+  line-height: 1;
+}
+
 .owner-edit {
   margin-top: 16px;
 }

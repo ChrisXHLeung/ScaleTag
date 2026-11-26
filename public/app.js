@@ -1,5 +1,5 @@
 import { localizedPath } from "/locale.js";
-import { renderHelp, helpTopic } from "/help.js";
+import { renderHelp, helpTopic, renderIntroFlow } from "/help.js";
 import {
   t,
   main,
@@ -72,7 +72,7 @@ function installPage() {
 function createPoll() {
   document.title = t("Create a poll — ScaleTag", "创建投票 — ScaleTag");
   setActiveNav("create");
-  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br>${t("your mind?", "想听听大家的意见？")}</h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br>${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p><div class="intro-note"><span class="tiny-label">${t("KEEP IT SIMPLE", "简单就好")}</span><p>${t("One question, a few options,", "提出一个问题，给出几个选项，")}<br>${t("and room for a different perspective.", "听听不同的声音。")}</p></div><div class="rules"><p>${icons.pin} ${t("Public posts require location.", "公开帖需要位置信息。")}</p><p>${icons.clock} ${t("Voting stays open for up to 7 days.", "投票最多开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
+  main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br> ${t("your mind?", "想听听大家的意见？")}</h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br> ${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p>${renderIntroFlow("polls")}<div class="rules"><p>${icons.pin} ${t("Public posts require location.", "公开帖需要位置信息。")}</p><p>${icons.clock} ${t("Voting stays open for up to 7 days.", "投票最多开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
   <form id="create-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}"><a href="/create" aria-current="page">${t("Poll", "投票")}</a><a href="/create/task">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div>
     <div class="form-heading"><h2>${t("Your new poll", "创建投票")}</h2><span class="pill">${t("SINGLE CHOICE", "单选")}</span></div>
     <label for="title">${t("The question", "问题")} <span class="required">*</span></label><input id="title" name="title" maxlength="140" placeholder="${t("What should we make happen next?", "接下来做什么好？")}" required><div class="field-hint"><span>${t("Keep it clear and open to everyone.", "把问题说清楚，让大家都能参与。")}</span><span id="title-count">0 / 140</span></div>

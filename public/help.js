@@ -16,7 +16,7 @@ const features = [
   ["secrex", "/secrex", ["Secrex one-time secrets", "Secrex 阅后即焚"],
     ["The sender’s browser encrypts the text. Share the generated link and password separately. A valid password starts one reading session of up to five minutes within the seven-day expiry. The sender can revoke an unopened secret. Use End and destroy to end the session explicitly. For details about leaving the tab and server deletion, see the privacy page.",
       "发送者的浏览器会加密文本。请分开发送生成的链接和密码。正确密码可在七天有效期内开启一轮最长五分钟的阅读。发送者可以撤销尚未打开的秘密。「结束并销毁」可主动结束阅读。关闭标签页和服务器清理的细节见隐私页面。"],
-    [["Encrypt a message", "加密消息"], ["Share link and password separately", "分开发送链接和密码"], ["Open one reading session", "开启一轮阅读"], ["End or let the session expire", "主动结束或等待到期"]]],
+    [["Encrypt a message", "加密消息"], ["Send the link or QR code separately from the password", "将链接或二维码与密码分开发送"], ["Open one reading session", "开启一轮阅读"], ["Select End and destroy or wait for expiry", "点击「结束并销毁」或等待到期"]]],
   ["discovery", "/PostList", ["Discovery, maps and shared filters", "发现、地图与筛选分享"],
     ["Search public titles and descriptions, then combine type, status and pickup filters. Search nearby using GPS or a chosen map area, with a radius of 2, 10, 50 or 100 km. Shareable filter links contain type, status and pickup timing. Opening a post and returning can restore the public filters and the last opened card when it is still available. The app’s return link uses the prior list in browsers that support the Navigation API.",
       "可搜索公开帖的标题和描述，并组合类型、状态及领取筛选。附近搜索可用 GPS 或地图选区，范围为 2、10、50 或 100 公里。可分享的筛选链接包含类型、状态和领取时段。从详情返回时可恢复公开筛选，并在原卡片仍可用时恢复定位。浏览器支持 Navigation API 时，详情页的返回链接可返回之前的列表。"],
@@ -47,15 +47,28 @@ const features = [
     [["Open a public page", "访问公开页面"], ["Count the browser once per window", "每个统计窗口内按浏览器去重"], ["Read the totals in the footer", "在页脚查看累计数"]]],
 ];
 
+const label = pair => escape(t(...pair));
+
+function renderFlow(steps) {
+  return `<ol class="help-flow" role="list">${steps.map(step => `<li>${label(step)}</li>`).join("")}</ol>`;
+}
+
+export function renderIntroFlow(topic) {
+  const [, , , , steps] = features.find(([id]) => id === topic);
+  return `<section class="intro-flow" aria-labelledby="intro-flow-title">
+    <h2 id="intro-flow-title" class="tiny-label">${t("How it works", "使用流程")}</h2>
+    ${renderFlow(steps)}
+  </section>`;
+}
+
 export function renderHelp(main) {
-  const label = pair => escape(t(...pair));
   document.title = t("Feature guide — ScaleTag", "功能指南 — ScaleTag");
   const topics = features.map(([id, , title]) => `<li><a href="#${id}">${label(title)}</a></li>`).join("");
   const sections = features.map(([id, path, title, description, steps]) => `
     <section id="${id}" class="help-topic" aria-labelledby="help-${id}">
       <h2 id="help-${id}">${label(title)}</h2>
       <p>${label(description)}</p>
-      <ol class="help-flow" role="list">${steps.map(step => `<li>${label(step)}</li>`).join("")}</ol>
+      ${renderFlow(steps)}
       <a class="text-link" href="${path}">${path === "/privacy" ? t("Privacy & retention", "隐私与保留") : t("Open this feature", "打开此功能")}</a>
     </section>`).join("");
   main.innerHTML = `<article class="privacy-page feature-guide">

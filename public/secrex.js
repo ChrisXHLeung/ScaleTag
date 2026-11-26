@@ -1,3 +1,4 @@
+import { renderIntroFlow } from "/help.js";
 import { t, icons, setActiveNav } from "/common.js";
 import {
   decryptSecret,
@@ -61,6 +62,7 @@ function createView() {
         "Encrypt sensitive text directly in your browser. Only one recipient can open it once with both the share link and separate password, and it is permanently destroyed right after.",
         "在浏览器本地加密敏感文本，不上传明文。收件人需同时使用分享链接和独立密码才可打开，且仅限一次阅读，读完或到期后即刻销毁。",
       )}</p>
+      ${renderIntroFlow("secrex")}
       <div class="intro-note">
         <span class="tiny-label">${t("HOW SECREX WORKS", "工作原理与安全保障")}</span>
         <p>${t(
@@ -100,20 +102,6 @@ function createView() {
           "Secrex lets you share passwords, keys, addresses, or private notes safely without an account. Unlike public polls or tasks, your secret is never listed publicly and self-destructs after one reading.",
           "Secrex 用于安全传递账号密码、密钥、地址或私人备注，无需注册。与公开的投票、任务或闲置赠予不同，Secrex 不会出现在帖子列表中，且在单次阅读后永久销毁。",
         )}</p>
-        <ol class="secrex-steps">
-          <li><strong>${t("Encrypt locally", "本地加密")}</strong> — ${t(
-            "Your text is encrypted in your browser; only ciphertext is sent to the server.",
-            "内容在发送前于你的浏览器完成加密，服务器仅存密文。",
-          )}</li>
-          <li><strong>${t("Share via two channels", "分开传递")}</strong> — ${t(
-            "Send the link or QR code in one chat, and send the generated password separately. Neither works alone.",
-            "建议将分享链接或二维码与系统生成的分享密码分开发送，缺少其一都无法解密。",
-          )}</li>
-          <li><strong>${t("Read once & destroy", "一次阅读即销毁")}</strong> — ${t(
-            "Once unlocked, other visitors are blocked immediately. The secret is erased when the reader clicks End and destroy or the short timer ends.",
-            "一方解锁后其他人即无法打开；阅读者点击“结束并销毁”或短时会话到期后，密文将被永久删除。",
-          )}</li>
-        </ol>
       </section>
       <div id="secrex-compose" class="secrex-fields">
         <label for="secrex-text">${t("Secret text", "私密内容")}</label>

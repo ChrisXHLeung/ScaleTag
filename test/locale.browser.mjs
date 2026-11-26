@@ -87,6 +87,9 @@ test('browser language, manual preference, storage fallback and offline switchin
     ]);
     await page.goto(`${origin}/create/task`);
     await page.getByText(task, { exact: false }).first().waitFor();
+    const taskStep = htmlLang === 'zh-Hans' ? '发布任务'
+      : TRANSLATIONS['Publish a task'][htmlLang] ?? 'Publish a task';
+    assert.equal(await page.locator('.intro-flow li').first().textContent(), taskStep);
     if (locale === 'zh-CN' || locale === 'en-US') {
       const link = page.locator('[data-feature-guide]');
       assert.equal(await link.getAttribute('href'), '/help#tasks');
@@ -275,4 +278,28 @@ test('browser language, manual preference, storage fallback and offline switchin
   assert.equal(await readOnlyPage.locator('#language-select').inputValue(), 'fr');
   assert.equal(await readOnlyPage.locator('html').getAttribute('lang'), 'fr');
   await readOnly.close();
+
+  // Each creation tab shows its own flow in the introduction beside the form.
+  for (const [locale, stepNames] of [
+    ['en-US', ['Set the question and deadline', 'Publish a task', 'Publish an item and pickup details', 'Encrypt a message']],
+    ['zh-CN', ['设置问题和截止时间', '发布任务', '发布物品与领取安排', '加密消息']],
+  ]) {
+    const context = await browser.newContext({ locale, viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(`${origin}/create`);
+    for (const [index, path] of ['/create', '/create/task', '/create/sale', '/secrex'].entries()) {
+      if (index) await page.locator(`.post-kind-switch a[href="${path}"]`).click();
+      assert.equal(new URL(page.url()).pathname, path);
+      const flow = page.locator('.section-intro .help-flow');
+      await flow.waitFor();
+      assert.equal(await flow.locator('li').first().textContent(), stepNames[index]);
+      assert.ok(await flow.evaluate(el =>
+        el.getBoundingClientRect().right < document.querySelector('.form-card').getBoundingClientRect().left));
+      await page.setViewportSize({ width: 360, height: 800 });
+      assert.ok(await flow.isVisible());
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    await context.close();
+  }
 });

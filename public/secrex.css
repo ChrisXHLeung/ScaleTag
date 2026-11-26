@@ -28,16 +28,6 @@
   margin-bottom: 0;
 }
 
-.secrex-steps {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink);
-}
-
 .secrex-fields {
   display: grid;
   gap: 10px;
