@@ -1,53 +1,182 @@
 # ScaleTag
 
-ScaleTag is an installable web app for local polls, tasks, free giveaways, and one-time encrypted secrets (Secrex). No account is required. Publish a post, share its link or QR code, and find nearby posts in PostList, or send a burn-after-reading secret via Secrex.
+ScaleTag is an installable web app for local polls, tasks, free giveaways, and one-time encrypted secrets through Secrex. You can publish, vote, reply, and browse without creating an account.
 
-[Canada](https://www.scaletag.top/) · [Japan](https://asia.scaletag.top/) · [Privacy and retention](https://www.scaletag.top/privacy) · [Architecture case study](https://www.chriscn.cn/scaletag/)
+[Canada](https://www.scaletag.top/) · [Japan](https://asia.scaletag.top/) · [Help](https://www.scaletag.top/help) · [Privacy and retention](https://www.scaletag.top/privacy) · [Architecture case study](https://www.chriscn.cn/scaletag/)
 
-## Posts and their lifetimes
+## Product guide
 
-| Type | What people can do | Public lifetime |
-| --- | --- | --- |
-| Poll | Vote, see results and download a result card | Voting lasts up to seven days. Publishers can end voting early, delay results until voting closes, or take down the poll. Results remain available until day 30 unless withdrawn. |
-| Task | Offer a reward, receive replies and privately choose a respondent | Available for 30 days. Selecting a respondent pauses applications. The publisher can reopen them before the task reaches a final state. |
-| Free giveaway | Share a pickup location and optional pickup window, hold an item, or mark it claimed | Public for up to 72 hours. A temporary hold ends at the scheduled time or when the publisher releases it. Marking an item claimed hides pickup details and removes it from discovery while the original link shows the status. Active storage retains the record until day 30. |
-| Secrex | Encrypt text for one-time reading and optionally revoke it before it is opened | Never listed in PostList. Expires after seven days if unopened, or is destroyed after a single reading session (up to 5 minutes). |
+### Polls
 
-Each post has a unique ID. PostList combines publicly discoverable polls, tasks and giveaways in one list and an optional map. Keyword search matches titles and descriptions and works alongside post type, status, distance and sorting. Nearby search supports GPS or a manually chosen map area, with 2, 10, 50 and 100 km radii and a nearest-first sort. Nearby search and public map pins use a rounded 0.01° grid for post locations. Posts appear on the map only with explicit consent. Search coordinates are used for that request and are not stored.
+[Create a poll](https://www.scaletag.top/create) with a question and choices. The form offers voting periods of 1 hour, 6 hours, 1 day, 3 days, or 7 days. Readers can vote once per browser cookie. Publish results as votes come in or after voting closes. The publisher can reorder choices before the first vote, end voting early, or take down the poll. Once results are visible, readers can copy them as text or download a result card. The results stay available until 30 days after publication unless the poll is taken down or frozen. [Poll help](https://www.scaletag.top/help#polls)
 
-Polls, tasks and giveaways can also be published as link-only. Anyone with the direct link or QR code can open them. Link-only posts skip GPS, stay out of PostList and the map, and are excluded from visit counters.
+```mermaid
+flowchart TD
+    A["Publish a question and choices"] --> B["Share the poll link or QR code"]
+    B --> C["Readers vote before the deadline"]
+    C --> D["Show live results or wait for closing"]
+    D --> E["Copy results or download the result card"]
+```
 
-Text drafts and saved links stay in the current browser. Drafts cover public post fields. Images, location permissions, management credentials and private replies are excluded. Saved links show the current public status when the list is viewed. Saved management URLs still require their separate passwords. A publisher can copy public text and voting options from an existing managed post into a new local draft. Location, pickup times, photos and management credentials are left out.
+### Tasks and replies
 
-Public task replies show the submitted name and message. The reply form encrypts the separate phone and email fields in the sender’s browser. The task publisher’s browser uses the management password to decrypt them. Giveaways use likes and a public pickup location, without an offer or contact form. Secrex one-time secrets are encrypted end-to-end in the sender’s browser, never listed publicly, and deliberately excluded from the ScaleTag post archive. The app does not process payments.
+[Post a task](https://www.scaletag.top/create/task) with a description and reward. When a task accepts replies, readers submit a public message, an optional public name, and a phone number or email in separate private fields. The sender's browser encrypts those contact fields. The task publisher can decrypt them in their browser with the management password. Participants arrange the work and any reward directly. ScaleTag does not process payments.
+
+Readers can sort public replies oldest or newest first. After submitting, they can open, copy, or save a link to their individual reply. The publisher can select a respondent privately, which pauses new replies. They can reopen the task or finish it with **Completed** or **Closed**, both final states. The task and replies leave the website 30 days after publication. [Task help](https://www.scaletag.top/help#tasks)
+
+```mermaid
+flowchart TD
+    A["Publish a task and reward"] --> B["A reader submits a reply"]
+    B --> C["Show the public name and message"]
+    B --> D["Encrypt phone or email in the sender's browser"]
+    D --> E["The publisher unlocks the contact fields"]
+    E --> F["Privately choose a respondent and pause replies"]
+```
+
+### Free giveaways
+
+[Publish a giveaway](https://www.scaletag.top/create/sale) with public pickup directions and an optional pickup window. Visitors can like the post, copy the pickup directions when the item is available, or download a calendar entry for an available pickup window. Giveaways have no reply or offer form.
+
+The publisher can hold the item until a chosen time or release it sooner. Marking it claimed removes it from discovery and hides the pickup details. The original link shows the claimed status until the giveaway expires 72 hours after publication. Active storage retains the record until day 30. [Giveaway help](https://www.scaletag.top/help#giveaways)
+
+```mermaid
+flowchart TD
+    A["Post the item and pickup directions"] --> B["Readers see an available item"]
+    B --> C["Publisher can put the item on hold"]
+    C -->|"Hold ends or is released"| B
+    B --> D["Publisher marks the item claimed"]
+    C --> D
+    D --> E["Original link shows Claimed and hides pickup details"]
+```
+
+### Secrex
+
+[Create a Secrex secret](https://www.scaletag.top/secrex) to send text for one reading session. The sender's browser encrypts the secret and provides a link, a QR code, and a separate share password. Send the link or QR code and the password through separate channels. The first valid claim opens a session of up to five minutes. The reader can select **End and destroy**. The server removes the secret when the session expires or after seven days if nobody opens it. The browser also generates a private code the sender can use to revoke an unopened secret. Secrex is excluded from PostList and the ScaleTag post archive. [Secrex help](https://www.scaletag.top/help#secrex)
+
+```mermaid
+flowchart TD
+    A["Encrypt text in the sender's browser"] --> B["Share the link and password separately"]
+    B --> C["Recipient unlocks one reading session"]
+    C --> D["Destroy the secret at session end"]
+    B --> E["Unopened secret expires or is revoked"]
+```
+
+### Discovery, maps, and sharing
+
+[PostList](https://www.scaletag.top/PostList) combines discoverable polls, tasks, and giveaways in a list and an optional map. Search titles and descriptions, choose a post type and status, or filter giveaways to **Pickup now** or **Starts in the next 24 hours**. For nearby search, use GPS or choose an area on the map. Choose a radius of 2, 10, 50, or 100 km and sort by newest or nearest. ScaleTag uses search coordinates for the current request and discards them afterward.
+
+Public discovery requires a publishing location. The publication form asks for consent to show an approximate location on the map. Only posts with consent appear on the map. Nearby search and public map pins use post locations rounded to a 0.01° grid. The optional map loads tiles from OpenFreeMap. Choose **Anyone with the link** to skip GPS and publish outside PostList and the map. Anyone with the public link or QR code can open a link-only post.
+
+Post pages offer link copying, QR downloads, and printable A4 posters while the post is available. On supported browsers they also offer the system share sheet. **Copy public filter link** shares only the chosen post type, status, and pickup filter. Browser Back or **Back to PostList** can return you to the previous view and restore its public filters and the result you opened. Direct visits link back to the default PostList. [Discovery help](https://www.scaletag.top/help#discovery)
+
+```mermaid
+flowchart TD
+    A["Open PostList"] --> B["Choose List or Map and apply filters"]
+    B --> C["Open a result"]
+    C --> D["Return to the previous PostList view"]
+    B --> E["Copy a link with shareable filters"]
+```
+
+### Public and link-only publication
+
+The web form requires GPS and consent to show an approximate area on the map for a public post. A link-only post skips GPS and is available to anyone who has the link. Uploaded images are re-encoded to remove metadata. Check visible details such as names or addresses before uploading. [Publication and photo help](https://www.scaletag.top/help#publishing)
+
+```mermaid
+flowchart TD
+    A["Choose a publication mode"] --> B["Public post with GPS and map consent"]
+    A --> C["Link-only post without GPS"]
+    B --> D["Find it in discovery or open its link"]
+    C --> E["Open it with the shared link"]
+```
+
+### Post management and text drafts
+
+When publishing a poll, task, or giveaway, save the management URL and its separately generated password. Open the management URL and enter the password to unlock the page. Use **Show password** to check what you typed before submitting. From the management page, you can share the public URL, update supported fields and photos, or change the post's state. Keep the management details private.
+
+The publication forms save draft text and selected form settings in the current browser. The drafts exclude photos, GPS coordinates, management credentials, and replies. If another tab changes the same draft, the form pauses autosave and lets you choose which text to keep. **Copy to new draft** starts a draft of the same type from selected public text and, for polls, the voting choices. It uses the new form's defaults for publication settings and leaves behind pickup directions, pickup times, photos, and credentials. [Management and draft help](https://www.scaletag.top/help#manage)
+
+```mermaid
+flowchart TD
+    A["Write a local draft"] --> B["Publish and save the management details"]
+    B --> C["Verify the password on the management page"]
+    C --> D["Edit the post or change its state"]
+    C --> E["Copy selected public content to a new draft"]
+```
+
+### Saved links
+
+[Saved links](https://www.scaletag.top/saved) can store a public post, a management page, or an individual public task reply in the current browser. Search saved titles, filter by type or link availability, copy a URL, or remove a link and undo the last removal. A saved management URL still requires the separate password on newer posts. When the reply is available, its saved link opens the specific public reply. The saved list shows the parent task's link status. [Saved links help](https://www.scaletag.top/help#saved)
+
+```mermaid
+flowchart TD
+    A["Save a post, management page, or public reply"] --> B["Open Saved links in the same browser"]
+    B --> C["Search, filter, open, or copy a link"]
+    B --> D["Remove a link"]
+    D --> E["Undo the last removal"]
+```
+
+### Installation and offline use
+
+[Install ScaleTag](https://www.scaletag.top/install) from a supported browser to add it to your home screen or apps. After the service worker has cached the interface files, the offline page lets you browse saved links in the same browser and retry the original page after reconnecting. Opening a post, checking live status, and submitting changes all require a connection. The service worker caches selected interface files and the offline page. Private management data and live post content stay out of that cache, and the app does not queue offline submissions. [Install and offline help](https://www.scaletag.top/help#offline)
+
+```mermaid
+flowchart TD
+    A["Open ScaleTag online to cache interface files"] --> B["Install the app if your browser supports it"]
+    A --> C["Network fails or server is unavailable"]
+    C --> D["Open the offline page and view saved links"]
+    D --> E["Reconnect and retry the original page"]
+```
+
+### Anonymous reports
+
+Readers can report a poll, task, or giveaway once per browser cookie. The sixth distinct report freezes the post, removes it from discovery, and blocks its detail and management pages. The default configuration keeps the post frozen through its normal retention period. An optional deployment setting enables report reasons and administrator review. [Reporting help](https://www.scaletag.top/help#reports)
+
+```mermaid
+flowchart TD
+    A["Reader submits an anonymous report"] --> B["Count one report per browser cookie"]
+    B --> C{"Has the post received six distinct reports?"}
+    C -->|"Yes"| D["Freeze the post and remove it from discovery"]
+    C -->|"No"| E["Keep the report count"]
+```
+
+### Visit counters
+
+The home page and discoverable polls, tasks, and giveaways show distinct-browser counts for the past 7 and 30 days. Returning from the same browser updates its latest visit. The Canadian and Japanese deployments count separately. Link-only posts, management pages, and Secrex links are excluded. [Visit count help](https://www.scaletag.top/help#visits)
+
+```mermaid
+flowchart TD
+    A["Browser opens the home page or a discoverable post"] --> B["Update its last visit using a random browser cookie"]
+    B --> C["Count that browser once per window"]
+    C --> D["Show the 7-day and 30-day totals"]
+```
 
 | Page | Path |
 | --- | --- |
 | Publish | [Poll](https://www.scaletag.top/create), [task](https://www.scaletag.top/create/task), [giveaway](https://www.scaletag.top/create/sale), [Secrex](https://www.scaletag.top/secrex) (also `/create/secrex`) |
 | Discover | [PostList](https://www.scaletag.top/PostList) and its optional map |
-| Saved links | `/saved` |
+| Saved links | [`/saved`](https://www.scaletag.top/saved) |
 | View a post or secret | `/vote/<id>`, `/task/<id>`, `/sale/<id>`, `/secrex/<id>` |
 | Manage a post | `/vote/<id>/manage`, `/task/<id>/manage`, `/sale/<id>/manage` |
-| Install and learn about data | [Install](https://www.scaletag.top/install), [privacy](https://www.scaletag.top/privacy) |
+| Install and learn about the app | [Install](https://www.scaletag.top/install), [help](https://www.scaletag.top/help), [privacy](https://www.scaletag.top/privacy) |
 
 ## Production architecture
 
 ```text
-Browser ─ HTTPS ─ Cloudflare Tunnel ─ Nginx on OCI Host
+Browser ─ HTTPS ─ Cloudflare Tunnel ─ Nginx on OCI host in each region
                                        ├─ app1 (primary) ─┐
                                        └─ app2 (standby) ─┴─ encrypted SQLite
 ```
 
-- **Ingress and runtime.** Nginx forwards to two Node.js 24 containers on the same host. The primary and standby share local storage. This provides app-instance failover, with the host and local disk as shared failure points.
+- **Ingress and runtime.** Canada and Japan each run a separate installation. In each region, Nginx forwards to two Node.js 24 containers on the same host. The primary and standby share local storage. This provides app-instance failover, with the host and local disk as shared failure points.
 - **Storage.** SQLite is the production store. The `posts.id` primary key identifies each post, and `posts.document` contains its full JSON record, including uploaded images. SQLite transactions protect state changes, voting and like deduplication, and shared rate limits.
 - **Encryption.** SQLCipher encrypts SQLite pages on disk. Both instances receive the database key from root-managed host configuration at runtime. Daily backup exports use authenticated AES-256-GCM encryption. Administrators with the necessary access can read application records, which contain ciphertext for browser-encrypted reply contacts. See [encryption and recovery](docs/encryption.md) for the storage formats and restore tools.
 - **Delivery.** Standard releases follow a two-workflow pipeline:
   1. **Test, build, and publish ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).** On GitHub-hosted `ubuntu-latest` runners, the `test`, `container`, and `ha` jobs run syntax checks (`npm run check`), production dependency auditing (`npm audit --omit=dev --audit-level=high`), Node unit, security, and privacy tests (`npm test`), Python unit tests, Playwright browser tests (including report-freeze and task contact privacy checks), container smoke tests, and HA failover integration tests. Only after all test jobs pass on `main` (on push or `workflow_dispatch`) does the `publish` job build the multi-platform image (`linux/amd64,linux/arm64` by default) and upload it to Docker Hub tagged by exact commit SHA.
-  2. **Pull and deploy ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), [`deploy/deploy.sh`](deploy/deploy.sh)).** Triggered by a successful `Build and Publish Image` run on `main` (or `workflow_dispatch` on `main`), the target server’s self-hosted runner (`[self-hosted, ocihost]`) checks out that commit, rejects stale revisions that no longer match `main`, and runs [`deploy/deploy.sh`](deploy/deploy.sh) to pull the prebuilt commit-SHA image (never building on the server), run a pre-deployment backup (`scaletag-backup.service`), update the standby (`app2`) before the primary (`app1`), verify `/readyz` on each slot and ingress, and roll back to the previous slot images if readiness checks fail. Host environment and backup configuration live outside the public application repository.
+  2. **Pull and deploy ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), [`deploy/deploy.sh`](deploy/deploy.sh)).** Triggered by a successful `Build and Publish Image` run on `main` (or `workflow_dispatch` on `main`), the self-hosted runners for Canada (`[self-hosted, ocihost]`) and Japan (`[self-hosted, ocijphost]`) check out that commit, reject stale revisions that no longer match `main`, and run [`deploy/deploy.sh`](deploy/deploy.sh) to pull the prebuilt commit-SHA image, run a pre-deployment backup when `scaletag-backup.service` is installed, update the standby (`app2`) before the primary (`app1`), verify `/readyz` on each slot and ingress, and roll back to the previous slot images if readiness checks fail. Host environment and backup configuration live outside the public application repository.
 
 ## Traffic and publication statistics
 
-Canada and Japan count independently. The homepage footer counts distinct browsers for the site, and a public poll, task, or giveaway footer counts distinct browsers for that post. Each browser contributes once to each 7-day or 30-day window. Reloading updates the last visit. The count uses a random 30-day browser cookie, with separate hashes for the site and individual posts. Browsers that clear the cookie are counted again. Visits use successful public HTML requests, including visits without JavaScript. They exclude API and asset requests, management pages, Secrex share links, failed requests, and recognized browser prefetches. Counters use UTC hour buckets and include the current hour plus the preceding 167 or 719 hours. Deduplicated counts start at the changeover, and previous aggregate page views expire on their original schedule.
+Canada and Japan count independently. The homepage footer counts distinct browsers for the site, and a public poll, task, or giveaway footer counts distinct browsers for that post. Each browser contributes once to each 7-day or 30-day window. Reloading updates the last visit. The count uses a random 30-day browser cookie, with separate hashes for the site and individual posts. Browsers that clear the cookie are counted again. Visits use successful public HTML requests, including visits without JavaScript. They exclude API and asset requests, management pages, Secrex share links, failed requests, and recognized browser prefetches. Counters use UTC hour buckets and include the current hour plus the preceding 167 or 719 hours. Deduplicated counts begin when the visitor counter starts collecting. Older raw page-view records age out under the same 30-day policy.
 
 - `GET /api/visits` returns `days7` and `days30` for the current site.
 - `GET /api/visits/{poll|task|giveaway}/{id}` returns the same fields for a public post.
@@ -88,7 +217,7 @@ Secrex ([`/secrex`](https://www.scaletag.top/secrex), [`/create/secrex`](https:/
    - A 256-bit AES-GCM wrapping key (`secrex-v1-wrap`) that stays in the browser.
    The browser encrypts the plaintext with the DEK (`AES-256-GCM`, 12-byte random nonce) and wraps the DEK with the wrapping key (`AES-256-GCM`, 12-byte random nonce). Both ciphertexts authenticate length-prefixed AAD binding `secrex-v1`, the secret ID, and the purpose (`body` or `wrap`).
 2. **Split delivery.** The browser displays `/secrex/<id>`, a QR code (`/api/secrex/<id>/qr.png`), and the generated share password. Neither the URL nor the QR code carries the password or wrapping key; senders should transmit the link/QR code and the password through separate channels.
-3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), rejecting competing devices or tabs. Clicking **End and destroy** (`POST /api/secrex/:id/end`), closing/expiring the 5-minute reading window, or reaching the seven-day unopened TTL (`pendingMs = 604800000`) deletes the payload row and leaves only minimal metadata (`created_at`, `state`, `finished_at`) in `secrex_history`.
+3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), capped at the original seven-day deadline and rejecting competing devices or tabs. A successful **End and destroy** request (`POST /api/secrex/:id/end`) deletes the payload row. Closing the reading page clears the displayed text. Server cleanup deletes the payload when the 5-minute session or the seven-day unopened TTL (`pendingMs = 604800000`) expires. Deletion leaves only minimal metadata (`id`, `created_at`, `state`, `finished_at`) in `secrex_history`.
 
 4. **Sender revocation.** A private code lets the sender revoke an unopened secret. The server stores a verifier for the independently generated random code. Revocation competes with the first valid claim in a database transaction and cannot retrieve or decrypt a payload. Keep the code separate from the recipient link and password.
 
@@ -161,13 +290,14 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Configure the app with envi
 ```sh
 npm run check
 npm test
-npx playwright install chromium
+npx --no-install playwright install chromium
 npm run test:pwa
 npm run test:map
 npm run test:tasks
 npm run test:secrex
 npm run test:sales
 npm run test:locale
+node --test test/reports.browser.mjs test/poster.browser.mjs test/task-contact-privacy.browser.mjs
 python3 -m unittest discover -s test -p '*_test.py' -v
 ```
 

@@ -8,6 +8,7 @@ export const STATIC_ASSETS = [
   "/base.css",
   "/styles.css",
   "/app.js",
+  "/help.js",
   "/common.js",
   "/local-posts.js",
   "/owner-edit.js",

@@ -1,4 +1,5 @@
 import { localizedPath } from "/locale.js";
+import { renderHelp, helpTopic } from "/help.js";
 import {
   t,
   main,
@@ -1132,8 +1133,8 @@ function privacy() {
     <span class="eyebrow">${t("A SMALL DATA FOOTPRINT", "关于你的数据")}</span>
     <h1>${t("Privacy and data retention", "隐私与数据保留")}</h1>
     <p>${t(
-      "ScaleTag lets you vote, post a task or give something away without creating an account. Here is what other people can see, what we store and when it goes away.",
-      "你无需注册账户，就可以在 ScaleTag 投票、发布任务或赠送闲置物品。这里说明其他人能看到什么、我们保存什么，以及这些数据何时删除。",
+      "ScaleTag lets you vote, post a task, give something away or share a one-time encrypted message with Secrex without creating an account. Here is what other people can see, what we store and when it goes away.",
+      "你无需注册账户，就可以在 ScaleTag 投票、发布任务、赠送闲置物品，或使用 Secrex 分享只能开启一次的加密消息。这里说明其他人能看到什么、我们保存什么，以及这些数据何时删除。",
     )}</p>
 
     <h2>${t("What other people can see", "其他人能看到什么")}</h2>
@@ -1164,14 +1165,24 @@ function privacy() {
       "任务发布者查看联系方式后，可以另行保存或转发。",
     )}</p>
 
-    <h2>${t("Managing a task or giveaway", "管理任务或闲置赠予")}</h2>
+    <h2>${t("Managing polls, tasks and giveaways", "管理投票、任务和闲置赠予")}</h2>
     <p>${t(
       "Save the management address and randomly generated password when you publish. For a task, your browser uses the password locally. ScaleTag receives a separate credential derived from it to verify management requests. If you lose the task password, ScaleTag cannot reset it or recover encrypted contacts, even from a backup.",
       "发布时请保存管理网址和随机生成的密码。你的浏览器在本地使用任务管理密码。ScaleTag 接收的是由该密码派生的独立凭据，用于验证管理请求。任务管理密码丢失后，ScaleTag 无法重置密码，也无法从备份中恢复加密的联系方式。",
     )}</p>
     <p>${t(
-      "For a giveaway, your browser sends the password to ScaleTag for verification. ScaleTag stores a salted Argon2id verifier for both types of management credentials. Older private management links can still provide access while the post is available. Keep your management details private. They can be used to change a task’s status and view private reply contacts, or to take down a giveaway.",
-      "管理闲置赠予时，浏览器会把密码发送给 ScaleTag 验证。两种管理凭据均以带盐值的 Argon2id 验证值保存。只要帖子仍可访问，旧版私人管理链接仍可用于管理。请妥善保管管理信息，以免他人修改任务状态、查看回复者的私人联系方式或下架赠予帖子。",
+      "For a poll or giveaway, your browser sends the management password to ScaleTag for verification. ScaleTag stores a salted Argon2id verifier for new management credentials. Older private management links can still provide access while the post is available. Keep your management details private. They let you change a post’s status and, for tasks, view private reply contacts.",
+      "管理投票或闲置赠予时，浏览器会把管理密码发送给 ScaleTag 验证。新的管理凭据以带盐值的 Argon2id 验证值保存。只要帖子仍可访问，旧版私人管理链接仍可用于管理。请妥善保管管理信息。持有这些信息的人可以修改帖子状态，也可以查看任务回复中的私人联系方式。",
+    )}</p>
+
+    <h2>${t("Secrex one-time messages", "Secrex 阅后即焚消息")}</h2>
+    <p>${t(
+      "Secrex encrypts your message in your browser before sending it to ScaleTag. Share the link or QR code and the separate password through different channels. Secrex messages stay out of PostList, the map and the ScaleTag post archive. The sender can use a separate revocation code before anyone opens the message.",
+      "Secrex 会在浏览器中加密你的消息，再发送到 ScaleTag。请通过不同渠道发送链接或二维码与分享密码。Secrex 消息不会进入 PostList、地图或 ScaleTag 帖子备份。消息被打开前，发送者可以使用单独的撤回码撤回消息。",
+    )}</p>
+    <p>${t(
+      "An unopened message expires after seven days. The first successful unlock starts one reading session of up to five minutes, within that same seven-day limit. Closing or reloading the page clears the session in that browser. Use End and destroy to remove the encrypted message immediately once the server confirms. Otherwise the server removes it at expiry. ScaleTag retains the message ID, creation time, status and completion time as lifecycle records. Recipients can keep any copies they make.",
+      "未打开的消息在七天后过期。首次成功解锁只开启一次阅读会话，最长五分钟，并且不能超过这七天的期限。关闭或重新加载页面会清除该浏览器中的阅读会话。选择“结束并销毁”后，服务器确认时会立即删除加密消息。否则，服务器会在到期时删除。ScaleTag 保留消息编号、创建时间、状态和结束时间作为状态记录。收件人可以保留自己保存的副本。",
     )}</p>
 
     <h2>${t("No account or device fingerprinting", "无需账户，不使用设备指纹。")}</h2>
@@ -1190,6 +1201,10 @@ function privacy() {
       "只有发布者同意显示在地图上的帖子才会上图，图钉按 0.01° 网格取整。这样只显示大致位置，无法保证匿名。附近搜索只在当次请求使用你的当前位置。打开地图时，OpenFreeMap 会收到你的 IP 地址和地图图块请求。",
     )}</p>
     <p>${t(
+      "A copied PostList filter link includes only the selected post type, status and pickup time filter.",
+      "复制的 PostList 筛选链接只包含选中的帖子类型、状态和领取时段筛选条件。",
+    )}</p>
+    <p>${t(
       "Uploaded photos are re-encoded to remove metadata. Visible details such as faces or addresses can still identify people or places. If you choose to load an external image, its host receives the request.",
       "上传的照片会重新编码以移除元数据，但照片里可见的面孔或地址仍可能暴露身份或地点。如果你选择加载外部图片，图片托管方会收到请求。",
     )}</p>
@@ -1204,7 +1219,12 @@ function privacy() {
       "安装 ScaleTag 后，浏览器可能缓存界面文件和通用离线页。私人管理数据不会进入离线缓存，离线时提交的投票、点赞、回复、举报或帖子也不会排队发送。浏览器可以记住你的语言选择。",
     )}</p>
     <p>${t("Text drafts and saved links stay in this browser. Photos, management passwords and private reply contacts are excluded.", "文字草稿和已保存的链接仅保存在当前浏览器，不包含照片、管理密码或私人回复联系方式。")}</p>
+    <p>${t(
+      "Drafts save public form text. Saved links can include a link to a specific public task reply or a management address that still requires its password. Drafts and saved links are local to this browser and site address and do not sync across devices.",
+      "草稿保存表单中的公开文字。已保存的链接可以指向某条公开任务回复，也可以是仍需密码才能使用的管理网址。草稿和链接仅保存在当前浏览器及当前网站地址下，不会跨设备同步。",
+    )}</p>
     <p>${t("Visit counts use a random browser cookie. Active storage keeps separate hashes for the site and each post for up to 30 days after the last visit. Visit statistics do not record IP addresses or Secrex share links.", "访问统计使用随机浏览器 Cookie。站点和各帖子分别保存其哈希，活跃数据自上次访问起最多保留 30 天。访问统计不记录 IP 地址或 Secrex 分享链接。")}</p>
+    <p><a class="text-link" href="/help">${t("Feature guide", "功能指南")}</a></p>
     <a class="text-link" href="https://github.com/ChrisXHLeung/ScaleTag" target="_blank" rel="noopener noreferrer">${t("Read the architecture and source on GitHub ↗", "在 GitHub 查看架构与源代码 ↗")}</a>
   </article>`;
 }
@@ -1254,6 +1274,12 @@ function followPostListHistory(event) {
 }
 
 const route = window.location.pathname;
+const guideLink = document.querySelector("[data-feature-guide]");
+if (guideLink) {
+  const topic = helpTopic(route);
+  guideLink.textContent = t("Feature guide", "功能指南");
+  if (topic) guideLink.href = `/help#${topic}`;
+}
 if (typeof window.navigation?.traverseTo === "function" && /^\/(vote|task|sale)\/[a-f0-9]{24}$/.test(route)) {
   main.addEventListener("click", followPostListHistory);
 }
@@ -1275,6 +1301,7 @@ try {
     setActiveNav("saved");
     renderSavedPosts(main);
   }
+  else if (route === "/help" || route === "/help/") renderHelp(main);
   else if (route === "/privacy") privacy();
   else if (/^\/vote\/[a-f0-9]{24}\/manage$/.test(route)) await pollManagePage(route.split("/")[2]);
   else if (/^\/vote\/[a-f0-9]{24}$/.test(route)) {

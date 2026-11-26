@@ -595,7 +595,7 @@ export function createApp(
   );
   app.get("/saved", (_req, res) => res.sendFile(join(publicDir, "index.html")));
   app.get(
-    ["/", "/create", "/create/task", "/create/sale", "/PostList", "/privacy", "/install"],
+    ["/", "/create", "/create/task", "/create/sale", "/PostList", "/help", "/privacy", "/install"],
     (req, res) => sendPublicPage(req, res, "index.html"),
   );
   app.get(["/vote/:id", "/vote/:id/manage"], async (req, res) => {

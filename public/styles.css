@@ -1,5 +1,54 @@
 @import url("/base.css");
 
+.help-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding-inline-start: 20px;
+}
+.help-topic {
+  scroll-margin-block-start: 24px;
+  border-block-start: 1px solid var(--line);
+  margin-block-start: 28px;
+}
+.help-flow {
+  display: flex;
+  gap: 20px;
+  padding: 0;
+  margin: 16px 0;
+  list-style: none;
+}
+.help-flow li {
+  position: relative;
+  flex: 1 1 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.help-flow li + li::before {
+  content: "→" / "";
+  position: absolute;
+  inset-inline-start: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.feature-guide .text-link {
+  margin-top: 0;
+}
+@media (max-width: 600px) {
+  .help-flow {
+    flex-direction: column;
+    gap: 18px;
+  }
+  .help-flow li + li::before {
+    content: "↓" / "";
+    top: -20px;
+    inset-inline-start: 16px;
+    transform: none;
+  }
+}
+
 .owner-edit {
   margin-top: 16px;
 }

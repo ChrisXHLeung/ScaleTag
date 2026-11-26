@@ -87,6 +87,17 @@ test('browser language, manual preference, storage fallback and offline switchin
     ]);
     await page.goto(`${origin}/create/task`);
     await page.getByText(task, { exact: false }).first().waitFor();
+    if (locale === 'zh-CN' || locale === 'en-US') {
+      const link = page.locator('[data-feature-guide]');
+      assert.equal(await link.getAttribute('href'), '/help#tasks');
+      await link.click();
+      await page.getByRole('heading', { name: locale === 'zh-CN' ? '功能指南' : 'Feature guide', exact: true }).waitFor();
+      assert.equal(new URL(page.url()).hash, '#tasks');
+      assert.equal(await page.locator('.help-topic .help-flow').count(), 11);
+      assert.equal(await page.locator('#tasks .help-flow li').first().textContent(),
+        locale === 'zh-CN' ? '发布任务' : 'Publish a task');
+      assert.ok(await page.locator('#tasks').evaluate(section => section.getBoundingClientRect().top < innerHeight));
+    }
     await page.goto(`${origin}/privacy`);
     await page.getByText(privacy, { exact: false }).first().waitFor();
     await page.goto(`${origin}/secrex`);

@@ -10,6 +10,8 @@ import {
 } from "./secrex-crypto.js";
 
 const main = document.querySelector("main");
+const guideLink = document.querySelector("[data-feature-guide]");
+if (guideLink) guideLink.textContent = t("Feature guide", "功能指南");
 
 async function post(path, payload, headers = {}) {
   const result = await fetch("/api/secrex" + path, {
