@@ -4,6 +4,7 @@ if (typeof document !== "undefined" && language !== "en") {
   const labels = {
     ".skip-link": t("Skip to content", "跳至内容"),
     '[data-nav="create"]': t("Create a post", "创建帖子"),
+    '[data-nav="saved"]': t("Saved links", "已保存链接"),
     ".site-footer > div:first-child p": t("A question. A place. Seven days.", "一个问题，一个地方，七天时间。"),
     "#install-app": t("Install app", "安装应用"),
     '.footer-links a[href="/privacy"]': t("Privacy & retention", "隐私与数据保留"),

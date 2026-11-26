@@ -1283,8 +1283,6 @@ if (guideLink) {
 if (typeof window.navigation?.traverseTo === "function" && /^\/(vote|task|sale)\/[a-f0-9]{24}$/.test(route)) {
   main.addEventListener("click", followPostListHistory);
 }
-const savedNav = document.querySelector('[data-nav="saved"]');
-if (savedNav) savedNav.textContent = t("Saved links", "已保存链接");
 try {
   if (route === "/" && location.hash === "#create")
     window.location.replace(localizedPath("/create"));
