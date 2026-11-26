@@ -89,7 +89,10 @@ test('browser language, manual preference, storage fallback and offline switchin
     await page.getByText(task, { exact: false }).first().waitFor();
     const taskStep = htmlLang === 'zh-Hans' ? '发布任务'
       : TRANSLATIONS['Publish a task'][htmlLang] ?? 'Publish a task';
-    assert.equal(await page.locator('.intro-flow li').first().textContent(), taskStep);
+    assert.equal(await page.locator('.intro-flow .help-step-action').first().textContent(), taskStep);
+    const publisher = htmlLang === 'zh-Hans' ? '任务发布者'
+      : htmlLang === 'en' ? 'Task publisher' : TRANSLATIONS['Task publisher'][htmlLang];
+    assert.equal(await page.locator('.intro-flow .help-step-actor').first().textContent(), publisher);
     if (locale === 'zh-CN' || locale === 'en-US') {
       const link = page.locator('[data-feature-guide]');
       assert.equal(await link.getAttribute('href'), '/help#tasks');
@@ -97,8 +100,9 @@ test('browser language, manual preference, storage fallback and offline switchin
       await page.getByRole('heading', { name: locale === 'zh-CN' ? '功能指南' : 'Feature guide', exact: true }).waitFor();
       assert.equal(new URL(page.url()).hash, '#tasks');
       assert.equal(await page.locator('.help-topic .help-flow').count(), 11);
-      assert.equal(await page.locator('#tasks .help-flow li').first().textContent(),
+      assert.equal(await page.locator('#tasks .help-step-action').first().textContent(),
         locale === 'zh-CN' ? '发布任务' : 'Publish a task');
+      assert.equal(await page.locator('#tasks .help-step-actor').first().textContent(), publisher);
       assert.ok(await page.locator('#tasks').evaluate(section => section.getBoundingClientRect().top < innerHeight));
     }
     await page.goto(`${origin}/privacy`);
@@ -280,9 +284,19 @@ test('browser language, manual preference, storage fallback and offline switchin
   await readOnly.close();
 
   // Each creation tab shows its own flow in the introduction beside the form.
-  for (const [locale, stepNames] of [
-    ['en-US', ['Set the question and deadline', 'Publish a task', 'Publish an item and pickup details', 'Encrypt a message']],
-    ['zh-CN', ['设置问题和截止时间', '发布任务', '发布物品与领取安排', '加密消息']],
+  for (const [locale, flows] of [
+    ['en-US', [
+      ['Set the question and deadline', ['Poll creator', 'Poll creator', 'Voter', 'Poll reader']],
+      ['Publish a task', ['Task publisher', 'Respondent', 'Task publisher', 'Task publisher']],
+      ['Publish an item and pickup details', ['Giver', 'Pickup visitor', 'Giver']],
+      ['Enter the message to encrypt', ['Sender', 'Sender', 'Recipient', 'Recipient', 'ScaleTag']],
+    ]],
+    ['zh-CN', [
+      ['设置问题和截止时间', ['投票发起者', '投票发起者', '投票者', '查看结果的人']],
+      ['发布任务', ['任务发布者', '回复者', '任务发布者', '任务发布者']],
+      ['发布物品与领取安排', ['赠予者', '领取者', '赠予者']],
+      ['输入要加密的消息', ['发送者', '发送者', '收件人', '收件人', 'ScaleTag']],
+    ]],
   ]) {
     const context = await browser.newContext({ locale, viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
@@ -292,7 +306,9 @@ test('browser language, manual preference, storage fallback and offline switchin
       assert.equal(new URL(page.url()).pathname, path);
       const flow = page.locator('.section-intro .help-flow');
       await flow.waitFor();
-      assert.equal(await flow.locator('li').first().textContent(), stepNames[index]);
+      const [firstAction, actors] = flows[index];
+      assert.equal(await flow.locator('.help-step-action').first().textContent(), firstAction);
+      assert.deepEqual(await flow.locator('.help-step-actor').allTextContents(), actors);
       assert.ok(await flow.evaluate(el =>
         el.getBoundingClientRect().right < document.querySelector('.form-card').getBoundingClientRect().left));
       await page.setViewportSize({ width: 360, height: 800 });

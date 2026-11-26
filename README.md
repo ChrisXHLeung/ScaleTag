@@ -12,10 +12,10 @@ ScaleTag is an installable web app for local polls, tasks, free giveaways, and o
 
 ```mermaid
 flowchart TD
-    A["Publish a question and choices"] --> B["Share the poll link or QR code"]
-    B --> C["Readers vote before the deadline"]
-    C --> D["Show live results or wait for closing"]
-    D --> E["Copy results or download the result card"]
+    A["<b>Poll creator</b><br/>Set a question, choices, and a results schedule"] --> B["<b>Poll creator</b><br/>Publish and share the poll link or QR code"]
+    B --> C["<b>Voter</b><br/>Vote before the deadline"]
+    B --> D["<b>ScaleTag</b><br/>Show live results or unlock them when voting closes"]
+    D --> E["<b>Poll reader</b><br/>View results, copy them, or download the result card"]
 ```
 
 ### Tasks and replies
@@ -26,11 +26,14 @@ Readers can sort public replies oldest or newest first. After submitting, they c
 
 ```mermaid
 flowchart TD
-    A["Publish a task and reward"] --> B["A reader submits a reply"]
-    B --> C["Show the public name and message"]
-    B --> D["Encrypt phone or email in the sender's browser"]
-    D --> E["The publisher unlocks the contact fields"]
-    E --> F["Privately choose a respondent and pause replies"]
+    A["<b>Task publisher</b><br/>Publish a task and reward"] --> B["<b>Respondent</b><br/>Enter a public reply and private contact details"]
+    B --> D["<b>Respondent's browser</b><br/>Encrypt the private phone or email before sending"]
+    D --> C["<b>ScaleTag</b><br/>Show the public name and message"]
+    D --> E["<b>Task publisher</b><br/>Unlock the contact details on the management page"]
+    E --> F["<b>Task publisher</b><br/>Optionally choose a respondent to pause new replies"]
+    F --> G["<b>Task publisher</b><br/>Mark the task completed or closed"]
+    A -->|"Can finish without assigning"| G
+    E --> G
 ```
 
 ### Free giveaways
@@ -41,12 +44,13 @@ The publisher can hold the item until a chosen time or release it sooner. Markin
 
 ```mermaid
 flowchart TD
-    A["Post the item and pickup directions"] --> B["Readers see an available item"]
-    B --> C["Publisher can put the item on hold"]
+    A["<b>Giver</b><br/>Post the item and pickup directions"] --> B["<b>Pickup visitor</b><br/>Read the directions for an available item"]
+    B --> C["<b>Giver</b><br/>Optionally put the item on hold"]
     C -->|"Hold ends or is released"| B
-    B --> D["Publisher marks the item claimed"]
-    C --> D
-    D --> E["Original link shows Claimed and hides pickup details"]
+    B --> F["<b>Pickup visitor</b><br/>Pick up the item in person"]
+    C --> F
+    F --> D["<b>Giver</b><br/>Mark the item claimed"]
+    D --> E["<b>ScaleTag</b><br/>Show Claimed and hide pickup details"]
 ```
 
 ### Secrex
@@ -55,10 +59,12 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["Encrypt text in the sender's browser"] --> B["Share the link and password separately"]
-    B --> C["Recipient unlocks one reading session"]
-    C --> D["Destroy the secret at session end"]
-    B --> E["Unopened secret expires or is revoked"]
+    A["<b>Sender's browser</b><br/>Encrypt the text"] --> B["<b>Sender</b><br/>Share the link or QR code separately from the password"]
+    B --> C["<b>Recipient</b><br/>Enter the password to start one reading session"]
+    C -->|"Recipient selects End and destroy or session expires"| D["<b>ScaleTag</b><br/>Delete the encrypted text"]
+    B -->|"Still unopened"| E["<b>Sender</b><br/>Optionally revoke the secret"]
+    E --> D
+    B -->|"Unopened for seven days"| D
 ```
 
 ### Discovery, maps, and sharing
@@ -71,10 +77,10 @@ Post pages offer link copying, QR downloads, and printable A4 posters while the 
 
 ```mermaid
 flowchart TD
-    A["Open PostList"] --> B["Choose List or Map and apply filters"]
-    B --> C["Open a result"]
-    C --> D["Return to the previous PostList view"]
-    B --> E["Copy a link with shareable filters"]
+    A["<b>Visitor</b><br/>Open PostList"] --> B["<b>Visitor</b><br/>Choose List or Map and apply filters"]
+    B --> C["<b>Visitor</b><br/>Open a result"]
+    C --> D["<b>Visitor</b><br/>Return to the previous PostList view"]
+    B --> E["<b>Visitor</b><br/>Copy a link with shareable filters"]
 ```
 
 ### Public and link-only publication
@@ -83,10 +89,10 @@ The web form requires GPS and consent to show an approximate area on the map for
 
 ```mermaid
 flowchart TD
-    A["Choose a publication mode"] --> B["Public post with GPS and map consent"]
-    A --> C["Link-only post without GPS"]
-    B --> D["Find it in discovery or open its link"]
-    C --> E["Open it with the shared link"]
+    A["<b>Publisher</b><br/>Choose a publication mode"] --> B["<b>Publisher</b><br/>Publish with GPS and map consent"]
+    A --> C["<b>Publisher</b><br/>Publish with link-only visibility"]
+    B --> D["<b>Visitor</b><br/>Find the post in discovery or open its link"]
+    C --> E["<b>Visitor</b><br/>Open the post with the shared link"]
 ```
 
 ### Post management and text drafts
@@ -97,10 +103,10 @@ The publication forms save draft text and selected form settings in the current 
 
 ```mermaid
 flowchart TD
-    A["Write a local draft"] --> B["Publish and save the management details"]
-    B --> C["Verify the password on the management page"]
-    C --> D["Edit the post or change its state"]
-    C --> E["Copy selected public content to a new draft"]
+    A["<b>Publisher</b><br/>Write a local draft"] --> B["<b>Publisher</b><br/>Publish and save the management details"]
+    B --> C["<b>Publisher</b><br/>Enter the password on the management page"]
+    C --> D["<b>Publisher</b><br/>Edit the post or change its state"]
+    C --> E["<b>Publisher</b><br/>Copy selected public content to a new draft"]
 ```
 
 ### Saved links
@@ -109,10 +115,10 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["Save a post, management page, or public reply"] --> B["Open Saved links in the same browser"]
-    B --> C["Search, filter, open, or copy a link"]
-    B --> D["Remove a link"]
-    D --> E["Undo the last removal"]
+    A["<b>User</b><br/>Save a post, management page, or public reply"] --> B["<b>User</b><br/>Open Saved links in the same browser"]
+    B --> C["<b>User</b><br/>Search, filter, open, or copy a link"]
+    B --> D["<b>User</b><br/>Remove a link"]
+    D --> E["<b>User</b><br/>Undo the last removal"]
 ```
 
 ### Installation and offline use
@@ -121,10 +127,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["Open ScaleTag online to cache interface files"] --> B["Install the app if your browser supports it"]
-    A --> C["Network fails or server is unavailable"]
-    C --> D["Open the offline page and view saved links"]
-    D --> E["Reconnect and retry the original page"]
+    A["<b>User</b><br/>Open ScaleTag online"] --> F["<b>Browser</b><br/>Cache the interface files"]
+    F --> B["<b>User</b><br/>Install the app if your browser supports it"]
+    F -->|"Network fails or server is unavailable"| C["<b>Browser</b><br/>Show the offline page"]
+    C --> D["<b>User</b><br/>View saved links"]
+    D --> E["<b>User</b><br/>Reconnect and retry the original page"]
 ```
 
 ### Anonymous reports
@@ -133,10 +140,10 @@ Readers can report a poll, task, or giveaway once per browser cookie. The sixth 
 
 ```mermaid
 flowchart TD
-    A["Reader submits an anonymous report"] --> B["Count one report per browser cookie"]
-    B --> C{"Has the post received six distinct reports?"}
-    C -->|"Yes"| D["Freeze the post and remove it from discovery"]
-    C -->|"No"| E["Keep the report count"]
+    A["<b>Reader</b><br/>Submit an anonymous report"] --> B["<b>ScaleTag</b><br/>Count one report per browser cookie"]
+    B --> C{"<b>ScaleTag</b><br/>Has the post received six distinct reports?"}
+    C -->|"Yes"| D["<b>ScaleTag</b><br/>Freeze the post and remove it from discovery"]
+    C -->|"No"| E["<b>ScaleTag</b><br/>Keep the report count"]
 ```
 
 ### Visit counters
@@ -145,9 +152,9 @@ The home page and discoverable polls, tasks, and giveaways show distinct-browser
 
 ```mermaid
 flowchart TD
-    A["Browser opens the home page or a discoverable post"] --> B["Update its last visit using a random browser cookie"]
-    B --> C["Count that browser once per window"]
-    C --> D["Show the 7-day and 30-day totals"]
+    A["<b>Visitor</b><br/>Open the home page or a discoverable post"] --> B["<b>ScaleTag</b><br/>Update the last visit using a random browser cookie"]
+    B --> C["<b>ScaleTag</b><br/>Count the browser once per window"]
+    C --> D["<b>ScaleTag</b><br/>Show the 7-day and 30-day totals"]
 ```
 
 | Page | Path |

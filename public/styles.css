@@ -26,6 +26,19 @@
   border-radius: 6px;
   overflow-wrap: anywhere;
 }
+.help-step-actor,
+.help-step-action {
+  display: block;
+  min-inline-size: 0;
+}
+.help-step-actor {
+  color: var(--ink);
+  font-size: 0.875em;
+  hyphens: auto;
+}
+.feature-guide .help-step-actor {
+  margin-block-end: 4px;
+}
 .help-flow li + li::before {
   content: "→" / "";
   position: absolute;
@@ -63,6 +76,10 @@
   font-size: 0.875rem;
 }
 .intro-flow .help-flow li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: baseline;
+  column-gap: 12px;
   padding: 6px 12px;
   background: var(--paper);
 }
