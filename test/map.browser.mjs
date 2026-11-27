@@ -572,19 +572,131 @@ test("a late retry does not replace a newer PostList search", async (t) => {
 });
 
 test("a failed automatic pickup refresh still offers a direct retry", async (t) => {
-  const { page, origin } = await fixture(t);
-  let requests = 0;
-  await page.route("**/api/posts/search", route => {
-    if (route.request().postDataJSON().pickup !== "now") return route.fulfill({ json: { polls: [] } });
-    return route.fulfill({ status: 503, json: { error: `Pickup search failed ${++requests}` } });
+  const { page, origin, store, input } = await fixture(t);
+  const now = store.clock();
+  const sale = await store.create({
+    ...input,
+    title: "Fresh pickup giveaway",
+    type: "sale",
+    giveawayVersion: 1,
+    pickupLocation: "Library entrance",
+    pickupWindow: { startsAt: now, endsAt: now + 120000 },
+  });
+  let pickupRequests = 0;
+  await page.route("**/api/posts/search", async route => {
+    if (route.request().postDataJSON().pickup !== "now") return route.continue();
+    if (++pickupRequests === 2) {
+      return route.fulfill({ status: 503, json: { error: "Background pickup refresh failed" } });
+    }
+    return route.continue();
   });
   await page.goto(`${origin}/PostList?type=sale`);
   await page.locator("#pickup-time").selectOption("now");
-  await page.getByRole("alert").filter({ hasText: "Pickup search failed 1" }).waitFor();
+  const card = page.locator(`#poll-list a[href="/sale/${sale.id}"]`);
+  await card.waitFor();
+  const updated = await store.create({
+    ...input,
+    title: "Later pickup giveaway",
+    type: "sale",
+    giveawayVersion: 1,
+    pickupLocation: "Library entrance",
+    pickupWindow: { startsAt: now, endsAt: now + 120000 },
+  });
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await page.getByRole("alert").filter({ hasText: "Pickup search failed 2" }).waitFor();
-  await page.getByRole("button", { name: "Try again", exact: true }).click({ timeout: 3000 });
-  await page.getByRole("alert").filter({ hasText: "Pickup search failed 3" }).waitFor();
+  await page.getByRole("alert").filter({ hasText: "Background pickup refresh failed" }).waitFor();
+  await card.waitFor();
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  await retry.click({ timeout: 3000 });
+  await page.locator(`#poll-list a[href="/sale/${updated.id}"]`).waitFor();
+  assert.equal(await retry.count(), 0);
+  assert.equal(await page.locator("#list-error").isVisible(), false);
+});
+
+test("starting, canceling or failing nearby location keeps a failed search retry usable", async (t) => {
+  const { page, origin } = await fixture(t);
+  await page.addInitScript(() => {
+    window.nearbyRejects = [];
+    navigator.geolocation.getCurrentPosition = (_success, reject) => {
+      window.nearbyRejects.push(() => reject({ code: 1 }));
+    };
+  });
+  let searchAttempts = 0;
+  await page.route("**/api/posts/search", route => {
+    const body = route.request().postDataJSON();
+    if (body.query !== "orchard") return route.fulfill({ json: { polls: [] } });
+    if (++searchAttempts === 1) {
+      return route.fulfill({ status: 503, json: { error: "Orchard search failed" } });
+    }
+    return route.fulfill({ json: { polls: [] } });
+  });
+  await page.goto(`${origin}/PostList`);
+  await page.locator("#post-query").fill("orchard");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  const alert = page.getByRole("alert").filter({ hasText: "Orchard search failed" });
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  await alert.waitFor();
+  await retry.waitFor();
+
+  await page.locator("#nearby").click();
+  await page.getByRole("button", { name: "Cancel nearby search", exact: true }).click();
+  assert.equal(await alert.isVisible(), true);
+  assert.equal(await retry.isVisible(), true);
+
+  await page.locator("#nearby").click();
+  await page.waitForFunction(() => window.nearbyRejects.length === 2);
+  await page.evaluate(() => window.nearbyRejects[1]());
+  await page.getByRole("button", { name: "Within 100 km", exact: true }).waitFor();
+  assert.equal(await alert.isVisible(), true);
+  assert.equal(await retry.isVisible(), true);
+
+  await retry.click();
+  await page.getByText("No posts match your search.", { exact: true }).waitFor();
+  assert.equal(await retry.count(), 0);
+  assert.equal(await page.locator("#list-error").isVisible(), false);
+});
+
+test("a failed pickup filter switch after pagination resets page count before online recovery", async (t) => {
+  const { page, origin, store, input, advance } = await fixture(t);
+  const now = store.clock();
+  for (let i = 0; i < 21; i++) {
+    advance(1000);
+    await store.create({
+      ...input,
+      title: `Paginated giveaway ${i}`,
+      type: "sale",
+      giveawayVersion: 1,
+      pickupLocation: "Library entrance",
+      pickupWindow: { startsAt: now, endsAt: now + 240000 },
+    });
+  }
+  await page.goto(`${origin}/PostList?type=sale`);
+  const more = page.getByRole("button", { name: "Load more posts", exact: true });
+  await more.waitFor();
+  await more.click();
+  await page.locator("#list-count").filter({ hasText: "21 posts shown" }).waitFor();
+
+  const pickupBodies = [];
+  let failPickup = true;
+  await page.route("**/api/posts/search", async route => {
+    const body = route.request().postDataJSON();
+    if (body.pickup === "now") {
+      pickupBodies.push(body);
+      if (failPickup) {
+        failPickup = false;
+        return route.fulfill({ status: 503, json: { error: "Initial pickup filter failed" } });
+      }
+    }
+    return route.continue();
+  });
+
+  await page.locator("#pickup-time").selectOption("now");
+  await page.getByRole("alert").filter({ hasText: "Initial pickup filter failed" }).waitFor();
+  pickupBodies.length = 0;
+
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.locator("#list-count").filter({ hasText: "20 posts shown" }).waitFor();
+  assert.equal(pickupBodies.length, 1);
+  assert.equal("cursor" in pickupBodies[0], false);
 });
 
 test("Back restores the activated public result after loading more posts", async (t) => {
@@ -956,6 +1068,34 @@ test("map handles failure, offline and expiry without retaining markers in PWA c
   await f.page.getByText("No mapped posts match these filters.", { exact: false }).waitFor();
   assert.equal(await f.page.getByRole("button", { name: "Map", exact: true }).getAttribute("aria-pressed"), "true");
   assert.equal(await f.page.getByRole("button", { name: "Try again", exact: true }).count(), 0);
+  assert.deepEqual(f.errors, []);
+});
+
+test("retrying initial map load after online failure still fits markers to bounds", async (t) => {
+  const f = await fixture(t);
+  await f.store.create(f.input);
+  let mapAttempts = 0;
+  const searchBodies = [];
+  await f.context.route("**/api/map/search", async (route) => {
+    searchBodies.push(route.request().postDataJSON());
+    if (++mapAttempts <= 2) {
+      return route.fulfill({ status: 503, json: { error: `Map load failed ${mapAttempts}` } });
+    }
+    return route.continue();
+  });
+  await f.page.goto(f.origin + "/PostList");
+  await f.page.getByRole("button", { name: "Map", exact: true }).click();
+  await f.page.locator("#list-error").filter({ hasText: "Map load failed 1" }).waitFor();
+  await f.page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await f.page.locator("#list-error").filter({ hasText: "Map load failed 2" }).waitFor();
+  await f.page.getByRole("button", { name: "Try again", exact: true }).click();
+  await f.page.locator("#map-count").filter({ hasText: "1 of 1 matching mapped posts" }).waitFor();
+  await f.page.locator("#search-map-center").click();
+  await f.page.waitForFunction(() => document.querySelector("#nearby")?.getAttribute("aria-pressed") === "true");
+  const lastSearch = searchBodies.at(-1);
+  assert.ok(lastSearch?.location);
+  assert.ok(Math.abs(lastSearch.location.latitude - f.input.location.latitude) < 1);
+  assert.ok(Math.abs(lastSearch.location.longitude - f.input.location.longitude) < 1);
   assert.deepEqual(f.errors, []);
 });
 

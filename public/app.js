@@ -901,7 +901,7 @@ function postList() {
     showMapClear(false);
   });
   window.addEventListener("online", () => {
-    if (mode === "map") loadMap(false, { background: true });
+    if (mode === "map") loadMap(!mapView || mapNeedsFit, { background: true });
     else if (pickupTime.value) load(true, true);
   });
   document.addEventListener("visibilitychange", () => {
@@ -1004,6 +1004,8 @@ function postList() {
     beginDiscoveryRequest();
     more.disabled = true;
     if (reset && !background) {
+      loaded = 0;
+      cursor = undefined;
       listHasResults = false;
       list.replaceChildren();
       listCount.textContent = t("Finding posts…", "正在查找帖子…");
@@ -1074,7 +1076,7 @@ function postList() {
     } catch (e) {
       if (current !== request) return;
       // A background refresh can fail while the list still has no settled results.
-      showDiscoveryError(e.message, listHasResults ? undefined : () => load());
+      showDiscoveryError(e.message, reset ? () => load(true, background && listHasResults) : undefined);
       if (!listHasResults) {
         listCount.textContent = "";
         list.innerHTML =
@@ -1113,8 +1115,7 @@ function postList() {
   };
   nearbyButton.onclick = async () => {
     if (locating) {
-      discoveryError.hidden = true;
-      setDiscoveryRetry();
+      if (!retryRequest) discoveryError.hidden = true;
       setNearbyLocation(undefined);
       return;
     }
@@ -1126,8 +1127,7 @@ function postList() {
     locating = true;
     const current = ++locationRequest;
     updateNearbyControl();
-    discoveryError.hidden = true;
-    setDiscoveryRetry();
+    if (!retryRequest) discoveryError.hidden = true;
     try {
       const coordinates = await locate();
       if (current !== locationRequest) return;
