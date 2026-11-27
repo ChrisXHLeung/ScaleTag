@@ -3631,6 +3631,15 @@ export const TRANSLATIONS = {
     de: "Beiträge konnten nicht geladen werden.",
     it: "Impossibile caricare i post.",
   },
+  "Copy revoke code": {
+    ja: "取り消しコードをコピー",
+    ko: "철회 코드 복사",
+    fr: "Copier le code de révocation",
+    pt: "Copiar código de revogação",
+    es: "Copiar código de revocación",
+    de: "Widerrufscode kopieren",
+    it: "Copia codice di revoca",
+  },
   "Privacy & retention — ScaleTag": {
     ja: "プライバシーとデータ保持 — ScaleTag",
     ko: "개인정보 및 보관 정책 — ScaleTag",

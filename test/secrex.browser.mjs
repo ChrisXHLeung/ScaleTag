@@ -173,3 +173,108 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
   const allLogs = [...browserLogs, ...serverLogs].join("\n");
   assert.ok([plaintext, password, ...requestTokens].every(value => !allLogs.includes(value)), "Secret in local logs");
 });
+
+test("Secrex supports revoke-code copy fallback and password visibility toggles with auto-masking", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "secrex-toggle-browser-"));
+  const probe = createServer().listen(0, "127.0.0.1");
+  await once(probe, "listening");
+  const { port } = probe.address();
+  await new Promise(resolve => probe.close(resolve));
+  const origin = `http://127.0.0.1:${port}`;
+  const server = spawn(process.execPath, ["src/server.js"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    env: { PATH: process.env.PATH, NODE_ENV: "test", PORT: String(port),
+      HOST: "127.0.0.1", PUBLIC_ORIGIN: origin, STORAGE_BACKEND: "sqlite", DATA_DIR: directory },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let browser;
+  t.after(async () => {
+    await browser?.close();
+    if (server.exitCode === null) {
+      const exited = once(server, "exit");
+      server.kill();
+      await exited;
+    }
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const pageErrors = [];
+  for (let attempt = 0; ; attempt++) {
+    if (await fetch(origin + "/healthz").then(response => response.ok, () => false)) break;
+    assert.ok(attempt < 100 && server.exitCode === null, "Local server failed to start");
+    await setTimeout(40);
+  }
+  browser = await chromium.launch();
+  async function page(options = {}) {
+    const tab = await browser.newPage({ viewport: { width: 390, height: 844 }, ...options });
+    tab.setDefaultTimeout(15000);
+    tab.on("pageerror", error => pageErrors.push(error.message));
+    return tab;
+  }
+
+  const sender = await page();
+  const plaintext = "secrex-toggle-marker-" + randomBytes(16).toString("hex");
+  await sender.goto(origin + "/secrex");
+  await sender.getByLabel("Secret text", { exact: true }).fill(plaintext);
+  await sender.getByRole("button", { name: "Create secret" }).click();
+  const copyRevokeButton = sender.locator("#secrex-copy-revoke-code");
+  await copyRevokeButton.waitFor();
+  const url = await sender.getByLabel("Share link", { exact: true }).inputValue();
+  const password = await sender.getByLabel("Share password", { exact: true }).inputValue();
+  const generatedCode = await sender.locator("#secrex-generated-revoke-code").inputValue();
+  await sender.evaluate(() => {
+    navigator.clipboard.writeText = () => Promise.reject(new Error("Clipboard denied"));
+  });
+  await copyRevokeButton.click();
+  await sender.getByRole("status").filter({ hasText: "Use your browser’s copy command." }).waitFor();
+  const copyFallback = await sender.evaluate(() => {
+    const field = document.querySelector("#secrex-generated-revoke-code");
+    return {
+      focused: document.activeElement === field,
+      selectionStart: field.selectionStart,
+      selectionEnd: field.selectionEnd,
+      length: field.value.length,
+    };
+  });
+  assert.equal(copyFallback.focused, true);
+  assert.equal(copyFallback.selectionStart, 0);
+  assert.equal(copyFallback.selectionEnd, copyFallback.length);
+
+  await sender.getByText("Revoke a previously created secret", { exact: true }).click();
+  const revokeInput = sender.locator("#secrex-revoke-code");
+  const revokeToggle = sender.locator("#secrex-revoke-code-toggle");
+  await revokeInput.fill(generatedCode);
+  assert.equal(await revokeInput.getAttribute("type"), "password");
+  assert.equal(await revokeToggle.textContent(), "Show password");
+  assert.equal(await revokeToggle.getAttribute("aria-pressed"), null);
+  assert.equal(await revokeToggle.getAttribute("aria-controls"), "secrex-revoke-code");
+  await revokeToggle.click();
+  assert.equal(await revokeInput.getAttribute("type"), "text");
+  assert.equal(await revokeToggle.textContent(), "Hide password");
+  assert.equal(await revokeToggle.getAttribute("aria-pressed"), null);
+  assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await sender.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+  assert.equal(await revokeInput.getAttribute("type"), "password");
+  assert.equal(await revokeToggle.textContent(), "Show password");
+
+  const receiver = await page();
+  await receiver.goto(url);
+  const passwordInput = receiver.locator("#secrex-password");
+  const passwordToggle = receiver.locator("#secrex-password-toggle");
+  await passwordInput.fill(password);
+  assert.equal(await passwordInput.getAttribute("type"), "password");
+  assert.equal(await passwordToggle.textContent(), "Show password");
+  assert.equal(await passwordToggle.getAttribute("aria-pressed"), null);
+  assert.equal(await passwordToggle.getAttribute("aria-controls"), "secrex-password");
+  await passwordToggle.click();
+  assert.equal(await passwordInput.getAttribute("type"), "text");
+  assert.equal(await passwordToggle.textContent(), "Hide password");
+  assert.equal(await passwordToggle.getAttribute("aria-pressed"), null);
+  assert.equal(await receiver.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await receiver.locator("#secrex-view").click();
+  assert.equal(await passwordInput.getAttribute("type"), "password");
+  assert.equal(await passwordToggle.textContent(), "Show password");
+  await receiver.getByText(plaintext, { exact: true }).waitFor();
+  assert.equal(await receiver.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  assert.deepEqual(pageErrors, []);
+});

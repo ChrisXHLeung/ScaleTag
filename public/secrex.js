@@ -38,6 +38,7 @@ function copy(button, field, status) {
       await navigator.clipboard.writeText(field.value);
       status.textContent = t("Copied.", "已复制。");
     } catch {
+      field.focus();
       field.select();
       status.textContent = t(
         "Use your browser’s copy command.",
@@ -140,8 +141,11 @@ function createView() {
         )}</p>
         <div id="secrex-revoke-details" class="secrex-fields" hidden>
           <label for="secrex-generated-revoke-code">${t("Private revoke code", "私人撤回码")}</label>
-          <input id="secrex-generated-revoke-code" type="text" readonly autocomplete="off"
-            spellcheck="false" autocapitalize="off" aria-describedby="secrex-revoke-hint">
+          <div class="secrex-copy">
+            <input id="secrex-generated-revoke-code" type="text" readonly autocomplete="off"
+              spellcheck="false" autocapitalize="off" aria-describedby="secrex-revoke-hint">
+            <button id="secrex-copy-revoke-code" class="button secondary small" type="button">${t("Copy revoke code", "复制撤回码")}</button>
+          </div>
           <p id="secrex-revoke-hint" class="secrex-note">${t(
             "Save this code privately. It can revoke the secret before anyone opens it.",
             "请私下保存此码。它可以在任何人打开密信前撤回密信。",
@@ -153,8 +157,11 @@ function createView() {
         <summary>${t("Revoke a previously created secret", "撤回已创建的密信")}</summary>
         <form id="secrex-revoke-form" class="secrex-fields" method="post" autocomplete="off">
           <label for="secrex-revoke-code">${t("Enter your private revoke code", "输入你的私人撤回码")}</label>
-          <input id="secrex-revoke-code" type="password" maxlength="66" required
-            spellcheck="false" autocapitalize="off" autocomplete="off">
+          <div class="manage-password-input">
+            <input id="secrex-revoke-code" type="password" maxlength="66" required
+              spellcheck="false" autocapitalize="off" autocomplete="off">
+            <button id="secrex-revoke-code-toggle" type="button" class="button secondary small" aria-controls="secrex-revoke-code">${t("Show password", "显示密码")}</button>
+          </div>
           <button class="button secondary" type="submit">${t("Revoke unopened secret", "撤回未打开的密信")}</button>
           <p class="secrex-note" role="status"></p>
         </form>
@@ -173,12 +180,24 @@ function createView() {
   const revokeDetails = document.querySelector("#secrex-revoke-details");
   const revokeCode = document.querySelector("#secrex-generated-revoke-code");
   const revokeForm = document.querySelector("#secrex-revoke-form");
+  const revokeCodeInput = document.querySelector("#secrex-revoke-code");
+  const revokeCodeToggle = document.querySelector("#secrex-revoke-code-toggle");
   const qr = document.querySelector("#secrex-qr");
   let activeShareId;
   let leaving = false;
   copy(document.querySelector("#secrex-copy-link"), link, status);
   copy(document.querySelector("#secrex-copy-password"), password, status);
+  copy(document.querySelector("#secrex-copy-revoke-code"), revokeCode, status);
+  function setRevokeCodeVisible(visible) {
+    revokeCodeInput.type = visible ? "text" : "password";
+    revokeCodeToggle.textContent = visible
+      ? t("Hide password", "隐藏密码")
+      : t("Show password", "显示密码");
+  }
+  const maskRevokeCode = () => setRevokeCodeVisible(false);
+  revokeCodeToggle.onclick = () => setRevokeCodeVisible(revokeCodeInput.type === "password");
   function clearShare() {
+    maskRevokeCode();
     activeShareId = undefined;
     password.value = "";
     link.value = "";
@@ -193,7 +212,7 @@ function createView() {
     status.textContent = "";
     share.hidden = true;
     compose.hidden = false;
-  });
+  }, maskRevokeCode);
 
   button.addEventListener("click", async () => {
     if (!text.value.trim()) {
@@ -268,13 +287,16 @@ function createView() {
   });
 }
 
-function bindRevokeForm(form, onRevoke) {
+function bindRevokeForm(form, onRevoke, mask) {
   const input = form.querySelector("input");
-  const button = form.querySelector("button");
+  const toggle = form.querySelector("#secrex-revoke-code-toggle");
+  const button = form.querySelector('[type="submit"]');
   const status = form.querySelector("[role=status]");
   let leaving = false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (button.disabled) return;
+    mask?.();
     const parts = input.value.trim().split(".");
     const [id, revoke] = parts;
     if (parts.length !== 2 || !isValidId(id) || !isValidPassword(revoke)) {
@@ -282,7 +304,7 @@ function bindRevokeForm(form, onRevoke) {
       return;
     }
     input.readOnly = true;
-    button.disabled = true;
+    button.disabled = toggle.disabled = true;
     status.textContent = "";
     try {
       await post(`/${id}/revoke`, { revoke });
@@ -298,11 +320,12 @@ function bindRevokeForm(form, onRevoke) {
           : t("Could not confirm revocation. Try again.", "未能确认撤回，请重试。");
     } finally {
       input.readOnly = false;
-      button.disabled = false;
+      button.disabled = toggle.disabled = false;
     }
   });
   return () => {
     leaving = true;
+    mask?.();
     input.value = "";
   };
 }
@@ -353,9 +376,12 @@ function readView(id) {
       </section>
       <div id="secrex-unlock" class="secrex-fields">
         <label for="secrex-password">${t("Share password", "分享密码")}</label>
-        <input id="secrex-password" type="password" autocomplete="off"
-          spellcheck="false" autocapitalize="off" maxlength="80"
-          placeholder="${t("Paste the separate share password…", "粘贴对方发来的分享密码…")}">
+        <div class="manage-password-input">
+          <input id="secrex-password" type="password" autocomplete="off"
+            spellcheck="false" autocapitalize="off" maxlength="80"
+            placeholder="${t("Paste the separate share password…", "粘贴对方发来的分享密码…")}">
+          <button id="secrex-password-toggle" type="button" class="button secondary small" aria-controls="secrex-password">${t("Show password", "显示密码")}</button>
+        </div>
         <button id="secrex-view" class="button" type="button">${t("View secret", "解锁查看内容")}</button>
       </div>
       <div id="secrex-reading" class="secrex-fields" hidden>
@@ -374,6 +400,7 @@ function readView(id) {
   const status = main.querySelector(".secrex-status");
   const unlock = document.querySelector("#secrex-unlock");
   const password = document.querySelector("#secrex-password");
+  const passwordToggle = document.querySelector("#secrex-password-toggle");
   const view = document.querySelector("#secrex-view");
   const reading = document.querySelector("#secrex-reading");
   const result = document.querySelector("#secrex-result");
@@ -384,12 +411,22 @@ function readView(id) {
     monotonicDeadline = 0,
     closed = false;
 
+  function setPasswordVisible(visible) {
+    password.type = visible ? "text" : "password";
+    passwordToggle.textContent = visible
+      ? t("Hide password", "隐藏密码")
+      : t("Show password", "显示密码");
+  }
+  const maskPassword = () => setPasswordVisible(false);
+  passwordToggle.onclick = () => setPasswordVisible(password.type === "password");
+
   function close(message) {
     closed = true;
     clearTimeout(timer);
     deadline = 0;
     monotonicDeadline = 0;
     session = undefined;
+    maskPassword();
     password.value = "";
     result.textContent = "";
     unlock.hidden = true;
@@ -408,6 +445,8 @@ function readView(id) {
   }
 
   view.addEventListener("click", async () => {
+    if (view.disabled) return;
+    maskPassword();
     const supplied = password.value.trim();
     if (!isValidPassword(supplied)) {
       status.textContent = t(
@@ -416,7 +455,7 @@ function readView(id) {
       );
       return;
     }
-    view.disabled = true;
+    view.disabled = passwordToggle.disabled = true;
     password.readOnly = true;
     status.textContent = t("Opening…", "正在验证并解密…");
     const started = Date.now();
@@ -475,7 +514,7 @@ function readView(id) {
                 "无法打开该信息，请在此页面重试。",
               );
     } finally {
-      view.disabled = false;
+      view.disabled = passwordToggle.disabled = false;
       password.readOnly = false;
     }
   });
