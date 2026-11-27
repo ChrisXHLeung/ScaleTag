@@ -72,7 +72,15 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         <button class="text-link" type="button">${t("Remove option", "删除选项")}</button>`;
       const input = row.querySelector("input");
       input.value = value;
-      row.querySelector("button").onclick = () => { row.remove(); renumber(); };
+      row.querySelector(".text-link").onclick = () => {
+        if (optionList.children.length <= 2) return;
+        const nextFocus = row.nextElementSibling?.querySelector("input")
+          ?? row.previousElementSibling?.querySelector("input")
+          ?? addOption;
+        row.remove();
+        renumber();
+        nextFocus?.focus();
+      };
       mountPollOptionOrder(row, renumber);
       optionList.append(row);
       return input;

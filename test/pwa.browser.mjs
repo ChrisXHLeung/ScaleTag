@@ -2094,3 +2094,106 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "removing poll options preserves keyboard focus and PostList search syncs on Escape and native clear",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, origin, store } = f;
+
+    // 1. /create option removal focus management
+    await page.goto(`${origin}/create`);
+    const addOption = page.locator("#add-option");
+    await addOption.waitFor();
+    await addOption.click();
+    await addOption.click();
+    await page.getByLabel("Option 1", { exact: true }).fill("Alpha");
+    await page.getByLabel("Option 2", { exact: true }).fill("Beta");
+    await page.getByLabel("Option 3", { exact: true }).fill("Gamma");
+    await page.getByLabel("Option 4", { exact: true }).fill("Delta");
+
+    await page.getByRole("button", { name: "Remove option 2", exact: true }).click();
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
+      "Option 2",
+    );
+    assert.equal(await page.evaluate(() => document.activeElement?.value), "Gamma");
+
+    await page.getByRole("button", { name: "Remove option 3", exact: true }).click();
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
+      "Option 2",
+    );
+    assert.equal(await page.evaluate(() => document.activeElement?.value), "Gamma");
+
+    // 2. Owner-edit option removal focus management
+    const editablePoll = await store.create({
+      title: "Neighborhood garden vote",
+      options: ["Tomatoes", "Herbs"],
+      visibility: "public",
+    });
+    const secondPoll = await store.create({
+      title: "Evening movie selection",
+      options: ["Comedy", "Sci-Fi"],
+      visibility: "public",
+    });
+
+    await page.goto(`${origin}/vote/${editablePoll.id}/manage`);
+    await page.getByLabel("Management password").fill(editablePoll.manageKey);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.getByRole("heading", { name: "Manage this poll" }).waitFor();
+    await page.getByText("Edit public details", { exact: true }).click();
+    await page.locator("#owner-add-option").click();
+    await page.locator("#owner-option-3").fill("Flowers");
+    await page.getByRole("button", { name: "Remove option 3", exact: true }).click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "owner-option-2");
+
+    // 3. /PostList search Escape & native clear sync
+    await page.goto(`${origin}/PostList`);
+    await page.getByRole("heading", { name: editablePoll.title }).waitFor();
+    await page.getByRole("heading", { name: secondPoll.title }).waitFor();
+
+    const searchInput = page.locator("#post-query");
+    const clearSearch = page.locator("#clear-post-search");
+    assert.equal(await clearSearch.isHidden(), true);
+
+    // 3a. Typing an unsubmitted value into #post-query and pressing Escape clears #post-query cleanly
+    await searchInput.fill("Unsubmitted draft");
+    await searchInput.press("Escape");
+    assert.equal(await searchInput.inputValue(), "");
+    assert.equal(await clearSearch.isHidden(), true);
+
+    // 3b. Submitting a search query filters the list and shows #clear-post-search; pressing Escape clears, hides #clear-post-search, and reloads unfiltered list
+    await searchInput.fill("garden");
+    await searchInput.press("Enter");
+    await clearSearch.waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "hidden" });
+    assert.equal(await page.getByRole("heading", { name: editablePoll.title }).isVisible(), true);
+
+    await searchInput.focus();
+    await searchInput.press("Escape");
+    assert.equal(await searchInput.inputValue(), "");
+    await clearSearch.waitFor({ state: "hidden" });
+    await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "visible" });
+
+    // 3c. Submitting a search query again, then clearing #post-query and dispatching native "search" event hides #clear-post-search and reloads unfiltered list
+    await searchInput.fill("movie");
+    await searchInput.press("Enter");
+    await clearSearch.waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "hidden" });
+    assert.equal(await page.getByRole("heading", { name: secondPoll.title }).isVisible(), true);
+
+    await searchInput.evaluate((input) => {
+      input.value = "";
+      input.dispatchEvent(new Event("search", { bubbles: true }));
+    });
+    assert.equal(await searchInput.inputValue(), "");
+    await clearSearch.waitFor({ state: "hidden" });
+    await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "visible" });
+
+    assert.deepEqual(f.errors, []);
+  },
+);

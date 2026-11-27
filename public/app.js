@@ -115,10 +115,15 @@ function createPoll() {
     row.className = "option-input";
     row.innerHTML =
       `<span class="option-number"></span><input type="text" maxlength="120" required><button type="button" class="remove-option" title="${t("Remove option", "删除选项")}">×</button>`;
-    row.querySelector("button").onclick = () => {
+    row.querySelector(".remove-option").onclick = () => {
+      if (inputs.children.length <= 2) return;
+      const nextFocus = row.nextElementSibling?.querySelector("input")
+        ?? row.previousElementSibling?.querySelector("input")
+        ?? document.querySelector("#add-option");
       row.remove();
       renumber();
       draft.save();
+      nextFocus?.focus();
     };
     mountPollOptionOrder(row, () => {
       renumber();
@@ -939,17 +944,41 @@ function postList() {
     load();
   }
   mapClear.onclick = clearFilters;
+  let clearedBySearchEvent = false;
   search.onsubmit = (event) => {
     event.preventDefault();
-    query = searchInput.value.trim();
+    const next = searchInput.value.trim();
+    const duplicateClear = !next && !query && clearedBySearchEvent;
+    clearedBySearchEvent = false;
+    query = next;
     clearSearch.hidden = !query;
-    load();
+    if (!duplicateClear) load();
   };
   clearSearch.onclick = () => {
     searchInput.value = "";
     searchInput.focus();
     search.requestSubmit();
   };
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!searchInput.value && !query) return;
+    event.preventDefault();
+    searchInput.value = "";
+    if (query) {
+      query = "";
+      clearSearch.hidden = true;
+      load();
+    }
+  });
+  searchInput.addEventListener("search", () => {
+    if (!searchInput.value.trim() && query) {
+      query = "";
+      clearSearch.hidden = true;
+      clearedBySearchEvent = true;
+      queueMicrotask(() => { clearedBySearchEvent = false; });
+      load();
+    }
+  });
   function card(p) {
     if (p.type === "sale") {
       const hold = p.saleState === "reserved"
