@@ -509,6 +509,67 @@ test("poll state actions leave keyboard focus on the outcome or available retry"
   }
 });
 
+test("keyboard voting preserves focus and rejects stale results during submission", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Pickup poll", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const endpoint = `${origin}/api/polls/${poll.id}`;
+  const failure = Promise.withResolvers();
+  const stale = Promise.withResolvers();
+  let attempts = 0;
+  let holdRefresh = false;
+  await page.route(endpoint, async (route) => {
+    if (!holdRefresh) return route.continue();
+    holdRefresh = false;
+    await stale.promise;
+    return route.continue();
+  });
+  await page.route(`${endpoint}/votes`, async (route) => {
+    if (++attempts === 1) {
+      await failure.promise;
+      return route.fulfill({ status: 503, json: { error: "Try voting again." } });
+    }
+    return route.continue();
+  });
+  try {
+    await page.goto(`${origin}/vote/${poll.id}`);
+    const option = page.getByRole("radio", { name: "Morning", exact: true });
+    const submit = page.locator("#cast-vote");
+    const focused = control => control.evaluate(element => element === document.activeElement);
+    await option.press("Space");
+    const first = page.waitForRequest(`${endpoint}/votes`);
+    await submit.press("Enter");
+    await first;
+    assert.equal(await focused(submit), true, "Pending vote submission must retain keyboard focus");
+    assert.equal(await submit.getAttribute("aria-disabled"), "true");
+    await page.locator("#vote-form").evaluate(form => form.requestSubmit());
+    failure.resolve();
+    await page.getByText("Try voting again.", { exact: true }).waitFor();
+    await page.waitForFunction(() => !document.querySelector("#cast-vote").hasAttribute("aria-disabled"));
+    assert.equal(await focused(submit), true);
+    assert.equal(await option.isChecked(), true);
+    assert.equal(attempts, 1);
+
+    holdRefresh = true;
+    const refresh = page.waitForRequest(endpoint);
+    await page.evaluate(() => dispatchEvent(new Event("online")));
+    const request = await refresh;
+    const cancelled = page.waitForEvent("requestfailed", { predicate: failed => failed === request });
+    await submit.press("Enter");
+    await cancelled;
+    stale.resolve();
+    const confirmation = page.locator("#vote-message");
+    await confirmation.getByText(/This browser has already voted/).waitFor();
+    assert.equal(await focused(confirmation), true);
+    assert.equal(await submit.isDisabled(), true);
+    await page.locator("#vote-form").evaluate(form => form.requestSubmit());
+    assert.equal(attempts, 2);
+    await page.locator("#total-votes").getByText("1 vote", { exact: true }).waitFor();
+  } finally {
+    failure.resolve();
+    stale.resolve();
+  }
+});
+
 test("a stale draft keeps local edits and requires a choice before replacing saved text", async (t) => {
   const { page, context, origin } = await fixture(t);
   const other = await context.newPage();

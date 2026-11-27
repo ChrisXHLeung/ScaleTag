@@ -409,6 +409,12 @@ async function votePage(id, { ownerKey, published } = {}) {
   const updateResultExports = mountResultExports(
     main.querySelector(".results-section"), id, () => api(`/api/polls/${id}`),
   );
+  const options = main.querySelector("#vote-options");
+  const button = main.querySelector("#cast-vote");
+  const voteMessage = main.querySelector("#vote-message");
+  voteMessage.tabIndex = -1;
+  let submitting = false;
+  let refreshController;
   let lastResultsHtml;
   function render() {
     updateResultExports(poll);
@@ -444,17 +450,18 @@ async function votePage(id, { ownerKey, published } = {}) {
     // Compare against the last markup we wrote (not the browser-serialized
     // innerHTML, which may normalise entities/attributes differently).
     if (resultsHtml !== lastResultsHtml) results.innerHTML = lastResultsHtml = resultsHtml;
-    const options = document.querySelector("#vote-options");
+    const focused = document.activeElement;
+    const ballotDisabled = !sessionReady || closed || poll.hasVoted;
+    const shouldFocusMessage = ballotDisabled && (focused === button || options.contains(focused));
     const updatedBallot = pollBallotOptions(poll.options);
     if (ballotMarkup !== updatedBallot) options.innerHTML = ballotMarkup = updatedBallot;
-    options.disabled = !sessionReady || closed || poll.hasVoted;
-    document.querySelector("#cast-vote").disabled = !sessionReady || closed || poll.hasVoted;
-    document.querySelector("#cast-vote").innerHTML = closed
+    options.disabled = ballotDisabled;
+    button.disabled = ballotDisabled;
+    button.innerHTML = closed
       ? t("Voting has ended", "投票已结束")
       : poll.hasVoted
         ? t("Your vote is counted ✓", "你的投票已计入 ✓")
         : `${t("Cast my vote", "提交投票")} ${icons.arrow}`;
-    const voteMessage = document.querySelector("#vote-message");
     const voteMessageText = closed
       ? t("This poll has ended. You can still view the results and share its QR code until deletion.", "投票已结束。在投票被移除前，你仍可查看结果和分享二维码。")
       : poll.hasVoted
@@ -463,6 +470,7 @@ async function votePage(id, { ownerKey, published } = {}) {
           ? t("Results will appear when voting closes.", "投票截止后公布结果。")
           : t("Results are visible to everyone, before and after voting.", "投票前后所有人均可查看结果。");
     if (voteMessage.textContent !== voteMessageText) voteMessage.textContent = voteMessageText;
+    if (shouldFocusMessage) voteMessage.focus();
     // Always reset so a transient "Could not refresh" error clears on the next
     // successful refresh.
     document.querySelector("#results-updated").textContent = closed
@@ -472,32 +480,34 @@ async function votePage(id, { ownerKey, published } = {}) {
         : t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。");
   }
   render();
-  let submitting = false;
   document.querySelector("#vote-form").onsubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || button.disabled) return;
+    const optionId = Number(new FormData(e.currentTarget).get("option"));
     submitting = true;
-    const button = document.querySelector("#cast-vote");
+    refreshController?.abort();
     const error = document.querySelector("#vote-error");
-    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+    if (options.contains(document.activeElement)) button.focus();
+    options.disabled = true;
+    voteMessage.textContent = t("Submitting your vote…", "正在提交投票…");
     error.hidden = true;
     try {
-      poll = await api(`/api/polls/${id}/votes`, {
-        optionId: Number(new FormData(e.target).get("option")),
-      });
+      poll = await api(`/api/polls/${id}/votes`, { optionId });
       toast(t("Your vote is in. Thank you!", "投票已提交，谢谢参与！"));
     } catch (e) {
-      showFormError(error, e);
+      showFormError(error, e, { focus: false });
       try {
         poll = await api(`/api/polls/${id}`);
+        if (poll.hasVoted) error.hidden = true;
       } catch {}
     } finally {
       submitting = false;
+      button.removeAttribute("aria-disabled");
       render();
     }
   };
   const social = mountSocial(id, false);
-  let fetching = false;
   let timer;
   let stopped = false;
   function stopPolling() {
@@ -518,13 +528,17 @@ async function votePage(id, { ownerKey, published } = {}) {
     }
   }
   async function refresh() {
-    if (stopped || document.hidden || submitting || fetching) return;
-    fetching = true;
+    if (stopped || document.hidden || submitting || refreshController) return;
+    refreshController = new AbortController();
+    const { signal } = refreshController;
     try {
-      poll = await api(`/api/polls/${id}`);
+      const updated = await api(`/api/polls/${id}`, undefined, { signal });
+      if (signal.aborted) return;
+      poll = updated;
       sessionReady = true;
       render();
     } catch (e) {
+      if (signal.aborted) return;
       if (e.status === 404) {
         stopped = true;
         stopPolling();
@@ -538,7 +552,7 @@ async function votePage(id, { ownerKey, published } = {}) {
         document.querySelector("#results-updated").textContent =
           t("Could not refresh results. We’ll try again shortly.", "无法刷新结果，稍后将自动重试。");
     } finally {
-      fetching = false;
+      refreshController = undefined;
     }
   }
   startPolling();

@@ -715,6 +715,15 @@ export const TRANSLATIONS = {
     de: "Beitragslink nicht verfügbar",
     it: "Link della pubblicazione non disponibile",
   },
+  "Submitting your vote…": {
+    ja: "投票を送信中…",
+    ko: "투표 제출 중…",
+    fr: "Envoi de votre vote…",
+    pt: "Enviando seu voto…",
+    es: "Enviando tu voto…",
+    de: "Deine Stimme wird abgegeben…",
+    it: "Invio del tuo voto…",
+  },
   "Checking post status…": {
     ja: "投稿の状態を確認中…",
     ko: "게시물 상태 확인 중…",

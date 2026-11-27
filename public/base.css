@@ -45,6 +45,7 @@ button {
   cursor: pointer;
 }
 button:disabled,
+#cast-vote[aria-disabled="true"],
 #owner-edit-form button[type="submit"][aria-disabled="true"],
 #poll-owner-controls [data-poll-state][aria-disabled="true"],
 #refresh-saved-statuses[aria-disabled="true"],
