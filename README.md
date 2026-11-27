@@ -111,7 +111,7 @@ flowchart TD
 
 ### Saved links
 
-[Saved links](https://www.scaletag.top/saved) can store a public post, a management page, or an individual public task reply in the current browser. Search saved titles, filter by type or link availability, copy a URL, or remove a link and undo the last removal. A saved management URL still requires the separate password on newer posts. When the reply is available, its saved link opens the specific public reply. The saved list shows the parent task's link status. [Saved links help](https://www.scaletag.top/help#saved)
+[Saved links](https://www.scaletag.top/saved) can store a public post, a management page, or an individual public task reply in the current browser. Search saved titles, filter by type or link availability, copy a URL, or remove a link and undo the last removal. A saved management URL still requires the separate password on newer posts. When the reply is available, its saved link opens the specific public reply. The saved list shows the parent task's link status. After opening a saved link in the same tab, browser Back restores the previous search and filters from this browser’s history and returns focus to the link if it is still visible. [Saved links help](https://www.scaletag.top/help#saved)
 
 ```mermaid
 flowchart TD

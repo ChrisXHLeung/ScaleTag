@@ -662,6 +662,51 @@ test("Saved links filter by local title and type without changing data or reques
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), entries);
 });
 
+test("Back to Saved links restores the filters and focuses the exact opened link", async (t) => {
+  const { store, page, origin, errors } = await fixture(t);
+  const poll = await store.create({ title: "Garden poll", options: ["A", "B"], visibility: "unlisted" });
+  const savedPath = `/vote/${poll.id}`;
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), [
+    { path: savedPath + "/manage", title: "Garden poll" },
+    { path: savedPath, title: "Garden poll" },
+    { path: `/task/${"0".repeat(24)}`, title: "Other task" },
+  ]);
+  await page.goto(`${origin}/saved`);
+  const search = page.getByLabel("Search saved links", { exact: true });
+  const type = page.getByLabel("Post type", { exact: true });
+  const status = page.getByLabel("Link status", { exact: true });
+  await search.fill("garden");
+  await type.selectOption("poll");
+  await status.selectOption("available");
+  await page.getByRole("link", { name: "Garden poll", exact: true }).press("Enter");
+  await page.waitForURL(`${origin}${savedPath}`);
+  await page.goBack();
+  const active = page.locator(".saved-posts a:focus");
+  await active.waitFor({ timeout: 5000 });
+  assert.equal(await active.getAttribute("href"), savedPath);
+  assert.equal(await search.inputValue(), "garden");
+  assert.equal(await type.inputValue(), "poll");
+  assert.equal(await status.inputValue(), "available");
+  assert.equal(page.url(), `${origin}/saved`);
+  await page.goForward();
+  await page.waitForURL(`${origin}${savedPath}`);
+  await page.goBack();
+  await active.waitFor({ timeout: 5000 });
+  assert.equal(await active.getAttribute("href"), savedPath);
+  assert.equal(await search.inputValue(), "garden");
+  await page.getByRole("link", { name: "Create a post", exact: true }).click();
+  await page.waitForURL(`${origin}/create`);
+  await page.goBack();
+  await search.waitFor();
+  assert.equal(await page.evaluate(() => history.state?.scaleTagSavedView), undefined);
+  assert.equal(await active.count(), 0);
+  await page.goto(`${origin}/saved`);
+  assert.equal(await search.inputValue(), "");
+  assert.equal(await type.inputValue(), "all");
+  assert.equal(await status.inputValue(), "all");
+  assert.deepEqual(errors, []);
+});
+
 test("saved links can be copied directly and manually when clipboard access is denied", async (t) => {
   const { page, context, origin } = await fixture(t);
   const id = "a".repeat(24);

@@ -79,8 +79,8 @@ const features = [
       [actor.publisher, "Edit, change state or copy public text", "编辑、改状态或复制公开文字"],
     ]],
   ["saved", "/saved", ["Saved links", "已保存链接"],
-    ["Save a post, a management address or an individual public task reply. Search by title and filter by type and link status. A failed status check shows as unverified. You can copy a saved link or undo the latest removal while the page is open. Bookmarks stay in this browser on this site. A management address still needs its password.",
-      "可收藏帖子、管理网址或一条公开任务回复。支持按标题搜索、按类型和链接状态筛选。查询失败会显示为尚未核验。可以复制链接，或在页面打开期间撤销最近一次移除。收藏只保存在当前浏览器的当前站点，打开管理网址仍需要密码。"],
+    ["Save a post, a management address or an individual public task reply. Search by title and filter by type and link status. A failed status check shows as unverified. You can copy a saved link or undo the latest removal while the page is open. Bookmarks stay in this browser on this site. A management address still needs its password. After opening a saved link in this tab, use Back to restore the previous filters and return to that link if it is still visible.",
+      "可收藏帖子、管理网址或一条公开任务回复。支持按标题搜索、按类型和链接状态筛选。查询失败会显示为尚未核验。可以复制链接，或在页面打开期间撤销最近一次移除。收藏只保存在当前浏览器的当前站点，打开管理网址仍需要密码。在当前标签页打开收藏后，使用浏览器返回可恢复先前的筛选，并在链接仍可见时回到该链接。"],
     [
       [actor.user, "Save a post or reply", "收藏帖子或回复"],
       [actor.user, "Find it in Saved links", "在已保存链接中查找"],

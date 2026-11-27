@@ -371,6 +371,42 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   page.append(filters, recovery, list, empty);
   host.replaceChildren(page);
 
+  let returnPath;
+  const savedView = () => !offline && history.state?.scaleTagSavedView;
+  const stopRestoringFocus = () => { returnPath = undefined; };
+  page.addEventListener("pointerdown", stopRestoringFocus);
+  page.addEventListener("keydown", stopRestoringFocus);
+  page.addEventListener("wheel", stopRestoringFocus, { passive: true });
+
+  function updateSavedHistory(view) {
+    try {
+      const state = { ...history.state };
+      if (view) state.scaleTagSavedView = view;
+      else delete state.scaleTagSavedView;
+      history.replaceState(state, "");
+    } catch {
+      // Navigation works even if the browser refuses to store its state.
+    }
+  }
+
+  function restoreSavedView(view) {
+    search.value = typeof view.query === "string" ? view.query.slice(0, search.maxLength) : "";
+    for (const [select, value] of [[typeFilter, view.type], [statusFilter, view.status]]) {
+      if ([...select.options].some(option => option.value === value)) select.value = value;
+    }
+    if (typeof view.path === "string" && isSavedPath(view.path)) returnPath = view.path;
+  }
+
+  if (!offline) document.addEventListener("click", event => {
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest("a[href]");
+    if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
+    if (list.contains(link)) {
+      const path = link.pathname + link.hash;
+      updateSavedHistory({ path, query: search.value, type: typeFilter.value, status: statusFilter.value });
+    } else if (savedView() && !link.getAttribute("href").startsWith("#")) updateSavedHistory();
+  });
+
   const normalize = value => value.normalize("NFKC").toLowerCase().trim();
   function applyFilters() {
     const query = normalize(search.value);
@@ -389,16 +425,30 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     clear.hidden = !search.value && type === "all" && status === "all";
     const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
     if (empty.textContent !== message) empty.textContent = message;
+    if (returnPath && document.activeElement === document.body) {
+      const link = [...list.querySelectorAll("li:not([hidden]) .saved-post-details > a")]
+        .find(link => link.getAttribute("href") === returnPath);
+      const checkingLink = status !== "all" && link?.nextElementSibling?.textContent === checking;
+      if (link && !checkingLink) {
+        stopRestoringFocus();
+        link.focus();
+      }
+    }
   }
-  search.oninput = applyFilters;
-  typeFilter.onchange = applyFilters;
-  if (statusFilter) statusFilter.onchange = applyFilters;
+  function filtersChanged() {
+    if (savedView()) updateSavedHistory();
+    stopRestoringFocus();
+    applyFilters();
+  }
+  search.oninput = filtersChanged;
+  typeFilter.onchange = filtersChanged;
+  if (statusFilter) statusFilter.onchange = filtersChanged;
   clear.onclick = () => {
     search.value = "";
     typeFilter.value = "all";
     if (statusFilter) statusFilter.value = "all";
     search.focus();
-    applyFilters();
+    filtersChanged();
   };
   undo.onclick = () => withLocalLock(savedKey, () => {
     if (!lastRemoval) return;
@@ -488,6 +538,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       applyFilters();
     }
     if (!signal.aborted && lookups.size) {
+      stopRestoringFocus();
       const delay = Math.min(Math.max(100, nextRefresh - performance.now()), hadError ? 30000 : Infinity);
       if (Number.isFinite(delay)) refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
     }
@@ -497,6 +548,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     lookups.clear();
     list.replaceChildren();
     const items = savedPosts();
+    if (returnPath && !items.some(item => item.path === returnPath)) stopRestoringFocus();
     // Another tab may have saved the removed link again; the undo offer no longer applies.
     if (lastRemoval && items.some(item => item.path === lastRemoval.path)) {
       lastRemoval = undefined;
@@ -607,7 +659,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     void refreshStatuses();
   }
 
-  render();
+  const fromHistory = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+  if (!fromHistory && savedView()) updateSavedHistory();
+  if (!fromHistory || !savedView()) render();
   window.addEventListener("storage", (event) => {
     if (savedLinksChanged(event)) render();
   });
@@ -616,6 +670,14 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   window.addEventListener("offline", refreshStatuses);
   window.addEventListener("pagehide", cancelStatusRefresh);
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted) render();
+    if (!event.persisted && !fromHistory) return;
+    const view = savedView();
+    if (view) {
+      // Restore after the browser has restored its own persisted form state.
+      setTimeout(() => {
+        restoreSavedView(view);
+        render();
+      }, 0);
+    } else if (event.persisted) render();
   });
 }
