@@ -2168,13 +2168,15 @@ test(
     await searchInput.fill("garden");
     await searchInput.press("Enter");
     await clearSearch.waitFor({ state: "visible" });
-    await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "hidden" });
-    assert.equal(await page.getByRole("heading", { name: editablePoll.title }).isVisible(), true);
+    await page.locator("#list-count").filter({ hasText: "1 post shown" }).waitFor();
+    await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "visible" });
+    assert.equal(await page.getByRole("heading", { name: secondPoll.title }).isHidden(), true);
 
     await searchInput.focus();
     await searchInput.press("Escape");
     assert.equal(await searchInput.inputValue(), "");
     await clearSearch.waitFor({ state: "hidden" });
+    await page.locator("#list-count").filter({ hasText: "2 posts shown" }).waitFor();
     await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "visible" });
     await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "visible" });
 
@@ -2182,8 +2184,9 @@ test(
     await searchInput.fill("movie");
     await searchInput.press("Enter");
     await clearSearch.waitFor({ state: "visible" });
-    await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "hidden" });
-    assert.equal(await page.getByRole("heading", { name: secondPoll.title }).isVisible(), true);
+    await page.locator("#list-count").filter({ hasText: "1 post shown" }).waitFor();
+    await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "visible" });
+    assert.equal(await page.getByRole("heading", { name: editablePoll.title }).isHidden(), true);
 
     await searchInput.evaluate((input) => {
       input.value = "";
@@ -2191,6 +2194,7 @@ test(
     });
     assert.equal(await searchInput.inputValue(), "");
     await clearSearch.waitFor({ state: "hidden" });
+    await page.locator("#list-count").filter({ hasText: "2 posts shown" }).waitFor();
     await page.getByRole("heading", { name: editablePoll.title }).waitFor({ state: "visible" });
     await page.getByRole("heading", { name: secondPoll.title }).waitFor({ state: "visible" });
 
@@ -2348,11 +2352,10 @@ test(
 
     // Click Undo removal -> 98 + 4 > 100, rejected upfront without partial drop
     await undo.click();
+    await page.locator(".saved-recovery-status").filter({
+      hasText: "Could not restore the link because this browser’s saved links are full.",
+    }).waitFor();
     assert.equal(await undo.isVisible(), true);
-    assert.equal(
-      await page.locator(".saved-recovery-status").textContent(),
-      "Could not restore the link because this browser’s saved links are full.",
-    );
     assert.equal(
       await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).length, savedKey),
       98,
