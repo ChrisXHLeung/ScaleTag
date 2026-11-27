@@ -241,7 +241,7 @@ function renderPollManager(poll, key) {
   document.title = `${t("Manage: ", "管理：")}${poll.title} — ScaleTag`;
   main.innerHTML = `<section class="empty-page"><section class="manage-card" id="poll-owner-controls">
     <h1>${t("Manage this poll", "管理此投票")}</h1><h2>${escape(poll.title)}</h2>
-    <p id="poll-manager-state">${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
+    <p id="poll-manager-state" tabindex="-1">${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
     <div><a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>
     <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${linkCopyFallback("owner-public-link")}</div>
     ${poll.status === "open" ? `<button type="button" class="button secondary small" data-poll-state="closed">${t("End voting now", "立即结束投票")}</button>` : ""}
@@ -290,25 +290,40 @@ function renderPollManager(poll, key) {
   }
   mountOwnerEdit(host, poll, `${endpoint}/edit`, key, refreshAfterSave);
   const stateButtons = [...host.querySelectorAll("[data-poll-state]")];
+  let changingState = false;
   for (const button of stateButtons) {
     button.onclick = async () => {
+      if (changingState) return;
       const state = button.dataset.pollState;
       if (!window.confirm(state === "closed"
         ? t("End voting now and publish the results?", "立即结束投票并公布结果？")
         : t("Take this poll down? The shared link and QR code will stop working.", "下架这项投票？共享链接和二维码将失效。"))) return;
-      stateButtons.forEach(control => { control.disabled = true; });
+      changingState = true;
+      stateButtons.forEach(control => control.setAttribute("aria-disabled", "true"));
       const error = host.querySelector(".form-error");
       error.hidden = true;
       try {
         const updated = await api(`${endpoint}/state`, { key, state });
+        const focused = document.activeElement;
+        const restoreFocus = host.contains(focused) || focused === document.body;
         if (updated.withdrawn) {
-          main.innerHTML = `<section class="empty-page"><h1>${t("This poll has been taken down.", "此投票已下架。")}</h1>
+          main.innerHTML = `<section class="empty-page"><h1 tabindex="-1">${t("This poll has been taken down.", "此投票已下架。")}</h1>
             <a class="button" href="/PostList">${t("Back to PostList", "返回帖子列表")}</a></section>`;
-        } else renderPollManager(updated, key);
+          if (restoreFocus) main.querySelector("h1").focus();
+        } else {
+          renderPollManager(updated, key);
+          if (restoreFocus) {
+            const nextFocus = focused.dataset.pollState === "withdrawn"
+              ? main.querySelector('[data-poll-state="withdrawn"]')
+              : document.getElementById(focused.id);
+            (nextFocus?.getClientRects().length ? nextFocus : main.querySelector("#poll-manager-state")).focus();
+          }
+        }
       } catch (e) {
-        showFormError(error, e);
+        showFormError(error, e, { focus: false });
       } finally {
-        stateButtons.forEach(control => { control.disabled = false; });
+        changingState = false;
+        stateButtons.forEach(control => control.removeAttribute("aria-disabled"));
       }
     };
   }

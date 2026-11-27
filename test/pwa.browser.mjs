@@ -443,6 +443,72 @@ test("poll edits keep keyboard focus during save, on retry, and after confirmati
   }
 });
 
+test("poll state actions leave keyboard focus on the outcome or available retry", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Vote on pickup times", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const endpoint = `${origin}/api/polls/${poll.id}/state`;
+  const pending = Promise.withResolvers();
+  let attempts = 0;
+  await page.route(endpoint, async (route) => {
+    attempts++;
+    if (attempts === 1) {
+      await pending.promise;
+      await route.fulfill({ status: 503, json: { error: "Try the action again." } });
+    } else {
+      await route.continue();
+    }
+  });
+  try {
+    await page.goto(`${origin}/vote/${poll.id}/manage`);
+    await page.getByLabel("Management password").fill(poll.manageKey);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    const endVoting = page.getByRole("button", { name: "End voting now", exact: true });
+    const takeDown = page.getByRole("button", { name: "Take down", exact: true });
+    const focused = (control) => control.evaluate(element => element === document.activeElement);
+
+    page.once("dialog", dialog => dialog.dismiss());
+    await endVoting.press("Enter");
+    assert.equal(await focused(endVoting), true, "Cancelling must return focus to the action");
+
+    page.once("dialog", dialog => dialog.accept());
+    const request = page.waitForRequest(endpoint);
+    await endVoting.press("Enter");
+    await request;
+    assert.equal(await focused(endVoting), true, "Waiting for the action must keep the button focused");
+    assert.equal(await takeDown.getAttribute("aria-disabled"), "true");
+    let duplicateConfirmation = false;
+    const checkDuplicate = async (dialog) => {
+      duplicateConfirmation = true;
+      await dialog.dismiss();
+    };
+    page.on("dialog", checkDuplicate);
+    await endVoting.press("Enter");
+    page.off("dialog", checkDuplicate);
+    assert.equal(duplicateConfirmation, false);
+    pending.resolve();
+    await page.getByText("Try the action again.", { exact: true }).waitFor();
+    assert.equal(await focused(endVoting), true);
+    assert.equal(await endVoting.isEnabled(), true);
+    assert.equal(attempts, 1, "Cancelling or activating a pending action must not send another request");
+
+    page.once("dialog", dialog => dialog.accept());
+    await endVoting.press("Enter");
+    const closed = page.getByText("Voting closed", { exact: true });
+    await closed.waitFor();
+    assert.equal(await focused(closed), true, "Closing must focus the result when the trigger disappears");
+
+    page.once("dialog", dialog => dialog.accept());
+    await takeDown.press("Enter");
+    const withdrawn = page.getByRole("heading", { name: "This poll has been taken down.", exact: true });
+    await withdrawn.waitFor();
+    assert.equal(await focused(withdrawn), true, "Withdrawal must focus the replacement view");
+    await page.keyboard.press("Tab");
+    assert.equal(await focused(page.getByRole("link", { name: "Back to PostList", exact: true })), true);
+  } finally {
+    pending.resolve();
+  }
+});
+
 test("a stale draft keeps local edits and requires a choice before replacing saved text", async (t) => {
   const { page, context, origin } = await fixture(t);
   const other = await context.newPage();
