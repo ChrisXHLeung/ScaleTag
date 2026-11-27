@@ -689,6 +689,66 @@ test("owners can copy public text to a new draft without copying publication det
   assert.deepEqual(errors, []);
 });
 
+test("saved link statuses can be retried without reloading or changing the saved list", async (t) => {
+  const { store, page, origin, context } = await fixture(t);
+  const poll = await store.create({ title: "Pickup poll", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const saved = [{ path: `/vote/${poll.id}`, title: poll.title }];
+  const endpoint = `${origin}/api/posts/statuses`;
+  const pending = Promise.withResolvers();
+  let attempts = 0;
+  await page.route(endpoint, async (route) => {
+    attempts++;
+    if (attempts === 1) {
+      await route.fulfill({ status: 503, json: { error: "Status is temporarily unavailable." } });
+    } else {
+      await pending.promise;
+      await route.continue();
+    }
+  });
+  try {
+    await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), saved);
+    await page.goto(`${origin}/saved`);
+    await page.setViewportSize({ width: 320, height: 844 });
+    const list = page.locator(".saved-posts");
+    await list.getByText("Could not check post status.", { exact: true }).waitFor();
+    await page.getByRole("searchbox").fill("Pickup");
+    const refresh = page.getByRole("button", { name: "Refresh link statuses", exact: true });
+    await refresh.waitFor({ timeout: 3000 });
+    const requested = page.waitForRequest(endpoint);
+    await refresh.press("Enter");
+    await requested;
+    assert.equal(await refresh.getAttribute("aria-disabled"), "true");
+    await refresh.press("Enter");
+    assert.equal(attempts, 2);
+    const superseding = page.waitForRequest(endpoint);
+    await page.evaluate(() => dispatchEvent(new Event("online")));
+    await superseding;
+    assert.equal(await refresh.getAttribute("aria-disabled"), "true");
+    pending.resolve();
+    await list.getByText("Open for votes", { exact: true }).waitFor();
+    await page.getByRole("status").filter({ hasText: "Link statuses refreshed." }).waitFor();
+    assert.equal(await refresh.evaluate(button => button === document.activeElement), true);
+    assert.equal(await refresh.isEnabled(), true);
+    assert.equal(await page.getByRole("searchbox").inputValue(), "Pickup");
+    assert.equal(attempts, 3);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 320);
+
+    await context.setOffline(true);
+    await page.getByText("Reconnect to refresh link statuses.", { exact: true }).waitFor();
+    assert.equal(await refresh.getAttribute("aria-disabled"), "true");
+    assert.equal(await refresh.evaluate(button => button === document.activeElement), true);
+    assert.equal(await list.getByRole("link", { name: poll.title, exact: true }).count(), 1);
+    assert.equal(attempts, 3);
+    await context.setOffline(false);
+    await list.getByText("Open for votes", { exact: true }).waitFor();
+    assert.equal(await refresh.isEnabled(), true);
+    assert.equal(await page.getByText("Reconnect to refresh link statuses.", { exact: true }).count(), 0);
+  } finally {
+    pending.resolve();
+  }
+});
+
 test("saved links show current public status and stay usable if status checks fail", async (t) => {
   const { store, page, origin, context, setUnavailablePath } = await fixture(t);
   const poll = await store.create({ title: "Only for the group", signature: "Test", visibility: "unlisted", options: ["A", "B"] });

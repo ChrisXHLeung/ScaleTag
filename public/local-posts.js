@@ -352,6 +352,14 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   const statusFilter = filters.querySelector("#saved-status-filter");
   const clear = button(t("Clear all filters", "清除所有筛选"));
   filters.append(clear);
+  const refreshControls = document.createElement("div");
+  refreshControls.className = "local-post-controls";
+  refreshControls.hidden = true;
+  const refreshButton = button(t("Refresh link statuses", "刷新链接状态"));
+  refreshButton.id = "refresh-saved-statuses";
+  const refreshFeedback = notice("");
+  refreshFeedback.classList.add("saved-filter-message");
+  refreshControls.append(refreshButton, refreshFeedback);
   const recovery = document.createElement("div");
   recovery.className = "local-post-controls";
   const recoveryStatus = notice("");
@@ -371,7 +379,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   empty.classList.add("saved-filter-message");
   page.append(heading, description);
   if (offline) page.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
-  page.append(filters, recovery, list, empty);
+  page.append(filters);
+  if (!offline) page.append(refreshControls);
+  page.append(recovery, list, empty);
   host.replaceChildren(page);
 
   let returnPath;
@@ -435,6 +445,8 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     }
     if (focusedRow?.hidden && list.contains(focusedRow)) statusFilter?.focus();
     filters.hidden = !list.childElementCount;
+    if (filters.hidden && document.activeElement === refreshButton) heading.focus();
+    refreshControls.hidden = filters.hidden;
     clear.hidden = !search.value && type === "all" && status === "all";
     syncRemoveUnavailable();
     const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
@@ -575,17 +587,33 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   const failed = t("Could not check post status.", "暂时无法查看帖子状态。");
   const lookups = new Map();
 
+  const reconnect = t("Reconnect to refresh link statuses.", "联网后可刷新链接状态。");
   let request, refreshTimer;
-  function cancelStatusRefresh() {
-    clearTimeout(refreshTimer);
-    request?.abort();
+  let manuallyRefreshing = false;
+  function syncRefreshButton() {
+    refreshButton.setAttribute("aria-disabled", String(Boolean(request) || !navigator.onLine));
+    if (!navigator.onLine) refreshFeedback.textContent = reconnect;
+    else if (refreshFeedback.textContent === reconnect) refreshFeedback.textContent = "";
   }
 
+  function replaceStatusRequest(nextRequest) {
+    clearTimeout(refreshTimer);
+    const previousRequest = request;
+    request = nextRequest;
+    previousRequest?.abort();
+    syncRefreshButton();
+    if (!lookups.size) {
+      manuallyRefreshing = false;
+      refreshFeedback.textContent = "";
+    }
+  }
+  const cancelStatusRefresh = () => replaceStatusRequest();
+
   async function refreshStatuses() {
-    cancelStatusRefresh();
-    if (!lookups.size || !page.isConnected || document.hidden) return;
-    request = new AbortController();
-    const { signal } = request;
+    const controller = lookups.size && page.isConnected && !document.hidden ? new AbortController() : undefined;
+    replaceStatusRequest(controller);
+    if (!controller) return;
+    const { signal } = controller;
     const entries = [...lookups.values()];
     let nextRefresh = Infinity;
     let hadError = false;
@@ -621,12 +649,28 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       });
       applyFilters();
     }
-    if (!signal.aborted && lookups.size) {
+    if (signal.aborted) return;
+    request = undefined;
+    syncRefreshButton();
+    if (manuallyRefreshing && navigator.onLine) {
+      refreshFeedback.textContent = hadError
+        ? t("Could not refresh all link statuses.", "暂时无法刷新全部链接状态。")
+        : t("Link statuses refreshed.", "链接状态已刷新。");
+    }
+    manuallyRefreshing = false;
+    if (lookups.size) {
       stopRestoringFocus();
       const delay = Math.min(Math.max(100, nextRefresh - performance.now()), hadError ? 30000 : Infinity);
       if (Number.isFinite(delay)) refreshTimer = setTimeout(refreshStatuses, Math.min(delay, 2 ** 31 - 1));
     }
   }
+
+  refreshButton.onclick = () => {
+    if (request || !navigator.onLine || !lookups.size) return;
+    manuallyRefreshing = true;
+    refreshFeedback.textContent = checking;
+    void refreshStatuses();
+  };
 
   function render() {
     lookups.clear();
