@@ -2007,3 +2007,90 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "batch removing verified unavailable links on /saved supports one-click undo and hides offline",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, context, origin, store } = f;
+    const savedKey = "scaletag-saved-posts";
+    await page.addInitScript(() => {
+      window.__rejections = [];
+      window.addEventListener("unhandledrejection", (event) => window.__rejections.push(String(event.reason)));
+    });
+    const rejections = () => page.evaluate(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return window.__rejections;
+    });
+
+    const availablePoll = await store.create({
+      title: "Available community poll",
+      options: ["Yes", "No"],
+      visibility: "unlisted",
+    });
+    const unavailableFirst = { path: `/task/${"a".repeat(24)}`, title: "Expired task link 1" };
+    const availableEntry = { path: `/vote/${availablePoll.id}`, title: availablePoll.title };
+    const unavailableSecond = { path: `/sale/${"b".repeat(24)}`, title: "Expired giveaway link 2" };
+    const initialEntries = [unavailableFirst, availableEntry, unavailableSecond];
+
+    await page.evaluate(
+      ([key, value]) => localStorage.setItem(key, JSON.stringify(value)),
+      [savedKey, initialEntries],
+    );
+    await page.goto(`${origin}/saved`);
+
+    const batchRemove = page.locator("#remove-unavailable-saved");
+    await batchRemove.waitFor({ state: "visible" });
+    assert.equal(await batchRemove.textContent(), "Remove unavailable links");
+
+    // Offline state hides #remove-unavailable-saved
+    await context.setOffline(true);
+    await batchRemove.waitFor({ state: "hidden" });
+    await context.setOffline(false);
+    await batchRemove.waitFor({ state: "visible" });
+
+    // Clicking #remove-unavailable-saved removes the 2 unavailable links, keeps the available one, and focuses Undo removal
+    await batchRemove.click();
+    await batchRemove.waitFor({ state: "hidden" });
+    const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+    await undo.waitFor({ state: "visible" });
+    assert.equal(await undo.evaluate((el) => document.activeElement === el), true);
+    assert.equal(await page.locator(".saved-posts li").count(), 1);
+    assert.equal(
+      await page.locator(".saved-posts li a").first().textContent(),
+      availablePoll.title,
+    );
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), savedKey),
+      [availableEntry],
+    );
+
+    // Clicking Undo removal restores both unavailable links in their original order
+    await undo.click();
+    await undo.waitFor({ state: "hidden" });
+    assert.equal(await page.locator(".saved-posts li").count(), 3);
+    assert.deepEqual(
+      await page.evaluate(() =>
+        [...document.querySelectorAll(".saved-posts li .saved-post-details > a")].map((a) => ({
+          path: a.getAttribute("href"),
+          title: a.textContent,
+        })),
+      ),
+      initialEntries,
+    );
+    assert.deepEqual(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), savedKey),
+      initialEntries,
+    );
+
+    // Offline render (/saved loaded while offline) also keeps #remove-unavailable-saved hidden
+    await context.setOffline(true);
+    await page.goto(`${origin}/saved`);
+    await page.getByRole("heading", { name: "Saved links", exact: true }).waitFor();
+    assert.equal(await batchRemove.isHidden(), true);
+
+    assert.deepEqual(await rejections(), []);
+    assert.deepEqual(f.errors, []);
+  },
+);

@@ -1090,6 +1090,7 @@ test("retrying initial map load after online failure still fits markers to bound
   await f.page.locator("#list-error").filter({ hasText: "Map load failed 2" }).waitFor();
   await f.page.getByRole("button", { name: "Try again", exact: true }).click();
   await f.page.locator("#map-count").filter({ hasText: "1 of 1 matching mapped posts" }).waitFor();
+  await f.page.locator("#map-message").filter({ hasText: "Select a dot" }).waitFor();
   await f.page.locator("#search-map-center").click();
   await f.page.waitForFunction(() => document.querySelector("#nearby")?.getAttribute("aria-pressed") === "true");
   const lastSearch = searchBodies.at(-1);

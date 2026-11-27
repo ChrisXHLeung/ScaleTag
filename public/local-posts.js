@@ -356,9 +356,12 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   recovery.className = "local-post-controls";
   const recoveryStatus = notice("");
   recoveryStatus.classList.add("saved-recovery-status");
+  const removeUnavailable = button(t("Remove unavailable links", "移除不可用链接"));
+  removeUnavailable.id = "remove-unavailable-saved";
+  removeUnavailable.hidden = true;
   const undo = button(t("Undo removal", "撤销移除"));
   undo.hidden = true;
-  recovery.append(recoveryStatus, undo);
+  recovery.append(recoveryStatus, removeUnavailable, undo);
   let lastRemoval;
   const list = document.createElement("ul");
   list.className = "saved-posts";
@@ -408,6 +411,10 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   });
 
   const normalize = value => value.normalize("NFKC").toLowerCase().trim();
+  const isUnavailableRow = row => row.dataset.linkStatus === "unavailable" || row.dataset.postStatus === "unavailable";
+  function syncRemoveUnavailable() {
+    removeUnavailable.hidden = offline || !navigator.onLine || ![...list.children].some(isUnavailableRow);
+  }
   function applyFilters() {
     const query = normalize(search.value);
     const type = typeFilter.value;
@@ -423,6 +430,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     if (focusedRow?.hidden && list.contains(focusedRow)) statusFilter?.focus();
     filters.hidden = !list.childElementCount;
     clear.hidden = !search.value && type === "all" && status === "all";
+    syncRemoveUnavailable();
     const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
     if (empty.textContent !== message) empty.textContent = message;
     if (returnPath && document.activeElement === document.body) {
@@ -450,29 +458,98 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     search.focus();
     filtersChanged();
   };
-  undo.onclick = () => withLocalLock(savedKey, () => {
-    if (!lastRemoval) return;
-    const { path, title, previousPath, nextPath } = lastRemoval;
+  removeUnavailable.onclick = () => withLocalLock(savedKey, () => {
+    const unavailablePaths = new Set(
+      [...list.children]
+        .filter(isUnavailableRow)
+        .map(row => row.querySelector(".saved-post-details > a")?.getAttribute("href"))
+        .filter(Boolean),
+    );
+    if (!unavailablePaths.size) {
+      syncRemoveUnavailable();
+      return;
+    }
     const items = savedPosts();
-    if (!items.some(item => item.path === path)) {
+    const entries = [];
+    const remaining = [];
+    items.forEach((item, index) => {
+      if (unavailablePaths.has(item.path)) {
+        entries.push({
+          item: { path: item.path, title: item.title },
+          index,
+          previousPath: items.slice(0, index).findLast(prev => !unavailablePaths.has(prev.path))?.path,
+          nextPath: items.slice(index + 1).find(next => !unavailablePaths.has(next.path))?.path,
+        });
+      } else {
+        remaining.push(item);
+      }
+    });
+    if (!entries.length) {
+      render();
+      return;
+    }
+    if (!write(savedKey, remaining)) {
+      recoveryStatus.textContent = unavailable();
+      return;
+    }
+    lastRemoval = { entries };
+    recoveryStatus.textContent = entries.length === 1
+      ? t("Saved link removed.", "已移除保存的链接。")
+      : `${t("Removed unavailable links.", "已移除不可用链接。")} (${entries.length})`;
+    undo.hidden = false;
+    for (const row of [...list.children]) {
+      const rowPath = row.querySelector(".saved-post-details > a")?.getAttribute("href");
+      if (rowPath && unavailablePaths.has(rowPath)) {
+        const [, kind, id] = rowPath.split("#", 1)[0].split("/");
+        const tag = `${kind === "vote" ? "poll" : kind}:${id}`;
+        const statusEl = row.querySelector(".saved-post-status");
+        const lookup = lookups.get(tag);
+        if (lookup && statusEl) {
+          lookup.labels.delete(statusEl);
+          if (!lookup.labels.size) lookups.delete(tag);
+        }
+        row.remove();
+      }
+    }
+    if (!lookups.size) cancelStatusRefresh();
+    applyFilters();
+    undo.focus({ preventScroll: true });
+  }).catch(() => { recoveryStatus.textContent = unavailable(); });
+  undo.onclick = () => withLocalLock(savedKey, () => {
+    if (!lastRemoval?.entries?.length) return;
+    const entries = [...lastRemoval.entries].sort((a, b) => a.index - b.index);
+    const items = savedPosts();
+    const missing = entries.filter(({ item }) => !items.some(existing => existing.path === item.path));
+    if (missing.length) {
       if (items.length >= savedLimit) {
         recoveryStatus.textContent = t("Could not restore the link because this browser’s saved links are full.", "此浏览器的收藏已满，暂时无法恢复链接。");
         return;
       }
-      const next = items.findIndex(item => item.path === nextPath);
-      const previous = items.findIndex(item => item.path === previousPath);
-      const position = next >= 0 ? next : previous >= 0 ? previous + 1 : items.length;
-      items.splice(position, 0, { path, title });
+      if (entries.length === 1) {
+        const [{ item, previousPath, nextPath, index }] = missing;
+        const next = nextPath ? items.findIndex(existing => existing.path === nextPath) : -1;
+        const previous = previousPath ? items.findIndex(existing => existing.path === previousPath) : -1;
+        const position = next >= 0 ? next : previous >= 0 ? previous + 1 : Math.min(index, items.length);
+        items.splice(position, 0, { path: item.path, title: item.title });
+      } else {
+        for (const { item, index } of missing) {
+          if (items.length >= savedLimit) break;
+          if (!items.some(existing => existing.path === item.path)) {
+            items.splice(Math.min(index, items.length), 0, { path: item.path, title: item.title });
+          }
+        }
+      }
       if (!write(savedKey, items)) {
         recoveryStatus.textContent = unavailable();
         return;
       }
     }
+    const focusPath = entries[0].item.path;
     lastRemoval = undefined;
     undo.hidden = true;
     recoveryStatus.textContent = t("Saved link restored.", "已恢复保存的链接。");
     render();
-    const link = list.querySelector(`li:not([hidden]) a[href="${path}"]`);
+    const link = list.querySelector(`li:not([hidden]) a[href="${focusPath}"]`);
     (link ?? statusFilter ?? search).focus();
   }).catch(() => { recoveryStatus.textContent = unavailable(); });
 
@@ -532,7 +609,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         hadError ||= !label;
         for (const output of lookup.labels) {
           output.textContent = label ?? failed;
-          output.closest("li").dataset.linkStatus = linkStatus;
+          const row = output.closest("li");
+          row.dataset.linkStatus = linkStatus;
+          row.dataset.postStatus = linkStatus;
         }
       });
       applyFilters();
@@ -550,7 +629,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     const items = savedPosts();
     if (returnPath && !items.some(item => item.path === returnPath)) stopRestoringFocus();
     // Another tab may have saved the removed link again; the undo offer no longer applies.
-    if (lastRemoval && items.some(item => item.path === lastRemoval.path)) {
+    if (lastRemoval?.entries?.length && lastRemoval.entries.every(({ item }) => items.some(saved => saved.path === item.path))) {
       lastRemoval = undefined;
       undo.hidden = true;
       recoveryStatus.textContent = "";
@@ -574,6 +653,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
       details.append(link);
       if (!offline) {
         row.dataset.linkStatus = "unverified";
+        row.dataset.postStatus = "unverified";
         status = document.createElement("span");
         status.className = "field-hint saved-post-status";
         status.id = `saved-status-${list.childElementCount}`;
@@ -625,10 +705,15 @@ export function renderSavedPosts(host, { offline = false } = {}) {
           return;
         }
         lastRemoval = {
-          path,
-          title: items.findLast(item => item.path === path).title,
-          previousPath: items[index - 1]?.path,
-          nextPath: items.slice(index + 1).find(item => item.path !== path)?.path,
+          entries: [{
+            item: {
+              path,
+              title: items.findLast(item => item.path === path).title,
+            },
+            index,
+            previousPath: items[index - 1]?.path,
+            nextPath: items.slice(index + 1).find(item => item.path !== path)?.path,
+          }],
         };
         recoveryStatus.textContent = t("Saved link removed.", "已移除保存的链接。");
         undo.hidden = false;
@@ -666,8 +751,14 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     if (savedLinksChanged(event)) render();
   });
   document.addEventListener("visibilitychange", refreshStatuses);
-  window.addEventListener("online", refreshStatuses);
-  window.addEventListener("offline", refreshStatuses);
+  window.addEventListener("online", () => {
+    syncRemoveUnavailable();
+    void refreshStatuses();
+  });
+  window.addEventListener("offline", () => {
+    syncRemoveUnavailable();
+    void refreshStatuses();
+  });
   window.addEventListener("pagehide", cancelStatusRefresh);
   window.addEventListener("pageshow", (event) => {
     if (!event.persisted && !fromHistory) return;
