@@ -528,7 +528,7 @@ function postList() {
     <button id="choose-map-area" class="button secondary small" type="button">${t("Choose area on map", "在地图上选区")}</button>
   </div>`;
   const clearFiltersLabel = t("Clear all filters", "清除所有筛选");
-  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">${t("THE PUBLIC NOTICEBOARD", "发现身边事")}</span><h1>${t("Every post<br>starts <em>somewhere.</em>", "看看附近<br><em>大家都在聊什么</em>")}</h1><p>${t("Explore polls, local tasks and free giveaways nearby.", "浏览附近的投票、任务和闲置赠予，看看有什么新鲜事。")}</p></div><a href="/create" class="button">${t("Create a post", "创建帖子")} ${icons.plus}</a></div>${searchForm}<label class="content-filter" for="content-type">${t("Show", "显示")} <select id="content-type"><option value="all">${t("All post types", "全部类型")}</option><option value="poll">${t("Polls", "投票")}</option><option value="task">${t("Tasks", "任务")}</option><option value="sale">${t("Free Giveaways", "闲置赠予")}</option></select></label><div class="content-filter" id="pickup-time-filter" hidden><label for="pickup-time">${t("Pickup time", "领取时段")}</label><select id="pickup-time"><option value="">${t("Any pickup time", "不限时段")}</option><option value="now">${t("Pickup now", "现在可领取")}</option><option value="upcoming">${t("Starts in the next 24 hours", "未来 24 小时开始")}</option></select></div><div class="view-switch" role="group" aria-label="${t("PostList view", "帖子列表视图")}"><button type="button" class="selected" data-view="list" aria-pressed="true">${t("List", "列表")}</button><button type="button" data-view="map" aria-pressed="false">${t("Map", "地图")}</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="${t("Post status", "帖子状态")}"><button class="selected" data-filter="all" aria-pressed="true">${t("All posts", "全部帖子")}</button><button data-filter="open" aria-pressed="false">${t("Open", "进行中")}</button><button data-filter="closed" aria-pressed="false">${t("Ended", "已结束")}</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} <span id="nearby-label">${t("Within 100 km", "100 公里内")}</span> <span class="toggle" aria-hidden="true"></span></button></div>${nearbyPicker}<div class="list-caption"><span id="list-caption">${t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异")}</span><span id="list-count"></span></div><p class="location-privacy" id="location-privacy" hidden>${t("Your location is used only for this search and is not saved.", "你的位置仅用于本次搜索，不会保存。")}</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="${t("Post map", "帖子地图")}" hidden><div class="map-intro"><strong>${t("Posts on the map", "地图上的帖子")}</strong><p>${t("Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Post content stays on ScaleTag.", "地图只显示大致区域。打开地图时会连接 OpenFreeMap，该服务会收到你的 IP 地址和查看的地图区域；帖子内容仍保留在 ScaleTag。")}</p></div><div class="nearby-controls"><button id="search-map-center" class="button secondary small" type="button">${t("Search this area", "搜索此区域")}</button><span>${t("Search near the center of this map.", "以地图中心为起点搜索。")}</span></div><p id="map-message" class="map-message" role="status">${t("Loading the map…", "正在加载地图…")}</p><div id="poll-map" class="poll-map" role="region" aria-label="${t("Interactive map of approximate post locations", "帖子大致位置的互动地图")}"></div><div class="map-legend"><span><i class="legend-dot"></i> ${t("Open", "进行中")}</span><span><i class="legend-dot ended"></i> ${t("Ended", "已结束")}</span><button class="text-link" id="map-fit" type="button">${t("Fit all markers ↗", "显示所有标记 ↗")}</button></div><p id="map-count" class="map-count" aria-live="polite" tabindex="-1"></p><button id="clear-map-filters" class="button secondary small" type="button" hidden>${clearFiltersLabel}</button><p class="map-footnote">${t("Only posts published with map consent appear here. Older posts remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.", "仅显示发布时同意上地图的帖子。较早的帖子仍可在列表中查看。位置按 0.01° 网格显示，南北约 1 公里，东西更窄。")}</p><details class="mapped-polls"><summary>${t("Browse mapped posts without the map", "不用地图，直接浏览已标记的帖子")}</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid" aria-live="polite"></div><button id="load-more" class="button secondary load-more" hidden>${t("Load more posts", "加载更多帖子")}</button><p class="list-retention">${t("Polls and tasks leave the website after 30 days; giveaways after 72 hours. Private daily backups are retained for up to 90 days after backup creation.", "投票和任务在 30 天后从网站移除；闲置赠予在 72 小时后移除。每日私有备份自创建起最多保留 90 天。")}</p></section>`;
+  main.innerHTML = `<section class="list-page"><div class="list-heading"><div><span class="eyebrow">${t("THE PUBLIC NOTICEBOARD", "发现身边事")}</span><h1>${t("Every post<br>starts <em>somewhere.</em>", "看看附近<br><em>大家都在聊什么</em>")}</h1><p>${t("Explore polls, local tasks and free giveaways nearby.", "浏览附近的投票、任务和闲置赠予，看看有什么新鲜事。")}</p></div><a href="/create" class="button">${t("Create a post", "创建帖子")} ${icons.plus}</a></div>${searchForm}<label class="content-filter" for="content-type">${t("Show", "显示")} <select id="content-type"><option value="all">${t("All post types", "全部类型")}</option><option value="poll">${t("Polls", "投票")}</option><option value="task">${t("Tasks", "任务")}</option><option value="sale">${t("Free Giveaways", "闲置赠予")}</option></select></label><div class="content-filter" id="pickup-time-filter" hidden><label for="pickup-time">${t("Pickup time", "领取时段")}</label><select id="pickup-time"><option value="">${t("Any pickup time", "不限时段")}</option><option value="now">${t("Pickup now", "现在可领取")}</option><option value="upcoming">${t("Starts in the next 24 hours", "未来 24 小时开始")}</option></select></div><div class="view-switch" role="group" aria-label="${t("PostList view", "帖子列表视图")}"><button type="button" class="selected" data-view="list" aria-pressed="true">${t("List", "列表")}</button><button type="button" data-view="map" aria-pressed="false">${t("Map", "地图")}</button></div><div class="list-toolbar"><div class="filter-tabs" role="group" aria-label="${t("Post status", "帖子状态")}"><button class="selected" data-filter="all" aria-pressed="true">${t("All posts", "全部帖子")}</button><button data-filter="open" aria-pressed="false">${t("Open", "进行中")}</button><button data-filter="closed" aria-pressed="false">${t("Ended", "已结束")}</button></div><button class="near-button" id="nearby" aria-pressed="false">${icons.pin} <span id="nearby-label">${t("Within 100 km", "100 公里内")}</span> <span class="toggle" aria-hidden="true"></span></button></div>${nearbyPicker}<div class="list-caption"><span id="list-caption">${t("Newest first · Availability varies by post type", "最新发布优先 · 有效期因帖子类型而异")}</span><span id="list-count" role="status"></span></div><p class="location-privacy" id="location-privacy" hidden>${t("Your location is used only for this search and is not saved.", "你的位置仅用于本次搜索，不会保存。")}</p><p id="list-error" class="form-error" role="alert" hidden></p><section id="map-panel" class="map-panel" aria-label="${t("Post map", "帖子地图")}" hidden><div class="map-intro"><strong>${t("Posts on the map", "地图上的帖子")}</strong><p>${t("Approximate areas only. Loading this view connects to OpenFreeMap, which receives your IP address and the map areas you view. Post content stays on ScaleTag.", "地图只显示大致区域。打开地图时会连接 OpenFreeMap，该服务会收到你的 IP 地址和查看的地图区域；帖子内容仍保留在 ScaleTag。")}</p></div><div class="nearby-controls"><button id="search-map-center" class="button secondary small" type="button">${t("Search this area", "搜索此区域")}</button><span>${t("Search near the center of this map.", "以地图中心为起点搜索。")}</span></div><p id="map-message" class="map-message" role="status">${t("Loading the map…", "正在加载地图…")}</p><div id="poll-map" class="poll-map" role="region" aria-label="${t("Interactive map of approximate post locations", "帖子大致位置的互动地图")}"></div><div class="map-legend"><span><i class="legend-dot"></i> ${t("Open", "进行中")}</span><span><i class="legend-dot ended"></i> ${t("Ended", "已结束")}</span><button class="text-link" id="map-fit" type="button">${t("Fit all markers ↗", "显示所有标记 ↗")}</button></div><p id="map-count" class="map-count" aria-live="polite" tabindex="-1"></p><button id="clear-map-filters" class="button secondary small" type="button" hidden>${clearFiltersLabel}</button><p class="map-footnote">${t("Only posts published with map consent appear here. Older posts remain in List. Positions use a 0.01° grid, about 1 km north–south and narrower east–west.", "仅显示发布时同意上地图的帖子。较早的帖子仍可在列表中查看。位置按 0.01° 网格显示，南北约 1 公里，东西更窄。")}</p><details class="mapped-polls"><summary>${t("Browse mapped posts without the map", "不用地图，直接浏览已标记的帖子")}</summary><ul id="mapped-poll-links"></ul></details></section><div id="poll-list" class="poll-grid"></div><button id="load-more" class="button secondary load-more" hidden>${t("Load more posts", "加载更多帖子")}</button><p class="list-retention">${t("Polls and tasks leave the website after 30 days; giveaways after 72 hours. Private daily backups are retained for up to 90 days after backup creation.", "投票和任务在 30 天后从网站移除；闲置赠予在 72 小时后移除。每日私有备份自创建起最多保留 90 天。")}</p></section>`;
   let status = "all",
     location,
     query = "",
@@ -536,6 +536,7 @@ function postList() {
     sort = "newest",
     cursor,
     loaded = 0,
+    listAwaitingResults = false,
     request = 0,
     listReturnRequest,
     locating = false,
@@ -563,6 +564,7 @@ function postList() {
   const mapCount = document.querySelector("#map-count");
   const typeSelect = document.querySelector("#content-type");
   const list = document.querySelector("#poll-list");
+  const listCount = document.querySelector("#list-count");
   const pickupTime = document.querySelector("#pickup-time");
   const pickupFilter = document.querySelector("#pickup-time-filter");
   const statusButtons = [...document.querySelectorAll("[data-filter]")];
@@ -817,7 +819,7 @@ function postList() {
       document.querySelector("#map-panel").hidden = mode !== "map";
       document.querySelector("#poll-list").hidden = mode === "map";
       document.querySelector("#load-more").hidden = true;
-      document.querySelector("#list-count").hidden = mode === "map";
+      listCount.hidden = mode === "map";
       chooseArea.hidden = mode === "map";
       updateListCaption();
       if (mode === "list" || previousMode === "map") disposeMap();
@@ -965,8 +967,9 @@ function postList() {
     document.querySelector("#list-error").hidden = true;
     more.disabled = true;
     if (reset && !background) {
-      list.innerHTML =
-        `<div class="list-empty" role="status">${t("Finding posts…", "正在查找帖子…")}</div>`;
+      listAwaitingResults = true;
+      list.replaceChildren();
+      listCount.textContent = t("Finding posts…", "正在查找帖子…");
       more.hidden = true;
     }
     try {
@@ -1016,8 +1019,9 @@ function postList() {
         clear.onclick = clearFilters;
         list.querySelector(".list-empty").append(clear);
       }
-      document.querySelector("#list-count").textContent =
-        t(`${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`, `显示 ${count(loaded)} 条帖子`);
+      const countLabel = t(`${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`, `显示 ${count(loaded)} 条帖子`);
+      if (listCount.textContent !== countLabel) listCount.textContent = countLabel;
+      listAwaitingResults = false;
       more.hidden = !cursor;
       if (focused) ([...list.querySelectorAll("a")].find(link => link.getAttribute("href") === focused.getAttribute("href")) ?? pickupTime).focus({ preventScroll: true });
       if (returnTo && document.activeElement === document.body) {
@@ -1034,9 +1038,13 @@ function postList() {
       const error = document.querySelector("#list-error");
       error.textContent = e.message;
       error.hidden = false;
-      if (reset && !background)
+      // A background refresh may have superseded a search that cleared the list.
+      if (listAwaitingResults) {
+        listAwaitingResults = false;
+        listCount.textContent = "";
         list.innerHTML =
           `<div class="list-empty">${t("Could not load posts. Select a filter to try again.", "无法加载帖子，请选择筛选条件重试。")}</div>`;
+      }
     } finally {
       if (listReturnRequest === current) listReturnRequest = undefined;
       if (current === request) more.disabled = false;

@@ -416,6 +416,86 @@ test("a non-cached Back navigation restores the discovery view and public filter
   assert.equal(await page.locator("#content-type").inputValue(), "all");
 });
 
+test("list status tracks displayed results through loading, retry and filtering", async (t) => {
+  const { page, origin, store, input } = await fixture(t);
+  const sample = await store.get((await store.create(input)).id);
+  const nextSample = await store.get((await store.create({ ...input, title: "Second page result" })).id);
+  let failPage = true;
+  let releaseFilter;
+  const filter = new Promise(resolve => { releaseFilter = resolve; });
+  await page.route("**/api/posts/search", async route => {
+    const { status, cursor } = route.request().postDataJSON();
+    if (cursor && failPage) return route.fulfill({ status: 503, json: { error: "Pagination failed" } });
+    if (cursor) return route.fulfill({ json: { polls: [nextSample] } });
+    if (status === "open") {
+      await filter;
+      return route.fulfill({ status: 503, json: { error: "Filter failed" } });
+    }
+    if (status === "closed") return route.fulfill({ json: { polls: [] } });
+    return route.fulfill({ json: { polls: [sample], nextCursor: "page-two" } });
+  });
+  await page.goto(`${origin}/PostList`);
+  const count = page.locator("#list-count");
+  const grid = page.locator("#poll-list");
+  const cards = grid.locator("a.poll-list-card");
+  const more = page.getByRole("button", { name: "Load more posts", exact: true });
+  const statuses = page.getByRole("group", { name: "Post status" });
+  try {
+    await count.filter({ hasText: "1 post shown" }).waitFor();
+    await more.click();
+    await page.getByRole("alert").filter({ hasText: "Pagination failed" }).waitFor();
+    assert.equal(await count.textContent(), "1 post shown");
+    assert.equal(await cards.count(), 1);
+    failPage = false;
+    await more.click();
+    await more.waitFor({ state: "hidden" });
+    assert.equal(await count.textContent(), "2 posts shown");
+    assert.equal(await cards.count(), 2);
+
+    await statuses.getByRole("button", { name: "Open", exact: true }).click();
+    assert.equal(await count.textContent(), "Finding posts…");
+    assert.equal(await cards.count(), 0);
+  } finally {
+    releaseFilter();
+  }
+  await page.getByRole("alert").filter({ hasText: "Filter failed" }).waitFor();
+  assert.equal(await count.textContent(), "");
+  assert.equal(await cards.count(), 0);
+  await statuses.getByRole("button", { name: "Ended", exact: true }).click();
+  await count.filter({ hasText: "0 posts shown" }).waitFor();
+  assert.equal(await count.getAttribute("role"), "status");
+  assert.equal(await grid.getAttribute("aria-live"), null);
+});
+
+test("a failed pickup refresh clears the loading status when it supersedes a search", async (t) => {
+  const { page, origin } = await fixture(t);
+  let releaseSearch;
+  let searches = 0;
+  const pendingSearch = new Promise(resolve => { releaseSearch = resolve; });
+  await page.route("**/api/posts/search", async route => {
+    if (route.request().postDataJSON().pickup === "now") {
+      if (++searches > 1) return route.fulfill({ status: 503, json: { error: "Pickup refresh failed" } });
+      await pendingSearch;
+    }
+    return route.fulfill({ json: { polls: [] } });
+  });
+  try {
+    await page.goto(`${origin}/PostList?type=sale`);
+    const count = page.locator("#list-count");
+    await count.filter({ hasText: "0 posts shown" }).waitFor();
+    const request = page.waitForRequest(request =>
+      request.url().endsWith("/api/posts/search") && request.postDataJSON().pickup === "now");
+    await page.locator("#pickup-time").selectOption("now");
+    await request;
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await page.getByRole("alert").filter({ hasText: "Pickup refresh failed" }).waitFor();
+    assert.equal(await count.textContent(), "");
+    await page.getByText("Could not load posts. Select a filter to try again.", { exact: true }).waitFor();
+  } finally {
+    releaseSearch();
+  }
+});
+
 test("Back restores the activated public result after loading more posts", async (t) => {
   const { page, origin, store, input, advance } = await fixture(t);
   const viewport = { width: 390, height: 720 };
