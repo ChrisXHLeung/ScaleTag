@@ -15,7 +15,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       <input id="owner-title" name="title" value="${escape(post.title)}" maxlength="140" ${post.type === "poll" && !canEditOptions ? "readonly" : "required"}>
       <label for="owner-description">${t("Description", "说明")}</label>
       <textarea id="owner-description" name="description" rows="4" maxlength="4000" ${post.type === "poll" ? "" : "required"}>${escape(post.description)}</textarea>
-      ${post.type === "task" ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
+      ${post.type === "task" && post.taskKind !== "wanted" ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
         <input id="owner-reward" name="reward" value="${escape(post.reward)}" maxlength="160" required>` : ""}
       ${post.type === "sale" ? `<label for="owner-pickup">${post.pickupByRequest ? t("Pickup location (private)", "领取地点（私密）") : t("Pickup location (public)", "领取地点（公开）")}</label>
         <input id="owner-pickup" name="${post.pickupByRequest ? "privatePickupLocation" : "pickupLocation"}" value="${escape(post.pickupLocation)}" maxlength="300" required>
@@ -148,7 +148,7 @@ export function refreshOwnerPreview(host, post) {
   description.hidden = !post.description;
   host.querySelector(".sale-photos")?.remove();
   description.insertAdjacentHTML("afterend", uploadedPhotosHtml(post.images));
-  if (post.type === "task") host.querySelector(".task-reward h2").textContent = post.reward;
+  if (post.type === "task" && post.taskKind !== "wanted") host.querySelector(".task-reward h2").textContent = post.reward;
   const pickup = host.querySelector("#sale-pickup h2");
   if (post.type === "sale" && pickup) pickup.textContent = post.pickupLocation;
 }

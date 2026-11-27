@@ -1,5 +1,5 @@
 import { renderIntroFlow } from "/help.js";
-import { t, icons, setActiveNav } from "/common.js";
+import { t, icons, postKindSwitch, setActiveNav } from "/common.js";
 import {
   decryptSecret,
   deriveClaim,
@@ -87,12 +87,7 @@ function createView() {
       </div>
     </aside>
     <div class="form-card secrex-card">
-      <div class="post-kind-switch" aria-label="${t("Post type", "发布类型")}">
-        <a href="/create">${t("Poll", "投票")}</a>
-        <a href="/create/task">${t("Task", "任务")}</a>
-        <a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a>
-        <a href="/secrex" aria-current="page">${t("Secrex", "Secrex 阅后即焚")}</a>
-      </div>
+      ${postKindSwitch("/secrex")}
       <div class="form-heading">
         <h2>${t("Create a one-time secret", "创建阅后即焚私密信息")}</h2>
         <span class="pill">${t("BURN AFTER READING", "阅后即焚")}</span>

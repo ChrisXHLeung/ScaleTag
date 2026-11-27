@@ -239,6 +239,11 @@ export function taskCredentialsInput(body) {
 export function taskInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the task form.");
+  const wanted = body.taskKind === "wanted";
+  if (body.taskKind !== undefined && !wanted)
+    throw new AppError(400, "Choose a valid task type.");
+  if (wanted && Object.hasOwn(body, "reward"))
+    throw new AppError(400, "Item requests are for free items only.");
   const credentials = taskCredentialsInput(body);
   // Share publication validation; task content has no voting options.
   const common = baseInput({
@@ -250,7 +255,7 @@ export function taskInput(body) {
     type: "task",
     options: [],
     description: publicText(body.description, "Description", 4000),
-    reward: publicText(body.reward, "Reward", 160),
+    ...(wanted ? { taskKind: "wanted" } : { reward: publicText(body.reward, "Reward", 160) }),
     ...credentials,
   };
 }

@@ -66,6 +66,18 @@ const shortDate = (time) =>
     new Date(time),
   );
 const count = (value) => new Intl.NumberFormat(intlLocale).format(value);
+export function postKindSwitch(current) {
+  const entries = [
+    ["/create", t("Poll", "投票")],
+    ["/create/task", t("Task", "任务")],
+    ["/create/sale", t("Free Giveaways", "闲置赠予")],
+    ["/create/wanted", t("Wanted", "求赠")],
+    ["/secrex", t("Secrex", "Secrex 阅后即焚")],
+  ];
+  const links = entries.map(([path, label]) =>
+    `<a href="${path}"${path === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
+  return `<nav class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}">${links}</nav>`;
+}
 export const ballotsSubmitted = (value) => `${t("Ballots submitted", "已提交选票")}: ${count(value)}`;
 const percent = (votes, total) =>
   total ? ((votes / total) * 100).toFixed(1).replace(/\.0$/, "") : "0";

@@ -77,6 +77,44 @@ async function fixture(t) {
   };
 }
 
+test("wanted publisher receives a private donor contact and marks the item received", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  const title = "Moving boxes wanted";
+  const email = "donor@example.com";
+  await owner.goto(f.origin + "/create");
+  await owner.locator('.post-kind-switch a[href="/create/wanted"]').click({ timeout: 4000 });
+  await owner.getByLabel("Item wanted", { exact: true }).fill(title);
+  await owner.getByLabel("Description", { exact: true }).fill("Looking for five used boxes.");
+  assert.equal(await owner.getByLabel("Reward", { exact: true }).count(), 0);
+  await owner.locator("#task-map-consent").check();
+  await owner.locator("#task-retention").check();
+  await owner.getByRole("button", { name: "Publish item request", exact: true }).click();
+  await owner.getByRole("heading", { name: "Manage item request", exact: true }).waitFor();
+  const visitorContext = await f.browser.newContext({ viewport: { width: 320, height: 844 } });
+  const donor = await visitorContext.newPage();
+  const id = new URL(owner.url()).pathname.split("/")[2];
+  await donor.goto(f.origin + "/PostList");
+  await donor.locator("#content-type").selectOption("wanted");
+  await donor.getByRole("link", { name: new RegExp(title) }).first().click();
+  await donor.locator("#reply-message").fill("I have several boxes to give away.");
+  await donor.locator("#reply-email").fill(email);
+  await donor.locator("#contact-consent").check();
+  await donor.getByRole("button", { name: "Send offer", exact: true }).click();
+  await donor.getByText("I have several boxes to give away.", { exact: true }).waitFor();
+  assert.equal(await donor.getByText(email, { exact: true }).count(), 0);
+  await owner.locator("#refresh-private-replies").click();
+  await owner.getByRole("link", { name: new RegExp(email) }).waitFor();
+  owner.once("dialog", dialog => dialog.accept());
+  await owner.getByRole("button", { name: "Item received", exact: true }).click();
+  await owner.locator("#task-state").getByText("Item received", { exact: true }).waitFor();
+  await donor.goto(f.origin + "/task/" + id);
+  await donor.locator("#task-state").getByText("Item received", { exact: true }).waitFor();
+  await donor.getByRole("button", { name: "Send offer", exact: true }).waitFor({ state: "hidden" });
+  assert.equal(await donor.evaluate(() => document.documentElement.scrollWidth), 320);
+  assert.deepEqual(f.errors, []);
+});
+
 test("anonymous task publication, persistent likes and private email reply work end to end", async (t) => {
   const f = await fixture(t);
   await f.page.goto(f.origin + "/create");

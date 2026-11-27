@@ -142,6 +142,8 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Choose a valid task type.': '请选择有效的任务类型。',
+  'Item requests are for free items only.': '求赠只接受免费物品。',
   'Choose a valid pickup method.': '请选择有效的领取方式。',
   'Choose a valid pickup action.': '请选择有效的领取操作。',
   'Choose a future time within the pickup hours and giveaway lifetime.': '请选择领取时段和赠予有效期内的未来时间。',

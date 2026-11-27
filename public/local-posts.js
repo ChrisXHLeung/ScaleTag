@@ -81,6 +81,10 @@ const draftCopyFields = {
     path: "/create/task",
     fields: { "#task-title": "title", "#task-description": "description", "#task-reward": "reward", "#task-name": "signature" },
   },
+  wanted: {
+    path: "/create/wanted",
+    fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
+  },
   sale: {
     path: "/create/sale",
     fields: { "#sale-title": "title", "#sale-description": "description", "#sale-name": "signature" },
@@ -102,9 +106,10 @@ export function mountDraftCopy(host, getPost) {
   copy.onclick = async () => {
     status.hidden = true;
     const post = getPost();
-    const preset = draftCopyFields[post.type];
+    const kind = post.taskKind === "wanted" ? "wanted" : post.type;
+    const preset = draftCopyFields[kind];
     if (!preset) return;
-    const key = textDraftKey(post.type);
+    const key = textDraftKey(kind);
     const { stored, draft: previous } = readDraft(key);
     if (stored === undefined) return explain(unavailable());
     if (hasTextDraft(previous)) {

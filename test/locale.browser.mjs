@@ -99,7 +99,7 @@ test('browser language, manual preference, storage fallback and offline switchin
       await link.click();
       await page.getByRole('heading', { name: locale === 'zh-CN' ? '功能指南' : 'Feature guide', exact: true }).waitFor();
       assert.equal(new URL(page.url()).hash, '#tasks');
-      assert.equal(await page.locator('.help-topic .help-flow').count(), 11);
+      assert.equal(await page.locator('.help-topic .help-flow').count(), 12);
       assert.equal(await page.locator('#tasks .help-step-action').first().textContent(),
         locale === 'zh-CN' ? '发布任务' : 'Publish a task');
       assert.equal(await page.locator('#tasks .help-step-actor').first().textContent(), publisher);

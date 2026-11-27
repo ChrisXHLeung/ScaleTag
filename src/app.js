@@ -242,7 +242,7 @@ export function createApp(
     res.status(201).json(await store.create(input));
   });
   function contentType(data) {
-    if (data.type && !["all", "poll", "task", "sale"].includes(data.type))
+    if (data.type && !["all", "poll", "task", "sale", "wanted"].includes(data.type))
       throw new AppError(400, "Invalid content type.");
     return data.type;
   }
@@ -611,7 +611,7 @@ export function createApp(
   );
   app.get("/saved", (_req, res) => res.sendFile(join(publicDir, "index.html")));
   app.get(
-    ["/", "/create", "/create/task", "/create/sale", "/PostList", "/help", "/privacy", "/install"],
+    ["/", "/create", "/create/task", "/create/sale", "/create/wanted", "/PostList", "/help", "/privacy", "/install"],
     (req, res) => sendPublicPage(req, res, "index.html"),
   );
   app.get(["/vote/:id", "/vote/:id/manage"], async (req, res) => {

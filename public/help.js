@@ -7,6 +7,7 @@ const actor = {
   taskPublisher: ["Task publisher", "任务发布者"],
   respondent: ["Respondent", "回复者"],
   giver: ["Giver", "赠予者"],
+  requester: ["Requester", "求赠者"],
   pickupVisitor: ["Pickup visitor", "领取者"],
   sender: ["Sender", "发送者"],
   recipient: ["Recipient", "收件人"],
@@ -34,6 +35,14 @@ const features = [
       [actor.respondent, "Send a public reply with private contact details", "提交公开回复与私人联系方式"],
       [actor.taskPublisher, "Select a respondent if needed", "需要时选择一名回复者"],
       [actor.taskPublisher, "Finish or close the task", "完成或关闭任务"],
+    ]],
+  ["wanted", "/create/wanted", ["Wanted", "求赠"],
+    ["Ask neighbors for a free item. Donors can reply with a public offer and separately encrypted phone or email. The requester can pick a donor or mark the item received to stop new offers.",
+      "向邻里求赠闲置物品。赠予者可以公开回复，并单独填写加密的电话或邮箱。求赠者可以选定赠予者，或标记已收到以停止接收新回复。"],
+    [
+      [actor.requester, "Publish an item request", "发布求赠"],
+      [actor.giver, "Offer an item and leave private contact details", "提出赠予并私下留下联系方式"],
+      [actor.requester, "Arrange pickup and mark the item received", "安排领取并标记已收到"],
     ]],
   ["giveaways", "/create/sale", ["Free giveaways", "闲置赠予"],
     ["Enter a public pickup location and an optional pickup window. Published times follow the reader’s device time zone and show the offset from UTC. Browse for pickups available now or starting within 24 hours. For an available item with a pickup window you can download a calendar entry. A publisher can place or release a temporary hold and mark the item claimed. Once claimed, it leaves discovery and the original link hides pickup details. Giveaways can be available for up to 72 hours.",
@@ -159,4 +168,5 @@ export function helpTopic(path) {
   if (path === "/create" || path.startsWith("/vote/")) return "polls";
   if (path === "/create/task" || path.startsWith("/task/")) return "tasks";
   if (path === "/create/sale" || path.startsWith("/sale/")) return "giveaways";
+  if (path === "/create/wanted") return "wanted";
 }

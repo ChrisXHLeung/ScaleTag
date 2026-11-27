@@ -144,6 +144,8 @@ function searchFilter(query) {
   };
 }
 
+const discoveryType = post => post.taskKind === "wanted" ? "wanted" : (post.type ?? "poll");
+
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
   (p.type ?? "poll") === "task" ? (p.taskState ?? "open") : undefined;
@@ -245,6 +247,7 @@ export class PollStore {
     return {
       id: p.id,
       type: p.type ?? "poll",
+      taskKind: p.taskKind,
       reward: p.reward,
       price: p.price,
       saleState: p.saleState,
@@ -558,7 +561,7 @@ export class PollStore {
     }
     const now = this.clock();
     let rows = [...this.index.values()].filter((p) => isDiscoverable(p, now));
-    if (type !== "all") rows = rows.filter((p) => (p.type ?? "poll") === type);
+    if (type !== "all") rows = rows.filter((p) => discoveryType(p) === type);
     if (status !== "all")
       rows = rows.filter((p) => postStatus(p, now) === status);
     rows = rows.filter(searchFilter(query));
@@ -592,7 +595,7 @@ export class PollStore {
     const now = this.clock();
     const posts = [...this.index.values()]
       .filter((p) => p.mapVisible && isDiscoverable(p, now))
-      .filter((p) => type === "all" || (p.type ?? "poll") === type)
+      .filter((p) => type === "all" || discoveryType(p) === type)
       .filter((p) => status === "all" || postStatus(p, now) === status)
       .filter(searchFilter(query));
     let rows = nearbyRows(posts, location, radiusKm, sort);
@@ -608,6 +611,7 @@ export class PollStore {
         id: p.id,
         type: p.type ?? "poll",
         reward: p.reward,
+        taskKind: p.taskKind,
         price: p.price,
         ...publicSaleAvailability(p, now),
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
@@ -810,6 +814,8 @@ export class PollStore {
       const now = this.clock();
       if (type === "sale" && post.saleState === "claimed")
         throw new AppError(409, "This giveaway has already been claimed.");
+      if (post.taskKind === "wanted" && Object.hasOwn(copy, "reward"))
+        throw new AppError(400, "Item requests are for free items only.");
       if (type === "sale") validatePickupWindow(copy.pickupWindow, post.createdAt, post.endsAt, now);
       const questionChanged = type === "poll" && copy.title !== undefined && copy.title !== post.title;
       const optionsChanged = options && (options.length !== post.options.length ||

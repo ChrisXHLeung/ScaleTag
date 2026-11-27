@@ -199,6 +199,15 @@ function drawCoverImage(ctx, img, x, y, w, h, radius) {
 }
 
 function typeMeta(type) {
+  if (type === "wanted") {
+    return {
+      badge: t("Wanted", "求赠"),
+      bylinePrefix: t("Posted by", "发布者："),
+      scanEyebrow: t("Offer an item", "我可以赠予"),
+      scanHeadline: t("Ask for an item", "向邻里求赠"),
+      scanPrompt: t("Point your phone camera at the QR code to read full details or send a reply.", "用手机相机扫描二维码，即可查看详情或回复。"),
+    };
+  }
   if (type === "task") {
     return {
       badge: t("LOCAL TASK", "邻里任务"),
@@ -255,7 +264,7 @@ export async function renderPosterCanvas(post) {
   ctx.lineTo(POSTER_WIDTH, headerH);
   ctx.stroke();
 
-  const meta = typeMeta(post.type);
+  const meta = typeMeta(post.taskKind === "wanted" ? "wanted" : post.type);
   const qrPromise = loadImage(post.qrUrl);
   const validPhotos = (post.images ?? [])
     .filter((src) => DATA_IMAGE_PATTERN.test(src))
@@ -347,7 +356,7 @@ export async function renderPosterCanvas(post) {
   if (post.type === "poll" && Array.isArray(post.options) && post.options.length) {
     const shownCount = Math.min(post.options.length, 6);
     highlightReserve = 140 + shownCount * 112 + (post.options.length > 6 ? 56 : 0);
-  } else if (post.type === "task" || post.type === "sale") {
+  } else if ((post.type === "task" && post.taskKind !== "wanted") || post.type === "sale") {
     highlightReserve = 260;
   }
 
@@ -483,7 +492,7 @@ export async function renderPosterCanvas(post) {
       );
     }
     y += boxH;
-  } else if (post.type === "task" || post.type === "sale") {
+  } else if ((post.type === "task" && post.taskKind !== "wanted") || post.type === "sale") {
     const eyebrow =
       post.type === "task"
         ? t("REWARD OFFERED", "提供的酬谢")

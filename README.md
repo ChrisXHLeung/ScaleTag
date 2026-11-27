@@ -36,6 +36,17 @@ flowchart TD
     E --> G
 ```
 
+### Wanted posts
+
+[Ask for a free item](https://www.scaletag.top/create/wanted), such as moving boxes or a spare lamp. A donor can reply with a public message and separately encrypted contact details. Use the management password to read those details, choose a donor if needed, and mark the item received when you have it. That closes the request to new offers. Use the **Wanted** filter in PostList or the map to browse these posts. Link-only requests stay out of discovery. [Wanted help](https://www.scaletag.top/help#wanted)
+
+```mermaid
+flowchart TD
+    A["<b>Requester</b><br/>Publish the item you are looking for"] --> B["<b>Donor</b><br/>Offer the item and submit encrypted contact details"]
+    B --> C["<b>Requester</b><br/>Unlock the contact details and arrange pickup"]
+    C --> D["<b>Requester</b><br/>Mark the item received"]
+```
+
 ### Free giveaways
 
 [Publish a giveaway](https://www.scaletag.top/create/sale) for direct pickup or pickup by request, with an optional pickup window. Pickup times use the viewer’s device time zone and show the UTC offset, including both offsets when the window spans a daylight-saving change. For direct pickup, visitors can copy the pickup directions or download a calendar entry when the item is available. For pickup by request, the visitor proposes a time without signing in, then checks the same browser for confirmation. The publisher selects one request in the management page. Only that browser can retrieve the exact instructions while its hold is active. The hold ends one hour after the proposed pickup time or when the giveaway expires, whichever comes first. The visitor can cancel and the publisher can release the hold.

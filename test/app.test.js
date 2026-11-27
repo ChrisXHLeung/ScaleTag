@@ -876,6 +876,36 @@ async function replyBody(task, extra = {}) {
     : {};
   return { name, message, encryptedContact, privacyAccepted: Object.hasOwn(extra, "privacyAccepted") ? privacyAccepted : true, ...rest };
 }
+
+test("wanted posts have their own discovery filter and accept encrypted donor replies without a reward", async t => {
+  const f = await fixture(t);
+  const normal = await createTask(f);
+  const wanted = await createTask(f, { taskKind: "wanted", title: "Seeking moving boxes", reward: undefined });
+  const path = `/api/tasks/${wanted.id}`;
+  assert.equal(wanted.taskKind, "wanted");
+  assert.equal(wanted.reward, undefined);
+  assert.equal((await f.request(path + "/edit", { authKey: wanted.manageKey, reward: "CAD 50" })).status, 400);
+  for (const endpoint of ["/api/posts/search", "/api/map/search"]) {
+    for (const [type, expected] of [["wanted", wanted.id], ["task", normal.id]]) {
+      const response = await f.request(endpoint, { type, location: input().location });
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).polls.map(item => item.id), [expected]);
+    }
+  }
+  const { cookie } = await socialSession(f, wanted.id);
+  const socialPath = `/api/posts/${wanted.id}/replies`;
+  const offer = await replyBody(wanted, { message: "I can give you four boxes." });
+  const reply = await f.request(socialPath, offer, cookie);
+  assert.equal(reply.status, 201);
+  const publicReply = await reply.json();
+  assert.equal(publicReply.replies[0].encryptedContact, undefined);
+  const managed = await (await f.request(path + "/manage", { authKey: wanted.manageKey })).json();
+  assert.equal(managed.taskKind, "wanted");
+  assert.deepEqual(managed.replies[0].encryptedContact, offer.encryptedContact);
+  const closed = await f.request(path + "/state", { authKey: wanted.manageKey, state: "completed" });
+  assert.equal(closed.status, 200);
+  assert.equal((await f.request(socialPath, offer, cookie)).status, 409);
+});
 const CONTACT_STRINGS = [
   "helper@example.com",
   "both@example.com",
