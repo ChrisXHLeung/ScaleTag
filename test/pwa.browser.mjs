@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createServer } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -342,9 +342,28 @@ test("a poll owner can reorder choices until the first vote", async (t) => {
   await page.getByLabel("Management password").fill(poll.manageKey);
   await page.getByRole("button", { name: "Unlock", exact: true }).click();
   await page.getByText("Edit public details", { exact: true }).click();
+  for (const width of [390, 320, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    const overflow = await page.evaluate(() => [...document.querySelectorAll(".empty-page, .manage-card, .owner-edit .form-card, .owner-edit input, .owner-edit button")]
+      .filter(element => element.getBoundingClientRect().right > innerWidth)
+      .map(element => [element.id || element.className, Math.ceil(element.getBoundingClientRect().right)]));
+    assert.deepEqual(overflow, [], `Owner edit controls must fit a ${width}px viewport`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  const images = page.locator("#owner-images");
+  await images.setInputFiles({
+    name: `${"long-filename-".repeat(10)}.png`,
+    mimeType: "image/png",
+    buffer: await readFile("public/icons/icon-192.png"),
+  });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 320);
+  await images.setInputFiles([]);
   await page.getByRole("button", { name: "Move option 1 down", exact: true }).click({ timeout: 5000 });
+  await page.getByLabel("Title", { exact: true }).fill("LongTitle".repeat(15));
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.getByText("Changes saved.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 320);
   await page.goto(`${origin}/vote/${poll.id}`);
   assert.deepEqual(await page.locator("#vote-options label").allTextContents().then(labels => labels.map(label => label.trim())), ["Evening", "Morning"]);
   await page.getByRole("radio", { name: "Evening", exact: true }).check();

@@ -103,6 +103,9 @@
   margin-top: 12px;
   text-align: start;
 }
+.owner-edit input[type="file"] {
+  max-inline-size: 100%;
+}
 .manage-password-input {
   display: flex;
   align-items: center;
@@ -718,10 +721,12 @@
   border: 2px dashed #173b7a;
   border-radius: 12px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.6rem;
 }
 .manage-card h2 {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .manage-card input[readonly] {
   font-family: ui-monospace, monospace;
