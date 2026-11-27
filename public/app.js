@@ -1058,7 +1058,7 @@ function postList() {
     if (p.type === "sale") {
       const hold = p.saleState === "reserved"
         ? `data-hold-deadline="${Date.now() + p.reservedUntil - p.serverTime}"` : "";
-      return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${hold ? "in-progress" : ""}" ${hold}>${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${p.pickupWindow ? pickupWindowText(p.pickupWindow) : t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
+      return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${hold ? "in-progress" : ""}" ${hold}>${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${p.pickupByRequest ? t("Request before pickup", "先申请再领取") : p.pickupWindow ? pickupWindowText(p.pickupWindow) : t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
     }
     if (p.type === "task")
       return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${t("Task", "任务")}</span><span class="status-badge ${isFinalState(p.taskState) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${stateLabel(p.taskState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div><div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
@@ -1332,6 +1332,8 @@ function privacy() {
       "Poll votes use a random cookie for each poll. Likes, replies and reports share a separate random cookie for each post. We save hashes to limit repeat votes, likes and reports from the same browser. Vote hashes are removed after voting closes. A cookie cannot verify who you are. Clearing cookies or changing browsers can allow another vote, like or report. ScaleTag does not keep web request access logs. Cloudflare processes network requests, and host security logs may contain connection information.",
       "每个投票使用随机 Cookie 记录投票。点赞、回复和举报共用另一个按帖子生成的随机 Cookie。系统保存哈希值，以限制同一浏览器重复投票、点赞或举报。投票关闭后会删除投票去重哈希。Cookie 无法验证身份。清除 Cookie 或换浏览器后，可以再次投票、点赞或举报。ScaleTag 不保留网站请求访问日志。Cloudflare 会处理网络请求，主机安全日志也可能包含连接信息。",
     )}</p>
+
+    <p>${t("Pickup requests save a proposed time and a hash of a random cookie for that giveaway. They do not ask for contact details.", "领取申请会保存预计领取时间和这条赠予专用随机 Cookie 的哈希值。申请时无需填写联系方式。")}</p>
 
     <h2>${t("Location, maps and photos", "位置、地图与照片")}</h2>
     <p>${t(

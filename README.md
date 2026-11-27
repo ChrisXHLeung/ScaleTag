@@ -38,7 +38,7 @@ flowchart TD
 
 ### Free giveaways
 
-[Publish a giveaway](https://www.scaletag.top/create/sale) with public pickup directions and an optional pickup window. Pickup times use the viewer’s device time zone and show the UTC offset, including both offsets when the window spans a daylight-saving change. Visitors can like the post, copy the pickup directions when the item is available, or download a calendar entry for an available pickup window. Giveaways have no reply or offer form.
+[Publish a giveaway](https://www.scaletag.top/create/sale) for direct pickup or pickup by request, with an optional pickup window. Pickup times use the viewer’s device time zone and show the UTC offset, including both offsets when the window spans a daylight-saving change. For direct pickup, visitors can copy the pickup directions or download a calendar entry when the item is available. For pickup by request, the visitor proposes a time without signing in, then checks the same browser for confirmation. The publisher selects one request in the management page. Only that browser can retrieve the exact instructions while its hold is active. The hold ends one hour after the proposed pickup time or when the giveaway expires, whichever comes first. The visitor can cancel and the publisher can release the hold.
 
 The publisher can hold the item until a chosen time or release it sooner. Marking it claimed removes it from discovery and hides the pickup details. The original link shows the claimed status until the giveaway expires 72 hours after publication. Active storage retains the record until day 30. [Giveaway help](https://www.scaletag.top/help#giveaways)
 
@@ -255,6 +255,7 @@ The server also supports older management links with SHA-256 verifiers. SQLCiphe
 
 ## Data and retention
 
+- Pickup requests store the proposed time and a hash of a random, per-giveaway browser cookie. Requesters are not asked for contact details. The pickup address remains private during the giveaway and is served only to the publisher and the selected browser during an active hold.
 - Poll votes use a per-poll random cookie. Likes, replies and reports share a separate per-post random cookie. Server-side deduplication uses hashes. Vote hashes are cleared after voting ends. The application has no account or fingerprinting system and does not keep HTTP access logs. Infrastructure providers and host security logs can still process connection information.
 - Each browser cookie can report a post once. A sixth distinct report freezes the post, including its detail page and management access, and removes it from the list and map. The default mode keeps the post frozen through its regular retention period.
 - Uploaded photos are re-encoded and their metadata is stripped. Anything visible in a photo remains visible to viewers. External HTTPS images load on request from their hosts. The optional map uses OpenFreeMap, which receives requests from the viewer’s browser.

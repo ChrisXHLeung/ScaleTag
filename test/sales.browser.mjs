@@ -133,6 +133,45 @@ test('Chinese giveaway form',async t=>{
   assert.deepEqual(f.errors,[]);
 });
 
+test("a visitor requests pickup, sees the address after selection, and loses it when released", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  const address = "Private library entrance";
+  await owner.goto(f.origin + "/create/sale");
+  await owner.getByLabel("Pickup method", { exact: true }).selectOption("request", { timeout: 3500 });
+  await owner.locator("#sale-title").fill("Assorted garden tools");
+  await owner.locator("#sale-description").fill("Good condition");
+  await owner.getByLabel("Pickup location (private)", { exact: true }).fill(address);
+  await owner.locator("#post-visibility").selectOption("unlisted");
+  await owner.locator("#sale-retention").check();
+  await owner.getByRole("button", { name: "Publish giveaway", exact: true }).click();
+  await owner.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+  const path = new URL(owner.url()).pathname.replace(/\/manage$/, "");
+  const context = await f.browser.newContext({ viewport: { width: 320, height: 844 } });
+  const visitor = await context.newPage();
+  await visitor.goto(f.origin + path);
+  assert.equal(await visitor.getByText(address, { exact: true }).count(), 0);
+  const time = await visitor.evaluate(() => {
+    const date = new Date(Date.now() + 30 * 60000);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
+  await visitor.getByLabel("When can you pick it up?", { exact: true }).fill(time);
+  await visitor.getByRole("button", { name: "Request pickup", exact: true }).click();
+  await visitor.getByText("Your pickup request is pending.", { exact: true }).waitFor();
+  assert.equal(await visitor.getByText(address, { exact: true }).count(), 0);
+  await owner.getByRole("button", { name: "Refresh pickup requests", exact: true }).click();
+  await owner.getByRole("button", { name: "Confirm pickup request", exact: true }).click();
+  await owner.getByText("A pickup request is confirmed.", { exact: true }).waitFor();
+  await visitor.getByRole("button", { name: "Check pickup request", exact: true }).click();
+  await visitor.getByText(address, { exact: true }).waitFor();
+  assert.equal(await visitor.evaluate(() => document.documentElement.scrollWidth), 320);
+  await owner.getByRole("button", { name: "Release hold", exact: true }).click();
+  await owner.getByText("No pickup requests yet.", { exact: true }).waitFor();
+  await visitor.getByRole("button", { name: "Check pickup request", exact: true }).click();
+  await visitor.getByText(address, { exact: true }).waitFor({ state: "detached" });
+  assert.deepEqual(f.errors, []);
+});
+
 test("set a pickup window and hold a giveaway until it becomes available again", async (t) => {
   const f = await fixture(t);
   const publisher = f.page;

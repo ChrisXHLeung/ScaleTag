@@ -142,6 +142,14 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Choose a valid pickup method.': '请选择有效的领取方式。',
+  'Choose a valid pickup action.': '请选择有效的领取操作。',
+  'Choose a future time within the pickup hours and giveaway lifetime.': '请选择领取时段和赠予有效期内的未来时间。',
+  'Allow cookies and reopen the giveaway to request pickup.': '请允许 Cookie，重新打开赠予页面后再申请。',
+  'This giveaway does not accept pickup requests.': '这条赠予不接受领取申请。',
+  'This giveaway has reached its pickup request limit.': '这条赠予的领取申请已达上限。',
+  'Release the current pickup hold before selecting another request.': '请先取消当前保留，再选择其他领取申请。',
+  'That pickup request is no longer available.': '这条领取申请已不可用。',
   'Invalid request origin. Please use the ScaleTag website.': '请求来源无效，请使用 ScaleTag 网站。',
   'Invalid content type.': '内容类型无效。',
   'Invalid filter.': '筛选条件无效。',

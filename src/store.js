@@ -60,11 +60,35 @@ function publicSaleAvailability(post, now) {
   };
 }
 
+function activePickupRequests(post, now) {
+  const pickup = post.replyAuthors?.pickup;
+  const selectedId = post.reservedUntil > now ? pickup.selectedId : undefined;
+  const requests = pickup.requests.filter(request =>
+    request.id === selectedId || (request.id !== pickup.selectedId && request.pickupAt > now));
+  return { pickup, selectedId, requests };
+}
+
+function privatePickupManagement(post, now) {
+  if (!post.pickupByRequest || post.saleState === "claimed") return {};
+  const { pickup, selectedId, requests } = activePickupRequests(post, now);
+  return {
+    pickupLocation: pickup.location,
+    pickupRequests: requests.map(({ id, pickupAt }) => ({ id, pickupAt })),
+    selectedPickupRequestId: selectedId ?? null,
+  };
+}
+
+function validPickupRequestTime(post, pickupAt, now) {
+  const window = post.pickupWindow;
+  return Number.isSafeInteger(pickupAt) && pickupAt > now && pickupAt < post.endsAt
+    && (!window || (pickupAt >= window.startsAt && pickupAt < window.endsAt));
+}
+
 function filterPickupRows(rows, now, pickup) {
   let next = Infinity;
   const available = rows.filter(({ post }) => {
     const window = post.pickupWindow;
-    if (post.type !== "sale" || !window) return false;
+    if (post.type !== "sale" || post.pickupByRequest || !window) return false;
     const upcoming = pickup === "upcoming";
     const startsAt = Math.max(upcoming ? window.startsAt - DAY : window.startsAt, post.reservedUntil ?? 0);
     const endsAt = Math.min(upcoming ? window.startsAt : window.endsAt, post.endsAt);
@@ -226,6 +250,7 @@ export class PollStore {
       saleState: p.saleState,
       reservedUntil: p.reservedUntil,
       pickupWindow: p.pickupWindow,
+      pickupByRequest: p.pickupByRequest,
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
       ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
@@ -361,6 +386,11 @@ export class PollStore {
       };
       // Only the verifier is persisted. Poll and giveaway creation return the password once.
       if (type === "sale") p.saleState = "open";
+      if (type === "sale" && p.pickupByRequest) {
+        // Legacy readers and index projections already exclude replyAuthors.
+        p.replyAuthors.pickup = { location: input.pickupLocation, requests: [] };
+        delete p.pickupLocation;
+      }
       if (type === "task") {
         p.taskState = "open";
         p.contactPublicKey = input.contactPublicKey;
@@ -368,7 +398,9 @@ export class PollStore {
       }
       const db = new Low(new JSONFile(join(this.directory, `${id}.json`)), p);
       await this.write(db);
-      return manageKey ? { ...this.public(p), manageKey } : this.public(p);
+      return manageKey
+        ? { ...this.public(p), ...privatePickupManagement(p, now), manageKey }
+        : this.public(p);
     });
   }
 
@@ -429,7 +461,7 @@ export class PollStore {
       ...(p.resultsVisibility === "after_close" ? { resultsHidden } : {}),
       ...(resultsHidden ? {} : { totalVotes }),
       options: resultsHidden ? options.map(({ id, label }) => ({ id, label })) : options,
-      ...(pickupLocation !== undefined && p.saleState !== "claimed" ? { pickupLocation } : {}),
+      ...(pickupLocation !== undefined && !p.pickupByRequest && p.saleState !== "claimed" ? { pickupLocation } : {}),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
       ...(p.type === "task" && assignedReplyId ? { taskAssigned: true } : {}),
       totalLikes: p.totalLikes ?? 0,
@@ -581,6 +613,7 @@ export class PollStore {
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
         ...(p.selectionMode === "multiple" ? { selectionMode: p.selectionMode } : {}),
+        ...(p.pickupByRequest ? { pickupByRequest: true } : {}),
         ...(pollResultsHidden(p, now) ? { resultsHidden: true } : { totalVotes: p.totalVotes }),
         createdAt: p.createdAt,
         endsAt: p.endsAt,
@@ -771,7 +804,7 @@ export class PollStore {
   }
 
   async editManagedPost(id, key, type, changes, prepareImages) {
-    const { options, images, ...copy } = changes;
+    const { options, images, privatePickupLocation, ...copy } = changes;
     return this.withManagedPost(id, key, type, async (db, preparedImages) => {
       const post = db.data;
       const now = this.clock();
@@ -784,6 +817,11 @@ export class PollStore {
       const ballotChanged = questionChanged || optionsChanged;
       if (ballotChanged && !pollOptionsEditable(post, now))
         throw new AppError(409, "The poll question and options can change only before the first vote and before voting closes.");
+      if (privatePickupLocation !== undefined && !post.pickupByRequest)
+        throw new AppError(400, "Choose a valid pickup method.");
+      if (post.pickupByRequest && copy.pickupLocation !== undefined)
+        throw new AppError(400, "Choose a valid pickup method.");
+      if (privatePickupLocation !== undefined) post.replyAuthors.pickup.location = privatePickupLocation;
       Object.assign(post, copy);
       if (preparedImages) post.images = preparedImages;
       if (ballotChanged) {
@@ -795,6 +833,7 @@ export class PollStore {
       await this.write(db);
       return {
         ...this.public(post),
+        ...privatePickupManagement(post, now),
         ...(type === "poll" ? { canEditOptions: pollOptionsEditable(post, now) } : {}),
       };
     }, { prepare: images === undefined ? undefined : () => prepareImages(images) });
@@ -858,7 +897,46 @@ export class PollStore {
 
   async manageSale(id, key) {
     return this.withManagedPost(id, key, "sale", ({ data: p }) => {
-      return { ...this.public(p), replies: (p.replies ?? []).map(privateReply) };
+      return { ...this.public(p), ...privatePickupManagement(p, this.clock()), replies: (p.replies ?? []).map(privateReply) };
+    });
+  }
+
+  async pickupRequest(id, token, action, pickupAt) {
+    if (!["status", "request", "cancel"].includes(action))
+      throw new AppError(400, "Choose a valid pickup action.");
+    return this.exclusive(id, async () => {
+      const db = await this.live(id, { expectedType: "sale" });
+      const post = db.data;
+      if (!post.pickupByRequest) throw new AppError(404, "This giveaway does not accept pickup requests.");
+      if (post.saleState === "claimed") return { state: "unavailable" };
+      const now = this.clock();
+      const { pickup, selectedId, requests } = activePickupRequests(post, now);
+      const applicant = voterHash(token);
+      let request = requests.find(item => item.applicant === applicant);
+      if (action === "request" && !request) {
+        if (!validPickupRequestTime(post, pickupAt, now))
+          throw new AppError(400, "Choose a future time within the pickup hours and giveaway lifetime.");
+        if (requests.length >= 30) throw new AppError(409, "This giveaway has reached its pickup request limit.");
+        request = { id: randomBytes(12).toString("hex"), applicant, pickupAt };
+        pickup.requests = [...requests, request];
+        await this.write(db);
+      } else if (action === "cancel" && request) {
+        pickup.requests = requests.filter(item => item !== request);
+        if (request.id === selectedId) {
+          delete pickup.selectedId;
+          delete post.reservedUntil;
+        }
+        await this.write(db);
+        return { state: "none" };
+      }
+      if (!request) return { state: "none" };
+      return {
+        requestId: request.id,
+        pickupAt: request.pickupAt,
+        ...(request.id === selectedId
+          ? { state: "accepted", pickupLocation: pickup.location, reservedUntil: post.reservedUntil, serverTime: now }
+          : { state: "pending" }),
+      };
     });
   }
 
@@ -866,7 +944,7 @@ export class PollStore {
     return this.setSaleState(id, key, "closed");
   }
 
-  async setSaleState(id, key, state, reservedUntil) {
+  async setSaleState(id, key, state, reservedUntil, requestId) {
     if (!["claimed", "closed", "reserved", "open"].includes(state))
       throw new AppError(400, "Choose a valid giveaway status.");
     return this.withManagedPost(id, key, "sale", async (db) => {
@@ -874,6 +952,29 @@ export class PollStore {
       if (state === "claimed" && post.saleState === "claimed") return this.public(post);
       if (post.saleState === "claimed")
         throw new AppError(409, "This giveaway has already been claimed.");
+      const now = this.clock();
+      if (post.pickupByRequest) {
+        const { pickup, selectedId, requests } = activePickupRequests(post, now);
+        if (state === "reserved") {
+          if (selectedId && selectedId !== requestId)
+            throw new AppError(409, "Release the current pickup hold before selecting another request.");
+          if (selectedId && selectedId === requestId)
+            return { ...this.public(post), ...privatePickupManagement(post, now) };
+          const selected = requests.find(request => request.id === requestId);
+          if (!selected || !validPickupRequestTime(post, selected.pickupAt, now))
+            throw new AppError(409, "That pickup request is no longer available.");
+          pickup.requests = requests;
+          pickup.selectedId = selected.id;
+          post.reservedUntil = Math.min(post.endsAt, selected.pickupAt + 3600000);
+        } else {
+          pickup.requests = state === "open" ? requests.filter(request => request.id !== selectedId) : [];
+          delete pickup.selectedId;
+          delete post.reservedUntil;
+          post.saleState = state;
+        }
+        await this.write(db);
+        return { ...this.public(post), ...privatePickupManagement(post, now) };
+      }
       if (state === "reserved") {
         if (!Number.isSafeInteger(reservedUntil) || reservedUntil <= this.clock() || reservedUntil > post.endsAt)
           throw new AppError(400, "Choose a future hold time within the giveaway lifetime.");

@@ -171,6 +171,8 @@ export function ownerEditInput(body, type) {
   if (type === "task" && Object.hasOwn(body, "reward")) changes.reward = publicText(body.reward, "Reward", 160);
   if (type === "sale" && Object.hasOwn(body, "pickupLocation"))
     changes.pickupLocation = publicText(body.pickupLocation, "Pickup location", 300);
+  if (type === "sale" && Object.hasOwn(body, "privatePickupLocation"))
+    changes.privatePickupLocation = publicText(body.privatePickupLocation, "Pickup location", 300);
   if (type === "sale" && Object.hasOwn(body, "pickupWindow"))
     changes.pickupWindow = pickupWindowInput(body.pickupWindow);
   if (!Object.keys(changes).length) throw new AppError(400, "Choose something to update.");
@@ -364,9 +366,12 @@ function pickupWindowInput(value) {
 
 export function saleInput(body) {
   const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
+  if (body.pickupByRequest !== undefined && typeof body.pickupByRequest !== "boolean")
+    throw new AppError(400, "Choose a valid pickup method.");
   return { ...common, type: "sale", options: [],
     description: publicText(body.description, "Description", 4000),
-    pickupLocation: publicText(body.pickupLocation, "Pickup location", 300), giveawayVersion: 1,
+    pickupLocation: publicText(body.pickupByRequest ? body.privatePickupLocation : body.pickupLocation, "Pickup location", 300), giveawayVersion: 1,
+    ...(body.pickupByRequest ? { pickupByRequest: true } : {}),
     ...(Object.hasOwn(body, "pickupWindow") ? { pickupWindow: pickupWindowInput(body.pickupWindow) } : {}),
   };
 }

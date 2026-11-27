@@ -137,6 +137,7 @@ export function renderHelp(main) {
       <h2 id="help-${id}">${label(title)}</h2>
       <p>${label(description)}</p>
       ${id === "polls" ? `<p>${t("Use multiple choices to find when people can meet or which options they would accept. Each browser submits one ballot, and each option shows the share of ballots that picked it.", "可用多选投票寻找大家方便的时间，或了解哪些选择都能接受。每个浏览器提交一张选票，每项结果显示选择该项的选票占比。")}</p>` : ""}
+      ${id === "giveaways" ? `<p>${t("For pickup by request, propose a time and use the same browser to check whether the publisher confirmed it. Exact directions are available only to the confirmed browser during its hold.", "如需先申请领取，请提交预计领取时间，再用同一浏览器查看发布者是否确认。只有获选的浏览器能在保留期间看到详细地点。")}</p>` : ""}
       ${renderFlow(steps)}
       <a class="text-link" href="${path}">${path === "/privacy" ? t("Privacy & retention", "隐私与保留") : t("Open this feature", "打开此功能")}</a>
     </section>`).join("");

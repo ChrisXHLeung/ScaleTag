@@ -414,7 +414,19 @@ export function createApp(
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");
     markPostRobots(res, sale);
+    if (sale.pickupByRequest && sale.saleState !== "claimed" && !tokenFor(req, sale.id, "stpickup")) {
+      res.cookie(cookieName(sale.id, "stpickup"), randomBytes(32).toString("hex"), {
+        httpOnly: true, secure, sameSite: "strict", path: `/api/sales/${sale.id}`,
+        maxAge: Math.max(0, sale.endsAt - store.clock()),
+      });
+    }
     res.json(sale);
+  });
+  app.post("/api/sales/:id/pickup-request", async (req, res) => {
+    const token = tokenFor(req, req.params.id, "stpickup");
+    if (!token) throw new AppError(403, "Allow cookies and reopen the giveaway to request pickup.");
+    res.set({ "Cache-Control": "no-store, private, max-age=0", "X-Robots-Tag": "noindex" });
+    res.json(await store.pickupRequest(req.params.id, token, req.body.action, req.body.pickupAt));
   });
   app.post("/api/sales/:id/manage", async (req, res) => {
     res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache" });
@@ -422,7 +434,8 @@ export function createApp(
   });
   app.post("/api/sales/:id/state", async (req, res) => {
     const key = manageKeyInput(req.body);
-    res.json(await store.setSaleState(req.params.id, key, req.body.state, req.body.reservedUntil));
+    const state = await store.setSaleState(req.params.id, key, req.body.state, req.body.reservedUntil, req.body.requestId);
+    res.set("Cache-Control", "no-store, private, max-age=0").json(state);
   });
   app.get("/api/sales/:id/qr.png", async (req, res) => {
     const sale = await store.get(req.params.id);
@@ -433,7 +446,7 @@ export function createApp(
   });
   app.get("/api/sales/:id/pickup.ics", async (req, res) => {
     const sale = await store.get(req.params.id, undefined, { expectedType: "sale" });
-    if (sale.saleState !== "open" || !(sale.pickupWindow?.endsAt > sale.serverTime)) {
+    if (sale.pickupByRequest || sale.saleState !== "open" || !(sale.pickupWindow?.endsAt > sale.serverTime)) {
       throw new AppError(404, "Sale not found.");
     }
     res.set("X-Robots-Tag", "noindex");

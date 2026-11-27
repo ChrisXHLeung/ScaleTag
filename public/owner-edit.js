@@ -17,8 +17,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       <textarea id="owner-description" name="description" rows="4" maxlength="4000" ${post.type === "poll" ? "" : "required"}>${escape(post.description)}</textarea>
       ${post.type === "task" ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
         <input id="owner-reward" name="reward" value="${escape(post.reward)}" maxlength="160" required>` : ""}
-      ${post.type === "sale" ? `<label for="owner-pickup">${t("Pickup location (public)", "领取地点（公开）")}</label>
-        <input id="owner-pickup" name="pickupLocation" value="${escape(post.pickupLocation)}" maxlength="300" required>
+      ${post.type === "sale" ? `<label for="owner-pickup">${post.pickupByRequest ? t("Pickup location (private)", "领取地点（私密）") : t("Pickup location (public)", "领取地点（公开）")}</label>
+        <input id="owner-pickup" name="${post.pickupByRequest ? "privatePickupLocation" : "pickupLocation"}" value="${escape(post.pickupLocation)}" maxlength="300" required>
         ${pickupWindowFields("owner", post.pickupWindow)}` : ""}
       ${post.type === "poll" ? canEditOptions ? `<fieldset class="options-fieldset">
         <legend>${t("The options", "选项")}</legend>
@@ -102,7 +102,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
     try {
       const changes = { key };
       for (const [field, value] of new FormData(form)) {
-        if (value.trim() !== current[field]) changes[field] = value.trim();
+        const previous = current[field === "privatePickupLocation" ? "pickupLocation" : field];
+        if (value.trim() !== previous) changes[field] = value.trim();
       }
       if (optionList) {
         const options = Array.from(optionList.querySelectorAll("input"), field => field.value.trim());

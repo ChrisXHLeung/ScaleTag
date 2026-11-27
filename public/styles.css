@@ -737,12 +737,14 @@
   min-width: 0;
 }
 [data-pickup-window] label,
+#pickup-request-form label,
 #sale-hold-form label {
   display: block;
   margin: 10px 0 5px;
   font-weight: 700;
 }
 [data-pickup-window] input[type="datetime-local"],
+#pickup-request-form input[type="datetime-local"],
 #sale-hold-form input[type="datetime-local"] {
   display: block;
   width: 100%;
@@ -753,6 +755,10 @@
   background: white;
   color: var(--ink);
   font: inherit;
+}
+#pickup-request-details {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 [data-pickup-window] > .field-hint {
   margin-top: 8px;

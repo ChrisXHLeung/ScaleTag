@@ -396,6 +396,72 @@ test("managed posts accept validated public edits without changing private task 
   assert.equal((await f.request(salePath + "/edit", { key: sale.manageKey, pickupLocation: "Library" })).status, 409);
 });
 
+test("giveaway pickup requests reveal the private address only during the selected browser's hold", async (t) => {
+  const f = await fixture(t);
+  const address = "Private pickup details 123";
+  const posted = await f.request("/api/sales", input({
+    privatePickupLocation: address,
+    pickupByRequest: true,
+    pickupWindow: { startsAt: f.now() + 300000, endsAt: f.now() + 4 * 3600000 },
+  }));
+  assert.equal(posted.status, 201);
+  const sale = await posted.json();
+  assert.equal(sale.pickupByRequest, true);
+  const path = `/api/sales/${sale.id}`;
+  const privatePath = path + "/pickup-request";
+  const manager = data => f.request(path + "/state", { key: sale.manageKey, ...data });
+  const first = await f.request(path);
+  const firstCookie = first.headers.get("set-cookie")?.split(";")[0];
+  const secondCookie = (await f.request(path)).headers.get("set-cookie")?.split(";")[0];
+  assert.ok(firstCookie && secondCookie && firstCookie !== secondCookie);
+  assert.match(first.headers.get("set-cookie"), /HttpOnly/i);
+  for (const response of [first, await f.request(`/sale/${sale.id}`), await f.request("/api/posts"), await f.request(`/api/posts/${sale.id}/social`)]) {
+    assert.ok(!(await response.text()).includes(address));
+  }
+  const upcoming = await (await f.request("/api/posts?pickup=upcoming")).json();
+  assert.ok(upcoming.polls.every(poll => poll.id !== sale.id));
+  assert.equal((await f.request(path + "/pickup.ics")).status, 404);
+  const pickupAt = f.now() + 3600000;
+  const apply = (cookie, time = pickupAt) => f.request(privatePath, { action: "request", pickupAt: time }, cookie);
+  const get = async cookie => (await f.request(privatePath, { action: "status" }, cookie)).json();
+  assert.equal((await apply(undefined)).status, 403);
+  assert.equal((await apply(firstCookie, f.now())).status, 400);
+  assert.equal((await apply(firstCookie, f.now() + 60000)).status, 400);
+  const application = await (await apply(firstCookie)).json();
+  assert.equal(application.state, "pending");
+  assert.equal(application.pickupLocation, undefined);
+  assert.equal((await (await apply(firstCookie)).json()).requestId, application.requestId);
+  const other = await (await apply(secondCookie, pickupAt + 1800000)).json();
+  assert.equal(other.state, "pending");
+  assert.notEqual(other.requestId, application.requestId);
+  const edited = await f.request(path + "/edit", { key: sale.manageKey, privatePickupLocation: "Updated private address" });
+  assert.equal(edited.status, 200);
+  assert.equal((await edited.json()).pickupLocation, "Updated private address");
+  const owner = await (await f.request(path + "/manage", { key: sale.manageKey })).json();
+  assert.deepEqual(owner.pickupRequests.map(request => request.id), [application.requestId, other.requestId]);
+  assert.ok(!JSON.stringify(owner).includes(firstCookie.split("=")[1]));
+  const attempts = await Promise.all([application, other].map(({ requestId }) => manager({ state: "reserved", requestId })));
+  assert.deepEqual(attempts.map(response => response.status).sort(), [200, 409]);
+  const winner = attempts[0].ok ? firstCookie : secondCookie;
+  const loser = attempts[0].ok ? secondCookie : firstCookie;
+  const accepted = await get(winner);
+  assert.equal(accepted.state, "accepted");
+  assert.equal(accepted.pickupLocation, "Updated private address");
+  assert.equal((await get(loser)).pickupLocation, undefined);
+  assert.equal((await (await f.request(path, undefined, winner)).json()).pickupLocation, undefined);
+  assert.equal((await f.request(path + "/manage", { key: "a".repeat(64) })).status, 403);
+  assert.equal((await f.request(privatePath, { action: "cancel" }, winner)).status, 200);
+  assert.equal((await get(winner)).pickupLocation, undefined);
+  const secondId = (await get(loser)).requestId;
+  assert.equal((await manager({ state: "reserved", requestId: secondId })).status, 200);
+  f.advance(3 * 3600000);
+  assert.equal((await get(loser)).pickupLocation, undefined);
+  assert.equal((await (await f.request(path)).json()).saleState, "open");
+  const raw = JSON.parse(await readFile(join(f.directory, `${sale.id}.json`), "utf8"));
+  assert.equal(raw.pickupLocation, undefined, "Older server projections must never expose the exact pickup address");
+  assert.equal(raw.replyAuthors.pickup.location, "Updated private address");
+});
+
 test("30-day deletion removes JSON, list entry, original page, QR and crash leftovers", async (t) => {
   const f = await fixture(t);
   const p = await f.create();

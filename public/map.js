@@ -95,7 +95,9 @@ export async function createPollMap() {
         p.type === "sale"
           ? p.saleState === "reserved"
             ? t("Reserved giveaway · View item ↗", "已保留的赠予 · 查看物品 ↗")
-            : t("Free Giveaway · View item ↗", "闲置赠予 · 查看物品 ↗")
+            : p.pickupByRequest
+              ? t("Request before pickup", "先申请再领取")
+              : t("Free Giveaway · View item ↗", "闲置赠予 · 查看物品 ↗")
           : p.type === "task"
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : p.resultsHidden
