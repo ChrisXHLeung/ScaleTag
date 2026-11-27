@@ -490,10 +490,101 @@ test("a failed pickup refresh clears the loading status when it supersedes a sea
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     await page.getByRole("alert").filter({ hasText: "Pickup refresh failed" }).waitFor();
     assert.equal(await count.textContent(), "");
-    await page.getByText("Could not load posts. Select a filter to try again.", { exact: true }).waitFor();
+    await page.getByText("Could not load posts.", { exact: true }).waitFor();
   } finally {
     releaseSearch();
   }
+});
+
+test("PostList retries the same failed search and preserves keyboard focus", async (t) => {
+  const { page, origin } = await fixture(t);
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (_success, reject) => {
+      window.rejectNearby = () => reject({ code: 1 });
+    };
+  });
+  const requests = [];
+  let releaseRetry;
+  const pendingRetry = new Promise(resolve => { releaseRetry = resolve; });
+  await page.route("**/api/posts/search", async route => {
+    const search = route.request().postDataJSON();
+    if (search.query !== "garden") return route.fulfill({ json: { polls: [] } });
+    const attempt = requests.push(search);
+    if (attempt === 2) await pendingRetry;
+    return attempt <= 2
+      ? route.fulfill({ status: 503, json: { error: `Search failed ${attempt}` } })
+      : route.fulfill({ json: { polls: [] } });
+  });
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  const type = page.locator("#content-type");
+  try {
+    await page.goto(`${origin}/PostList?type=poll&status=open`);
+    await page.locator("#nearby").click();
+    await page.waitForFunction(() => typeof window.rejectNearby === "function");
+    const input = page.locator("#post-query");
+    await input.fill("garden");
+    await input.press("Enter");
+    await page.getByRole("alert").filter({ hasText: "Search failed 1" }).waitFor();
+    await page.evaluate(() => window.rejectNearby());
+    await page.getByRole("button", { name: "Within 100 km", exact: true }).waitFor();
+    assert.equal(await page.locator("#list-error").textContent(), "Search failed 1");
+    await retry.press("Enter", { timeout: 3000 });
+    await page.waitForFunction(() => document.querySelector("#list-retry")?.getAttribute("aria-disabled") === "true");
+    await retry.dispatchEvent("click");
+  } finally {
+    releaseRetry();
+  }
+  await page.getByRole("alert").filter({ hasText: "Search failed 2" }).waitFor();
+  assert.equal(await retry.evaluate(button => document.activeElement === button), true);
+  await retry.press("Enter");
+  await page.getByText("No posts match your search.", { exact: true }).waitFor();
+  assert.equal(await retry.count(), 0);
+  assert.equal(await type.evaluate(select => document.activeElement === select), true);
+  assert.deepEqual(requests, Array(3).fill({ status: "open", type: "poll", query: "garden" }));
+});
+
+test("a late retry does not replace a newer PostList search", async (t) => {
+  const { page, origin } = await fixture(t);
+  let releaseOldRetry;
+  let pollRequests = 0;
+  const oldRetry = new Promise(resolve => { releaseOldRetry = resolve; });
+  await page.route("**/api/posts/search", async route => {
+    if (route.request().postDataJSON().type !== "poll") return route.fulfill({ json: { polls: [] } });
+    if (++pollRequests > 1) await oldRetry;
+    return route.fulfill({ status: 503, json: { error: "Poll request failed" } });
+  });
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  try {
+    await page.goto(`${origin}/PostList?type=poll`);
+    const response = page.waitForResponse(response => response.url().endsWith("/api/posts/search")
+      && response.request().postDataJSON().type === "poll");
+    await retry.click();
+    await page.locator("#content-type").selectOption("task");
+    await page.locator("#list-count").filter({ hasText: "0 posts shown" }).waitFor();
+    releaseOldRetry();
+    await (await response).finished();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await retry.count(), 0);
+    assert.equal(await page.locator("#list-error").isVisible(), false);
+  } finally {
+    releaseOldRetry();
+  }
+});
+
+test("a failed automatic pickup refresh still offers a direct retry", async (t) => {
+  const { page, origin } = await fixture(t);
+  let requests = 0;
+  await page.route("**/api/posts/search", route => {
+    if (route.request().postDataJSON().pickup !== "now") return route.fulfill({ json: { polls: [] } });
+    return route.fulfill({ status: 503, json: { error: `Pickup search failed ${++requests}` } });
+  });
+  await page.goto(`${origin}/PostList?type=sale`);
+  await page.locator("#pickup-time").selectOption("now");
+  await page.getByRole("alert").filter({ hasText: "Pickup search failed 1" }).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.getByRole("alert").filter({ hasText: "Pickup search failed 2" }).waitFor();
+  await page.getByRole("button", { name: "Try again", exact: true }).click({ timeout: 3000 });
+  await page.getByRole("alert").filter({ hasText: "Pickup search failed 3" }).waitFor();
 });
 
 test("Back restores the activated public result after loading more posts", async (t) => {
@@ -852,6 +943,7 @@ test("map handles failure, offline and expiry without retaining markers in PWA c
   );
   await f.context.route("**/api/map/search", (route) =>
     route.fulfill({ status: 503, json: { error: "Test map unavailable" } }),
+    { times: 1 },
   );
   await f.page
     .getByRole("button", { name: "Fit all markers", exact: false })
@@ -860,6 +952,10 @@ test("map handles failure, offline and expiry without retaining markers in PWA c
     .locator("#list-error")
     .filter({ hasText: "Test map unavailable" })
     .waitFor();
+  await f.page.getByRole("button", { name: "Try again", exact: true }).press("Enter", { timeout: 4000 });
+  await f.page.getByText("No mapped posts match these filters.", { exact: false }).waitFor();
+  assert.equal(await f.page.getByRole("button", { name: "Map", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await f.page.getByRole("button", { name: "Try again", exact: true }).count(), 0);
   assert.deepEqual(f.errors, []);
 });
 

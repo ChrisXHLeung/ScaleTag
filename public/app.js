@@ -536,7 +536,7 @@ function postList() {
     sort = "newest",
     cursor,
     loaded = 0,
-    listAwaitingResults = false,
+    listHasResults = false,
     request = 0,
     listReturnRequest,
     locating = false,
@@ -574,7 +574,43 @@ function postList() {
     <button type="button" class="button secondary small" aria-describedby="share-filters-hint">${t("Copy public filter link", "复制公开筛选链接")}</button>
     ${linkCopyFallback("public-filter-link")}
   </div><p class="field-hint" id="share-filters-hint">${t("The link includes only post type, status and pickup time.", "链接仅包含帖子类型、状态和领取时段。")}</p>`;
-  document.querySelector("#list-error").before(share);
+  const discoveryError = document.querySelector("#list-error");
+  const retryButton = document.createElement("button");
+  retryButton.id = "list-retry";
+  retryButton.type = "button";
+  retryButton.className = "button secondary small";
+  retryButton.textContent = t("Try again", "重试");
+  retryButton.hidden = true;
+  discoveryError.before(share);
+  discoveryError.after(retryButton);
+  let retryRequest;
+  let startingRetry = false;
+
+  function setDiscoveryRetry(again) {
+    retryRequest = again;
+    if (!again && document.activeElement === retryButton) typeSelect.focus({ preventScroll: true });
+    retryButton.hidden = !again;
+    retryButton.removeAttribute("aria-disabled");
+  }
+
+  function beginDiscoveryRequest() {
+    discoveryError.hidden = true;
+    if (!startingRetry) setDiscoveryRetry();
+  }
+
+  function showDiscoveryError(message, again) {
+    discoveryError.textContent = message;
+    discoveryError.hidden = false;
+    setDiscoveryRetry(again);
+  }
+
+  retryButton.onclick = () => {
+    if (!retryRequest || retryButton.hasAttribute("aria-disabled")) return;
+    retryButton.setAttribute("aria-disabled", "true");
+    startingRetry = true;
+    retryRequest();
+    startingRetry = false;
+  };
   const copyFilters = share.querySelector("button");
   const filterLinkInput = share.querySelector("input");
   bindLinkCopy(copyFilters, shareableFilterLink, t("Link copied.", "链接已复制。"));
@@ -731,8 +767,7 @@ function postList() {
     if (suspended) return;
     mapNeedsFit = fit;
     const current = ++mapRequest;
-    const error = document.querySelector("#list-error");
-    error.hidden = true;
+    beginDiscoveryRequest();
     if (!background || mapClear.hidden) {
       showMapClear(false);
       mapCount.textContent = t("Finding mapped posts…", "正在查找地图帖子…");
@@ -758,6 +793,7 @@ function postList() {
       );
       view.setData(data.polls, fit);
       mapNeedsFit = false;
+      setDiscoveryRetry();
       view.resize();
       mapCount.textContent = data.total
         ? t(`${count(data.polls.length)} of ${count(data.total)} matching mapped posts`, `显示 ${count(data.polls.length)} / ${count(data.total)} 条符合条件的地图帖子`) + (data.total > 1000 ? ` · ${t("First 1,000 results", "前 1,000 条结果")}` : "")
@@ -797,10 +833,9 @@ function postList() {
       if (current !== mapRequest || mode !== "map") return;
       mapView?.setData([]);
       mapCount.textContent =
-        t("Mapped posts are unavailable. Try Map again or use List.", "无法加载地图帖子，请重试或使用列表。");
+        t("Mapped posts are unavailable.", "无法加载地图帖子。");
       showMapClear(false);
-      error.textContent = e.message;
-      error.hidden = false;
+      showDiscoveryError(e.message, () => loadMap(fit));
     }
   }
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -856,6 +891,8 @@ function postList() {
   window.addEventListener("offline", () => {
     if (mode !== "map") return;
     ++mapRequest;
+    discoveryError.hidden = true;
+    setDiscoveryRetry();
     clearTimeout(mapTimer);
     mapView?.setData([]);
     document.querySelector("#mapped-poll-links").replaceChildren();
@@ -964,10 +1001,10 @@ function postList() {
     let returnPages = returnTo ? Math.floor(returnTo.index / 20) + 2 : 0;
     let deadline = reset ? Infinity : listPickupDeadline;
     let next = reset ? undefined : cursor;
-    document.querySelector("#list-error").hidden = true;
+    beginDiscoveryRequest();
     more.disabled = true;
     if (reset && !background) {
-      listAwaitingResults = true;
+      listHasResults = false;
       list.replaceChildren();
       listCount.textContent = t("Finding posts…", "正在查找帖子…");
       more.hidden = true;
@@ -1021,7 +1058,8 @@ function postList() {
       }
       const countLabel = t(`${count(loaded)} ${loaded === 1 ? "post" : "posts"} shown`, `显示 ${count(loaded)} 条帖子`);
       if (listCount.textContent !== countLabel) listCount.textContent = countLabel;
-      listAwaitingResults = false;
+      listHasResults = true;
+      setDiscoveryRetry();
       more.hidden = !cursor;
       if (focused) ([...list.querySelectorAll("a")].find(link => link.getAttribute("href") === focused.getAttribute("href")) ?? pickupTime).focus({ preventScroll: true });
       if (returnTo && document.activeElement === document.body) {
@@ -1035,15 +1073,12 @@ function postList() {
       }
     } catch (e) {
       if (current !== request) return;
-      const error = document.querySelector("#list-error");
-      error.textContent = e.message;
-      error.hidden = false;
-      // A background refresh may have superseded a search that cleared the list.
-      if (listAwaitingResults) {
-        listAwaitingResults = false;
+      // A background refresh can fail while the list still has no settled results.
+      showDiscoveryError(e.message, listHasResults ? undefined : () => load());
+      if (!listHasResults) {
         listCount.textContent = "";
         list.innerHTML =
-          `<div class="list-empty">${t("Could not load posts. Select a filter to try again.", "无法加载帖子，请选择筛选条件重试。")}</div>`;
+          `<div class="list-empty">${t("Could not load posts.", "无法加载帖子。")}</div>`;
       }
     } finally {
       if (listReturnRequest === current) listReturnRequest = undefined;
@@ -1078,7 +1113,8 @@ function postList() {
   };
   nearbyButton.onclick = async () => {
     if (locating) {
-      document.querySelector("#list-error").hidden = true;
+      discoveryError.hidden = true;
+      setDiscoveryRetry();
       setNearbyLocation(undefined);
       return;
     }
@@ -1090,7 +1126,8 @@ function postList() {
     locating = true;
     const current = ++locationRequest;
     updateNearbyControl();
-    document.querySelector("#list-error").hidden = true;
+    discoveryError.hidden = true;
+    setDiscoveryRetry();
     try {
       const coordinates = await locate();
       if (current !== locationRequest) return;
@@ -1098,9 +1135,7 @@ function postList() {
       await load();
     } catch (e) {
       if (current !== locationRequest) return;
-      const error = document.querySelector("#list-error");
-      error.textContent = e.message;
-      error.hidden = false;
+      if (!retryRequest) showDiscoveryError(e.message);
     } finally {
       if (current === locationRequest) {
         locating = false;
