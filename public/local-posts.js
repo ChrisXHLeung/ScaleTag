@@ -375,12 +375,15 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   list.className = "saved-posts";
   const noBookmarks = t("You have no saved links.", "暂无已保存链接。");
   const noMatches = t("No saved links match these filters.", "没有符合筛选条件的已保存链接。");
+  const statusIncomplete = t("Some matching links could not be checked. Choose “Status not verified” to see them.", "部分符合搜索和类型条件的链接暂时无法核验。请选择「状态尚未核验」查看。");
+  const filterFeedback = notice("");
+  filterFeedback.classList.add("saved-filter-message");
   const empty = notice("");
   empty.classList.add("saved-filter-message");
   page.append(heading, description);
   if (offline) page.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
   page.append(filters);
-  if (!offline) page.append(refreshControls);
+  if (!offline) page.append(refreshControls, filterFeedback);
   page.append(recovery, list, empty);
   host.replaceChildren(page);
 
@@ -437,11 +440,13 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     const status = statusFilter?.value ?? "all";
     const focusedRow = document.activeElement?.closest(".saved-posts li");
     let matched = false;
+    let hiddenByStatusFailure = false;
     for (const row of list.children) {
-      row.hidden = (type !== "all" && type !== row.dataset.postType)
-        || (status !== "all" && status !== row.dataset.linkStatus)
-        || !row.dataset.searchTitle.includes(query);
+      const matchesDetails = (type === "all" || type === row.dataset.postType) && row.dataset.searchTitle.includes(query);
+      const matchesStatus = status === "all" || status === row.dataset.linkStatus;
+      row.hidden = !matchesDetails || !matchesStatus;
       matched ||= !row.hidden;
+      hiddenByStatusFailure ||= matchesDetails && !matchesStatus && row.hasAttribute("data-status-check-failed");
     }
     if (focusedRow?.hidden && list.contains(focusedRow)) statusFilter?.focus();
     filters.hidden = !list.childElementCount;
@@ -449,7 +454,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     refreshControls.hidden = filters.hidden;
     clear.hidden = !search.value && type === "all" && status === "all";
     syncRemoveUnavailable();
-    const message = matched ? "" : filters.hidden ? noBookmarks : noMatches;
+    const filterMessage = hiddenByStatusFailure ? statusIncomplete : "";
+    if (filterFeedback.textContent !== filterMessage) filterFeedback.textContent = filterMessage;
+    const message = matched || hiddenByStatusFailure ? "" : filters.hidden ? noBookmarks : noMatches;
     if (empty.textContent !== message) empty.textContent = message;
     if (returnPath && document.activeElement === document.body) {
       const link = [...list.querySelectorAll("li:not([hidden]) .saved-post-details > a")]
@@ -643,6 +650,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         for (const output of lookup.labels) {
           output.textContent = label ?? failed;
           const row = output.closest("li");
+          row.toggleAttribute("data-status-check-failed", !label);
           row.dataset.linkStatus = linkStatus;
           row.dataset.postStatus = linkStatus;
         }

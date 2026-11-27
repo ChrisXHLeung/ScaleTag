@@ -750,6 +750,58 @@ test("owners can copy public text to a new draft without copying publication det
   assert.deepEqual(errors, []);
 });
 
+test("a saved status filter explains when matching links could not be checked", async (t) => {
+  const { store, page, origin, setUnavailablePath } = await fixture(t);
+  const poll = await store.create({ title: "Pickup poll", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const other = await store.create({ title: "Pickup backup", options: ["Yes", "No"], visibility: "unlisted" });
+  const saved = [poll, other].map(({ id, title }) => ({ path: `/vote/${id}`, title }));
+  await page.evaluate(items => localStorage.setItem("scaletag-saved-posts", JSON.stringify(items)), saved);
+  await page.goto(`${origin}/saved`);
+  const row = page.getByRole("link", { name: poll.title, exact: true });
+  await page.getByText("Open for votes", { exact: true }).first().waitFor();
+  const filter = page.getByLabel("Link status", { exact: true });
+  const search = page.getByRole("searchbox");
+  const incomplete = page.getByRole("status").filter({ hasText: "Some matching links could not be checked." });
+  const noMatches = page.getByText("No saved links match these filters.", { exact: true });
+  await search.fill("Pickup");
+  await filter.selectOption("available");
+  await filter.focus();
+  setUnavailablePath("/api/posts/statuses");
+  await page.evaluate(() => dispatchEvent(new Event("online")));
+  await incomplete.waitFor({ timeout: 5000 });
+  assert.equal(await filter.evaluate(element => element === document.activeElement), true);
+  assert.equal(await row.count(), 0);
+  assert.equal(await noMatches.count(), 0);
+
+  await search.fill("Does not match");
+  await noMatches.waitFor();
+  assert.equal(await incomplete.count(), 0);
+  await search.fill("Pickup");
+  await filter.selectOption("unverified");
+  await row.waitFor();
+  assert.equal(await incomplete.count(), 0);
+  await filter.selectOption("available");
+  setUnavailablePath(undefined);
+  const refresh = page.getByRole("button", { name: "Refresh link statuses", exact: true });
+  await refresh.press("Enter");
+  await row.waitFor();
+  assert.equal(await incomplete.count(), 0);
+  assert.equal(await filter.inputValue(), "available");
+  assert.equal(await search.inputValue(), "Pickup");
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("scaletag-saved-posts"))), saved);
+
+  await page.route(`${origin}/api/posts/statuses`, route => route.fulfill({
+    json: { statuses: ["poll_open", null], refreshAfterMs: null },
+  }));
+  await page.evaluate(() => dispatchEvent(new Event("online")));
+  await incomplete.waitFor();
+  assert.equal(await row.isVisible(), true);
+  assert.equal(await page.getByRole("link", { name: other.title, exact: true }).count(), 0);
+  await page.getByLabel("Post type", { exact: true }).selectOption("task");
+  await noMatches.waitFor();
+  assert.equal(await incomplete.count(), 0);
+});
+
 test("saved link statuses can be retried without reloading or changing the saved list", async (t) => {
   const { store, page, origin, context } = await fixture(t);
   const poll = await store.create({ title: "Pickup poll", options: ["Morning", "Evening"], visibility: "unlisted" });

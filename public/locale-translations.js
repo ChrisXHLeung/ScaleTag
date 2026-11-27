@@ -616,6 +616,15 @@ export const TRANSLATIONS = {
     de: "Keine gespeicherten Links entsprechen diesen Filtern.",
     it: "Nessun link salvato corrisponde a questi filtri.",
   },
+  "Some matching links could not be checked. Choose “Status not verified” to see them.": {
+    ja: "条件に合うリンクの一部は状態を確認できませんでした。「状態は未確認」を選ぶと表示できます。",
+    ko: "조건에 맞는 링크 중 일부의 상태를 확인하지 못했습니다. ‘상태 미확인’을 선택하면 볼 수 있습니다.",
+    fr: "Certains liens correspondants n’ont pas pu être vérifiés. Choisissez « État non vérifié » pour les afficher.",
+    pt: "Não foi possível verificar alguns dos links correspondentes. Selecione “Status não verificado” para vê-los.",
+    es: "No se pudieron comprobar algunos enlaces coincidentes. Selecciona «Estado sin verificar» para verlos.",
+    de: "Einige passende Links konnten nicht geprüft werden. Wähle „Status ungeprüft“, um sie anzuzeigen.",
+    it: "Non è stato possibile verificare alcuni link corrispondenti. Seleziona «Stato non verificato» per vederli.",
+  },
   "Add pickup time to calendar": {
     ja: "受け取り時間をカレンダーに追加",
     ko: "수령 시간을 캘린더에 추가",
