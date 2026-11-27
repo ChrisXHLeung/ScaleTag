@@ -182,6 +182,38 @@ test("concurrent requests from one browser count exactly once", async (t) => {
   assert.equal(result.hasVoted, true);
 });
 
+test("multiple-choice polls count anonymous ballots atomically and conceal results until close", async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.request("/api/polls", input({ selectionMode: "ranked" }))).status, 400);
+  const poll = await f.create({ selectionMode: "multiple", resultsVisibility: "after_close", options: ["Friday", "Saturday", "Sunday"] });
+  assert.equal(poll.selectionMode, "multiple");
+  assert.equal(poll.resultsHidden, true);
+  const path = `/api/polls/${poll.id}/votes`;
+  const first = await f.session(poll.id);
+  for (const ballot of [{ optionId: 1 }, { optionIds: [] }, { optionIds: [1, 1] }, { optionIds: [1, 99] }, { optionId: 1, optionIds: [1, 2] }]) {
+    assert.equal((await f.request(path, ballot, first)).status, 400);
+  }
+  assert.equal((await f.request(path, { optionIds: [1, 2] })).status, 403);
+  const results = await Promise.all(Array.from({ length: 4 }, () => f.request(path, { optionIds: [1, 2] }, first)));
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409, 409, 409]);
+  const ballot = await results.find(r => r.ok).json();
+  assert.equal(ballot.hasVoted, true);
+  assert.equal(ballot.totalVotes, undefined);
+  assert.ok(ballot.options.every(o => o.votes === undefined));
+  assert.equal((await f.request(path, { optionIds: [2, 3] }, await f.session(poll.id))).status, 200);
+  const file = JSON.parse(await readFile(join(f.directory, `${poll.id}.json`), "utf8"));
+  assert.ok(Object.values(file.voters).every(value => value === true));
+  const closed = await (await f.request(`/api/polls/${poll.id}/state`, { key: poll.manageKey, state: "closed" })).json();
+  assert.equal(closed.totalVotes, 2);
+  assert.deepEqual(closed.options.map(o => o.votes), [1, 2, 1]);
+
+  const single = await f.create();
+  const legacy = await f.session(single.id);
+  const singlePath = `/api/polls/${single.id}/votes`;
+  assert.equal((await f.request(singlePath, { optionIds: [1, 2] }, legacy)).status, 400);
+  assert.equal((await f.request(singlePath, { optionId: 1 }, legacy)).status, 200);
+});
+
 test("concurrent distinct votes survive restart and sum correctly", async (t) => {
   const f = await fixture(t);
   const p = await f.create();

@@ -509,6 +509,33 @@ test("poll state actions leave keyboard focus on the outcome or available retry"
   }
 });
 
+test("a new multi-choice poll restores its draft and accepts all selected options", async (t) => {
+  const { page, origin, errors } = await fixture(t);
+  await page.goto(`${origin}/create`);
+  await page.getByLabel("The question").fill("When can we meet?");
+  await page.getByLabel("Option 1", { exact: true }).fill("Friday");
+  await page.getByLabel("Option 2", { exact: true }).fill("Saturday");
+  await page.getByLabel("Your signature").fill("Test");
+  const mode = page.getByLabel("Ballot type", { exact: true });
+  await mode.selectOption("multiple", { timeout: 3500 });
+  await page.waitForFunction(() => localStorage.getItem("scaletag-text-draft-poll")?.includes("multiple"));
+  await page.reload();
+  assert.equal(await mode.inputValue(), "multiple");
+  await page.locator("#post-visibility").selectOption("unlisted");
+  await page.locator("#retention").check();
+  await page.getByRole("button", { name: "Publish my poll" }).click();
+  const submit = page.getByRole("button", { name: "Cast my vote" });
+  await submit.click();
+  await page.getByText("Please select at least one option.", { exact: true }).waitFor();
+  await page.getByRole("checkbox", { name: "Friday", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Saturday", exact: true }).check();
+  await submit.press("Enter");
+  await page.getByRole("button", { name: "Your vote is counted" }).waitFor();
+  assert.equal(await page.locator("#total-votes").textContent(), "Ballots submitted: 1");
+  assert.deepEqual(await page.locator("#results meter").evaluateAll(meters => meters.map(meter => [meter.value, meter.max])), [[1, 1], [1, 1]]);
+  assert.deepEqual(errors, []);
+});
+
 test("keyboard voting preserves focus and rejects stale results during submission", async (t) => {
   const { page, origin, store } = await fixture(t);
   const poll = await store.create({ title: "Pickup poll", options: ["Morning", "Evening"], visibility: "unlisted" });

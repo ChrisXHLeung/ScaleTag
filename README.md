@@ -8,7 +8,7 @@ ScaleTag is an installable web app for local polls, tasks, free giveaways, and o
 
 ### Polls
 
-[Create a poll](https://www.scaletag.top/create) with a question and choices. The form offers voting periods of 1 hour, 6 hours, 1 day, 3 days, or 7 days. Readers can vote once per browser cookie. Publish results as votes come in or after voting closes. The publisher can reorder choices before the first vote, end voting early, or take down the poll. Once results are visible, readers can copy them as text or download a result card. The results stay available until 30 days after publication unless the poll is taken down or frozen. [Poll help](https://www.scaletag.top/help#polls)
+[Create a poll](https://www.scaletag.top/create) with a question and choices. Use a single choice for a favorite or multiple choices to find which times, places, or ideas participants could all accept. Each browser cookie can submit one ballot. On a multiple-choice poll, the percentage for each option is the share of ballots that selected it. The form offers voting periods of 1 hour, 6 hours, 1 day, 3 days, or 7 days. Publish results as votes come in or after voting closes. The publisher can reorder choices before the first vote, end voting early, or take down the poll. Once results are visible, readers can copy them as text or download a result card. The results stay available until 30 days after publication unless the poll is taken down or frozen. [Poll help](https://www.scaletag.top/help#polls)
 
 ```mermaid
 flowchart TD

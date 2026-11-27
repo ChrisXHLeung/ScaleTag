@@ -1,5 +1,6 @@
 import {
   DATA_IMAGE_PATTERN,
+  ballotsSubmitted,
   count,
   date,
   icons,
@@ -880,7 +881,8 @@ function renderResultCard(poll) {
     return { lines, votes: option.votes, height: Math.max(lines.length * 40 + 46, 104) };
   });
   const totalY = 124 + titleLines.length * 62 + 34;
-  const firstRowY = totalY + 64;
+  const multiple = poll.selectionMode === "multiple";
+  const firstRowY = totalY + (multiple ? 96 : 64);
   const footerY = firstRowY + rows.reduce((height, row) => height + row.height, 0);
   canvas.height = footerY + 137;
 
@@ -902,9 +904,14 @@ function renderResultCard(poll) {
   ctx.font = titleFont;
   titleLines.forEach((line, index) => ctx.fillText(line, left, 124 + index * 62));
   ctx.font = `700 32px ${FONT_STACK}`;
-  ctx.fillText(t("Total votes", "总票数"), left, totalY);
+  ctx.fillText(multiple ? t("Ballots submitted", "已提交选票") : t("Total votes", "总票数"), left, totalY);
   ctx.textAlign = "right";
   ctx.fillText(count(poll.totalVotes), right, totalY);
+  if (multiple) {
+    ctx.font = `500 24px ${FONT_STACK}`;
+    ctx.fillStyle = COLORS.muted;
+    ctx.fillText(t("Share of ballots", "占选票比例"), right, totalY + 41);
+  }
 
   let y = firstRowY;
   for (const { lines, votes, height } of rows) {
@@ -950,7 +957,10 @@ function formatResultText(poll, url) {
   return [
     poll.title,
     poll.status === "closed" ? t("Final results", "最终结果") : t("Live results", "实时结果"),
-    `${t("Total votes", "总票数")}: ${count(poll.totalVotes)}`,
+    ...(poll.selectionMode === "multiple" ? [
+      ballotsSubmitted(poll.totalVotes),
+      t("Percentages show the share of ballots that selected each option.", "百分比表示选择该选项的选票占比。"),
+    ] : [`${t("Total votes", "总票数")}: ${count(poll.totalVotes)}`]),
     ...poll.options.map(({ label, votes }) => {
       const total = t(`${count(votes)} ${votes === 1 ? "vote" : "votes"}`, `${count(votes)} 票`);
       const share = percentage.format(poll.totalVotes ? votes / poll.totalVotes : 0);

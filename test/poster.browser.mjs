@@ -229,6 +229,16 @@ test("poll result cards download public totals and never offer withheld counts",
   assert.equal(finalDownload.suggestedFilename(), `ScaleTag-results-${withheld.id}.png`);
   assert.equal((await sharp(await readFile(await finalDownload.path())).metadata()).format, "png");
   assert.ok((await page.evaluate(() => window.resultCardText)).includes("Final results"));
+
+  const multiple = await store.create({ ...input, selectionMode: "multiple", options: ["Morning", "Evening"] });
+  await store.vote(multiple.id, "multi-browser", [1, 2]);
+  await page.goto(`${origin}/vote/${multiple.id}?lang=en`);
+  const [multipleDownload] = await Promise.all([page.waitForEvent("download"), downloadButton.click()]);
+  assert.equal(multipleDownload.suggestedFilename(), `ScaleTag-results-${multiple.id}.png`);
+  const multipleText = await page.evaluate(() => window.resultCardText);
+  assert.ok(multipleText.includes("Ballots submitted"));
+  assert.ok(multipleText.includes("Share of ballots"));
+  assert.equal(multipleText.filter(value => value === "100%").length, 2);
   assert.deepEqual(errors, []);
 });
 

@@ -366,9 +366,12 @@ export function createApp(
         403,
         "Please allow this poll’s anonymous cookie and reload the page before voting.",
       );
-    if (!Number.isInteger(req.body?.optionId))
+    const { optionId, optionIds } = req.body ?? {};
+    if (optionIds !== undefined && (optionId !== undefined || !Array.isArray(optionIds)))
+      throw new AppError(400, "Please select one or more different options.");
+    if (optionIds === undefined && !Number.isInteger(optionId))
       throw new AppError(400, "Please select exactly one option.");
-    res.json(await store.vote(req.params.id, token, req.body.optionId));
+    res.json(await store.vote(req.params.id, token, optionIds ?? optionId));
   });
   app.post("/api/polls/:id/manage", async (req, res) => {
     res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache",

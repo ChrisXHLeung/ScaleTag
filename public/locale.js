@@ -154,6 +154,8 @@ export const serverErrors = {
   'This post has been permanently frozen after reports.': '此帖子因收到举报已被永久冻结。',
   'Please select exactly one option.': '请选择一个选项。',
   'Please select a valid option.': '请选择有效选项。',
+  'Please select one or more different options.': '请选择一个或多个不同的有效选项。',
+  'Choose a valid ballot type.': '请选择有效的投票类型。',
   'Too many replies. Please try again in a minute.': '回复过多，请一分钟后重试。',
   'Tasks do not accept votes.': '任务不接受投票。',
   'This poll has reached its current vote limit.': '此投票已达到当前投票上限。',

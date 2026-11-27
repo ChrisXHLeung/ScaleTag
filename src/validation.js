@@ -150,12 +150,14 @@ function pollOptionsInput(values) {
 export function pollInput(body) {
   const common = baseInput(body);
   const options = pollOptionsInput(body.options);
-  const { votingHours = 168, resultsVisibility = "live" } = body;
+  const { votingHours = 168, resultsVisibility = "live", selectionMode = "single" } = body;
   if (!Number.isInteger(votingHours) || votingHours < 1 || votingHours > 168)
     throw new AppError(400, "Voting must last between 1 and 168 whole hours.");
   if (!["live", "after_close"].includes(resultsVisibility))
     throw new AppError(400, "Choose when to publish poll results.");
-  return { ...common, options, votingHours, resultsVisibility };
+  if (!["single", "multiple"].includes(selectionMode))
+    throw new AppError(400, "Choose a valid ballot type.");
+  return { ...common, options, votingHours, resultsVisibility, selectionMode };
 }
 
 export function ownerEditInput(body, type) {

@@ -1,4 +1,5 @@
 import { t } from "/locale.js";
+import { ballotsSubmitted } from "/common.js";
 import { pickupWindowText } from "/pickup.js";
 // Loaded only after a visitor chooses Map. Poll data stays on ScaleTag.
 const vendor = "/vendor/maplibre/6.16.0/";
@@ -99,6 +100,8 @@ export async function createPollMap() {
           ? t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : p.resultsHidden
             ? t("Results will appear when voting closes.", "投票截止后公布结果。")
+            : p.selectionMode === "multiple"
+            ? `${p.status === "open" ? t("Open", "进行中") : t("Ended", "已结束")} · ${ballotsSubmitted(p.totalVotes)}`
             : t(`${p.status === "open" ? "Open" : "Ended"} · ${p.totalVotes} votes · View poll ↗`, `${p.status === "open" ? "进行中" : "已结束"} · ${p.totalVotes} 票 · 查看投票 ↗`);
       link.append(title, detail);
       if (p.type === "sale" && p.pickupWindow) {

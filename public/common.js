@@ -66,6 +66,7 @@ const shortDate = (time) =>
     new Date(time),
   );
 const count = (value) => new Intl.NumberFormat(intlLocale).format(value);
+export const ballotsSubmitted = (value) => `${t("Ballots submitted", "已提交选票")}: ${count(value)}`;
 const percent = (votes, total) =>
   total ? ((votes / total) * 100).toFixed(1).replace(/\.0$/, "") : "0";
 function remaining(end, now = Date.now()) {

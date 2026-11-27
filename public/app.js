@@ -8,6 +8,7 @@ import {
   date,
   shortDate,
   count,
+  ballotsSubmitted,
   percent,
   remaining,
   toast,
@@ -75,11 +76,12 @@ function createPoll() {
   setActiveNav("create");
   main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br> <em>${t("your mind?", "想听听大家的意见？")}</em></h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br> ${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p>${renderIntroFlow("polls")}<div class="rules"><p>${icons.pin} ${t("Public posts require location.", "公开帖需要位置信息。")}</p><p>${icons.clock} ${t("Voting stays open for up to 7 days.", "投票最多开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
   <form id="create-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}"><a href="/create" aria-current="page">${t("Poll", "投票")}</a><a href="/create/task">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div>
-    <div class="form-heading"><h2>${t("Your new poll", "创建投票")}</h2><span class="pill">${t("SINGLE CHOICE", "单选")}</span></div>
+    <div class="form-heading"><h2>${t("Your new poll", "创建投票")}</h2></div>
     <label for="title">${t("The question", "问题")} <span class="required">*</span></label><input id="title" name="title" maxlength="140" aria-describedby="title-count" placeholder="${t("What should we make happen next?", "接下来做什么好？")}" required><div class="field-hint"><span>${t("Keep it clear and open to everyone.", "把问题说清楚，让大家都能参与。")}</span><span id="title-count">0 / 140</span></div><p id="title-limit-status" class="field-hint reply-length-status" role="status"></p>
     <label for="description">${t("A little context", "补充说明")} <span class="optional">${t("optional", "可选")}</span></label><textarea id="description" name="description" maxlength="4000" rows="4" aria-describedby="description-count" placeholder="${t("Tell people a bit more about your question\u2026", "补充一些背景，让大家更了解这个问题…")}"></textarea><div class="field-hint"><span>${t("Character count", "字数")}</span><span id="description-count"></span></div><p id="description-limit-status" class="field-hint reply-length-status" role="status"></p>
     ${photoFields("poll", t("Photos (optional)", "投票照片（选填）"))}
-    <fieldset class="options-fieldset"><legend>${t("The options", "选项")} <span class="required">*</span></legend><p class="field-hint">${t("Add 2–12 choices. Each person selects one.", "添加 2 至 12 个选项，每人可选择一项。")}</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} ${t("Add an option", "添加选项")}</button></fieldset>
+    <label for="selection-mode">${t("Ballot type", "投票类型")}</label><select id="selection-mode" name="selectionMode"><option value="single">${t("Single choice", "单选")}</option><option value="multiple">${t("Multiple choices", "多选")}</option></select>
+    <fieldset class="options-fieldset"><legend>${t("The options", "选项")} <span class="required">*</span></legend><p class="field-hint">${t("Provide between 2 and 12 options.", "请提供 2 至 12 个选项。")}</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} ${t("Add an option", "添加选项")}</button></fieldset>
     <label for="voting-hours">${t("Voting duration", "投票时长")}</label><select id="voting-hours" name="votingHours"><option value="1">${t("1 hour", "1 小时")}</option><option value="6">${t("6 hours", "6 小时")}</option><option value="24">${t("1 day", "1 天")}</option><option value="72">${t("3 days", "3 天")}</option><option value="168" selected>${t("7 days", "7 天")}</option></select>
     <label for="results-visibility">${t("Show results", "公布结果")}</label><select id="results-visibility" name="resultsVisibility"><option value="live">${t("As votes come in", "实时公布")}</option><option value="after_close">${t("After voting closes", "截止后公布")}</option></select>
     <label for="signature">${t("Your signature", "署名")} <span class="required">*</span></label><input id="signature" name="signature" maxlength="60" placeholder="${t("A name, a nickname, or a little mystery", "姓名、昵称或其他署名")}" required><p class="field-hint">${t("Pick any name. No account or identity verification.", "可以使用姓名或昵称，无需注册或验证身份。")}</p>
@@ -136,7 +138,7 @@ function createPoll() {
   addOption();
   addOption();
   const choices = () => [...inputs.querySelectorAll("input")].map((el) => el.value);
-  const draft = bindTextDraft(form, "poll", ["#title", "#description", "#signature", "#voting-hours", "#results-visibility", "#post-visibility"], {
+  const draft = bindTextDraft(form, "poll", ["#title", "#description", "#signature", "#voting-hours", "#results-visibility", "#post-visibility", "#selection-mode"], {
     read: choices,
     contains: (target) => inputs.contains(target),
     restore(values) {
@@ -194,6 +196,7 @@ function createPoll() {
         options: choices(),
         votingHours: Number(form.elements.votingHours.value),
         resultsVisibility: form.elements.resultsVisibility.value,
+        selectionMode: form.elements.selectionMode.value,
         images,
         ...visibility.payload(location),
         retentionAccepted: document.querySelector("#retention").checked,
@@ -329,10 +332,13 @@ function renderPollManager(poll, key) {
   }
 }
 
-function pollBallotOptions(options) {
-  return `<legend class="sr-only">${t("Choose one option", "选择一个选项")}</legend>` +
+function pollBallotOptions(options, multiple) {
+  const instruction = multiple
+    ? t("Choose all that work for you", "选择所有合适的选项")
+    : t("Choose one option", "选择一个选项");
+  return `<legend class="sr-only">${instruction}</legend>` +
     options.map(option => `<label class="vote-option">
-      <input type="radio" name="option" value="${option.id}" required>
+      <input type="${multiple ? "checkbox" : "radio"}" name="option" value="${option.id}" ${multiple ? "" : "required"}>
       <span>${escape(option.label)}</span><span class="option-check" aria-hidden="true"></span>
     </label>`).join("");
 }
@@ -341,7 +347,8 @@ async function votePage(id, { ownerKey, published } = {}) {
   setActiveNav(null);
   let poll = published ?? await api(`/api/polls/${id}`);
   let sessionReady = !published;
-  let ballotMarkup = pollBallotOptions(poll.options);
+  const multiple = poll.selectionMode === "multiple";
+  let ballotMarkup = pollBallotOptions(poll.options, multiple);
   document.title = `${poll.title} — ScaleTag`;
   const uploadedImages = (poll.images ?? []).filter((src) =>
     DATA_IMAGE_PATTERN.test(src),
@@ -351,12 +358,12 @@ async function votePage(id, { ownerKey, published } = {}) {
   );
   main.innerHTML = `<section class="poll-layout"><div class="poll-main"><a class="back-link" href="/PostList">${t("← Back to PostList", "← 返回帖子列表")}</a>
     ${new URLSearchParams(location.search).has("created") ? `<div class="success-banner" role="status">${t("Your poll is live. Share its QR code to start the conversation.", "投票已发布，分享二维码邀请大家参与吧。")}</div>` : ""}
-    <div class="poll-meta"><span id="poll-status" class="status-badge"></span><span>${t("Single choice", "单选")}</span><span id="time-left"></span></div><h1 class="poll-title">${escape(poll.title)}</h1><p class="byline">${t("Started by", "发起人：")} <strong>${escape(poll.signature)}</strong> <span>· ${date(poll.createdAt)}</span></p>
+    <div class="poll-meta"><span id="poll-status" class="status-badge"></span><span>${multiple ? t("Multiple choices", "多选") : t("Single choice", "单选")}</span><span id="time-left"></span></div><h1 class="poll-title">${escape(poll.title)}</h1><p class="byline">${t("Started by", "发起人：")} <strong>${escape(poll.signature)}</strong> <span>· ${date(poll.createdAt)}</span></p>
     ${poll.description ? `<p class="poll-description">${escape(poll.description)}</p>` : ""}
     ${uploadedPhotosHtml(uploadedImages, "Poll photo", "投票照片")}
     ${externalImages.length ? `<div class="external-images"><button class="button secondary small" id="load-images">${t(`Show ${externalImages.length} external image${externalImages.length > 1 ? "s" : ""}`, `显示 ${externalImages.length} 张外部图片`)}</button><p class="field-hint">${t("Images load from third-party hosts, which may receive your IP address.", "图片从第三方服务器加载，该服务可能接收你的 IP 地址。")}</p><div id="poll-images"></div></div>` : ""}
-    <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
-    <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes" aria-live="polite"></span></div><div id="results"></div><p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
+    <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${multiple ? t("Choose all that work for you", "选择所有合适的选项") : t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
+    <section class="results-section" aria-label="${t("Current results", "当前结果")}"><div class="results-heading"><h2>${t("The conversation so far", "当前结果")}</h2><span id="total-votes" aria-live="polite"></span></div><div id="results"></div>${multiple ? `<p id="result-basis" class="field-hint">${t("Percentages show the share of ballots that selected each option.", "百分比表示选择该选项的选票占比。")}</p>` : ""}<p class="field-hint" id="results-updated">${t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。")}</p></section>
     <section id="social" aria-label="${t("Poll likes", "投票点赞")}"></section></div><aside class="poll-sidebar"><section class="share-card"><span class="eyebrow">${t("PASS IT ON", "分享出去")}</span><h2>${t("A small code.<br>A bigger conversation.", "分享二维码，<br>让更多人参与。") }</h2><div class="qr-frame"><img src="/api/polls/${id}/qr.png" width="256" height="256" alt="${t("QR code linking to this poll", "投票二维码")}"></div><p>${t("Scan to vote. Save to share.", "扫码投票，保存后分享。")}</p><a href="/api/polls/${id}/qr.png?download=1" class="button" download="ScaleTag-${id}.png">${icons.download} ${t("Save QR image", "保存二维码")}</a><button class="button secondary" id="copy-link" type="button">${t("Copy poll link", "复制投票链接")}</button>${linkCopyFallback("public-poll-link")}</section><section class="timeline-card"><div>${icons.clock}<span>${t("Voting closes", "投票截止时间")}<strong>${date(poll.endsAt)}</strong></span></div><div>${icons.shield}<span>${t("Removed from the website", "从网站移除")}<strong>${date(poll.deleteAt)}</strong></span></div><p>${t("Dates are shown in your local time.", "日期按你的本地时间显示。")}</p></section>${notice()}</aside></section>`;
   if (ownerKey) {
     const owner = document.createElement("section");
@@ -412,6 +419,7 @@ async function votePage(id, { ownerKey, published } = {}) {
   const options = main.querySelector("#vote-options");
   const button = main.querySelector("#cast-vote");
   const voteMessage = main.querySelector("#vote-message");
+  const resultBasis = main.querySelector("#result-basis");
   voteMessage.tabIndex = -1;
   let submitting = false;
   let refreshController;
@@ -434,9 +442,11 @@ async function votePage(id, { ownerKey, published } = {}) {
     // Only write when changed so unchanged 15s polls don't re-announce the
     // aria-live total or wipe the user's text selection in the results.
     const totalVotes = document.querySelector("#total-votes");
-    const totalText =
-      poll.resultsHidden ? "" : t(`${count(poll.totalVotes)} ${poll.totalVotes === 1 ? "vote" : "votes"}`, `${count(poll.totalVotes)} 票`);
+    const totalText = poll.resultsHidden ? "" : multiple
+      ? ballotsSubmitted(poll.totalVotes)
+      : t(`${count(poll.totalVotes)} ${poll.totalVotes === 1 ? "vote" : "votes"}`, `${count(poll.totalVotes)} 票`);
     if (totalVotes.textContent !== totalText) totalVotes.textContent = totalText;
+    if (resultBasis) resultBasis.hidden = Boolean(poll.resultsHidden);
     const results = document.querySelector("#results");
     const resultsHtml = poll.resultsHidden ? "" : poll.options
       .map(
@@ -453,7 +463,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     const focused = document.activeElement;
     const ballotDisabled = !sessionReady || closed || poll.hasVoted;
     const shouldFocusMessage = ballotDisabled && (focused === button || options.contains(focused));
-    const updatedBallot = pollBallotOptions(poll.options);
+    const updatedBallot = pollBallotOptions(poll.options, multiple);
     if (ballotMarkup !== updatedBallot) options.innerHTML = ballotMarkup = updatedBallot;
     options.disabled = ballotDisabled;
     button.disabled = ballotDisabled;
@@ -483,17 +493,22 @@ async function votePage(id, { ownerKey, published } = {}) {
   document.querySelector("#vote-form").onsubmit = async (e) => {
     e.preventDefault();
     if (submitting || button.disabled) return;
-    const optionId = Number(new FormData(e.currentTarget).get("option"));
+    const error = document.querySelector("#vote-error");
+    const selected = new FormData(e.currentTarget).getAll("option").map(Number);
+    if (!selected.length) {
+      showFormError(error, t("Please select at least one option.", "请至少选择一个选项。"), { focus: false });
+      return;
+    }
+    const vote = multiple ? { optionIds: selected } : { optionId: selected[0] };
     submitting = true;
     refreshController?.abort();
-    const error = document.querySelector("#vote-error");
     button.setAttribute("aria-disabled", "true");
     if (options.contains(document.activeElement)) button.focus();
     options.disabled = true;
     voteMessage.textContent = t("Submitting your vote…", "正在提交投票…");
     error.hidden = true;
     try {
-      poll = await api(`/api/polls/${id}/votes`, { optionId });
+      poll = await api(`/api/polls/${id}/votes`, vote);
       toast(t("Your vote is in. Thank you!", "投票已提交，谢谢参与！"));
     } catch (e) {
       showFormError(error, e, { focus: false });
@@ -1047,7 +1062,7 @@ function postList() {
     }
     if (p.type === "task")
       return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${t("Task", "任务")}</span><span class="status-badge ${isFinalState(p.taskState) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${stateLabel(p.taskState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div><div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
-    return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${p.resultsHidden ? t("Results will appear when voting closes.", "投票截止后公布结果。") : p.options
+    return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${!p.resultsHidden && p.selectionMode === "multiple" ? `<small>${t("Share of ballots", "占选票比例")}</small>` : ""}${p.resultsHidden ? t("Results will appear when voting closes.", "投票截止后公布结果。") : p.options
       .slice(0, 2)
       .map(
         (o) =>
@@ -1055,7 +1070,7 @@ function postList() {
       )
       .join(
         "",
-      )}${!p.resultsHidden && p.options.length > 2 ? `<small>${t(`+ ${p.options.length - 2} ${p.options.length - 2 === 1 ? "more option" : "more options"}`, `+ ${p.options.length - 2} 个其他选项`)}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
+      )}${!p.resultsHidden && p.options.length > 2 ? `<small>${t(`+ ${p.options.length - 2} ${p.options.length - 2 === 1 ? "more option" : "more options"}`, `+ ${p.options.length - 2} 个其他选项`)}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${p.selectionMode === "multiple" ? ballotsSubmitted(p.totalVotes) : t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
   }
   function refreshHoldBadges(list) {
     clearTimeout(listHoldTimer);

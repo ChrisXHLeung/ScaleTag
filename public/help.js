@@ -136,6 +136,7 @@ export function renderHelp(main) {
     <section id="${id}" class="help-topic" aria-labelledby="help-${id}">
       <h2 id="help-${id}">${label(title)}</h2>
       <p>${label(description)}</p>
+      ${id === "polls" ? `<p>${t("Use multiple choices to find when people can meet or which options they would accept. Each browser submits one ballot, and each option shows the share of ballots that picked it.", "可用多选投票寻找大家方便的时间，或了解哪些选择都能接受。每个浏览器提交一张选票，每项结果显示选择该项的选票占比。")}</p>` : ""}
       ${renderFlow(steps)}
       <a class="text-link" href="${path}">${path === "/privacy" ? t("Privacy & retention", "隐私与保留") : t("Open this feature", "打开此功能")}</a>
     </section>`).join("");

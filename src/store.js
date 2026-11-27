@@ -242,6 +242,7 @@ export class PollStore {
       endsAt: p.endsAt,
       deleteAt: p.deleteAt,
       resultsVisibility: p.resultsVisibility,
+      selectionMode: p.selectionMode,
       totalVotes: p.totalVotes,
       options: (p.options ?? []).map((o) => ({ ...o })),
       location: p.location,
@@ -470,7 +471,7 @@ export class PollStore {
     return { statuses, refreshAfterMs: Number.isFinite(nextChange) ? nextChange - now : null };
   }
 
-  async vote(id, token, optionId) {
+  async vote(id, token, selection) {
     return this.exclusive(id, async () => {
       const db = await this.live(id);
       const p = db.data;
@@ -483,14 +484,22 @@ export class PollStore {
         );
       if (Object.hasOwn(p.voters, voterHash(token)))
         throw new AppError(409, "This browser has already voted in this poll.");
-      const option = p.options.find((o) => o.id === optionId);
-      if (!option) throw new AppError(400, "Please select a valid option.");
+      const multiple = p.selectionMode === "multiple";
+      const selectedIds = Array.isArray(selection) ? selection : [selection];
+      if (multiple && (!Array.isArray(selection) || selectedIds.length < 1 ||
+          selectedIds.length > p.options.length || new Set(selectedIds).size !== selectedIds.length))
+        throw new AppError(400, "Please select one or more different options.");
+      if (!multiple && !Number.isInteger(selection))
+        throw new AppError(400, "Please select exactly one option.");
+      const selected = p.options.filter(option => selectedIds.includes(option.id));
+      if (selected.length !== selectedIds.length)
+        throw new AppError(400, multiple ? "Please select one or more different options." : "Please select a valid option.");
       if (p.totalVotes >= this.maxVotes)
         throw new AppError(
           503,
           "This poll has reached its current vote limit.",
         );
-      option.votes += 1;
+      for (const option of selected) option.votes += 1;
       p.totalVotes += 1;
       p.voters[voterHash(token)] = true;
       await this.write(db);
@@ -571,6 +580,7 @@ export class PollStore {
         ...publicSaleAvailability(p, now),
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
         title: p.title,
+        ...(p.selectionMode === "multiple" ? { selectionMode: p.selectionMode } : {}),
         ...(pollResultsHidden(p, now) ? { resultsHidden: true } : { totalVotes: p.totalVotes }),
         createdAt: p.createdAt,
         endsAt: p.endsAt,
