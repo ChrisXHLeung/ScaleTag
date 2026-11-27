@@ -36,8 +36,8 @@ const features = [
       [actor.taskPublisher, "Finish or close the task", "完成或关闭任务"],
     ]],
   ["giveaways", "/create/sale", ["Free giveaways", "闲置赠予"],
-    ["Enter a public pickup location and an optional pickup window. Browse for pickups available now or starting within 24 hours. For an available item with a pickup window you can download a calendar entry. A publisher can place or release a temporary hold and mark the item claimed. Once claimed, it leaves discovery and the original link hides pickup details. Giveaways can be available for up to 72 hours.",
-      "填写公开领取地点，也可设置领取时段。可筛选现在能领取或未来 24 小时开始领取的物品。物品可领取且设有时段时，可以下载日历事件。发布者可保留或解除保留，也可标记为已领取。标记后，物品退出公开发现，原链接隐藏领取详情。赠予帖最长可供访问 72 小时。"],
+    ["Enter a public pickup location and an optional pickup window. Published times follow the reader’s device time zone and show the offset from UTC. Browse for pickups available now or starting within 24 hours. For an available item with a pickup window you can download a calendar entry. A publisher can place or release a temporary hold and mark the item claimed. Once claimed, it leaves discovery and the original link hides pickup details. Giveaways can be available for up to 72 hours.",
+      "填写公开领取地点，也可设置领取时段。已发布的时间按查看者设备的时区显示，并标注相对 UTC 的偏移。可筛选现在能领取或未来 24 小时开始领取的物品。物品可领取且设有时段时，可以下载日历事件。发布者可保留或解除保留，也可标记为已领取。标记后，物品退出公开发现，原链接隐藏领取详情。赠予帖最长可供访问 72 小时。"],
     [
       [actor.giver, "Publish an item and pickup details", "发布物品与领取安排"],
       [actor.pickupVisitor, "Check the directions and pick up the item", "查看领取地点并现场领取"],

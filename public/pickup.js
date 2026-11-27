@@ -33,6 +33,17 @@ export function readPickupWindow(start, end) {
   return { startsAt, endsAt };
 }
 
-export function pickupWindowText(window) {
-  return `${t("Pickup window", "领取时段")} · ${date(window.startsAt)} – ${date(window.endsAt)}`;
+function utcOffset(time) {
+  const minutes = -new Date(time).getTimezoneOffset();
+  const magnitude = Math.abs(minutes);
+  const hours = String(Math.floor(magnitude / 60)).padStart(2, "0");
+  const remainder = String(magnitude % 60).padStart(2, "0");
+  return `UTC${minutes < 0 ? "−" : "+"}${hours}:${remainder}`;
+}
+
+export function pickupWindowText({ startsAt, endsAt }) {
+  const startOffset = utcOffset(startsAt);
+  const endOffset = utcOffset(endsAt);
+  const startLabel = startOffset === endOffset ? "" : ` (${startOffset})`;
+  return `${t("Pickup window", "领取时段")} · ${date(startsAt)}${startLabel} – ${date(endsAt)} (${endOffset})`;
 }

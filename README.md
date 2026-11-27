@@ -38,7 +38,7 @@ flowchart TD
 
 ### Free giveaways
 
-[Publish a giveaway](https://www.scaletag.top/create/sale) with public pickup directions and an optional pickup window. Visitors can like the post, copy the pickup directions when the item is available, or download a calendar entry for an available pickup window. Giveaways have no reply or offer form.
+[Publish a giveaway](https://www.scaletag.top/create/sale) with public pickup directions and an optional pickup window. Pickup times use the viewer’s device time zone and show the UTC offset, including both offsets when the window spans a daylight-saving change. Visitors can like the post, copy the pickup directions when the item is available, or download a calendar entry for an available pickup window. Giveaways have no reply or offer form.
 
 The publisher can hold the item until a chosen time or release it sooner. Marking it claimed removes it from discovery and hides the pickup details. The original link shows the claimed status until the giveaway expires 72 hours after publication. Active storage retains the record until day 30. [Giveaway help](https://www.scaletag.top/help#giveaways)
 

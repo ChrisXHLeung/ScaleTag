@@ -211,6 +211,37 @@ test("hide the calendar link as soon as the pickup window ends", async (t) => {
   await calendar.waitFor({ state: "hidden", timeout: 4000 });
 });
 
+test("pickup windows identify the visitor’s offset, including each side of a DST change", async (t) => {
+  const f = await fixture(t);
+  const startsAt = Date.UTC(2027, 2, 14, 6, 30);
+  const endsAt = Date.UTC(2027, 2, 14, 7, 30);
+  f.advance(startsAt - Date.now() - 60 * 60000);
+  const sale = await f.store.create({ ...f.input, type: "sale", giveawayVersion: 1,
+    title: "Timezone pickup", pickupLocation: "Library", pickupWindow: { startsAt, endsAt },
+  });
+  for (const [timezoneId, endpoints, offsets] of [
+    ["America/Toronto", ["1:30 AM (UTC−05:00)", "3:30 AM (UTC−04:00)"], ["UTC−05:00", "UTC−04:00"]],
+    ["Asia/Tokyo", ["3:30 PM", "4:30 PM (UTC+09:00)"], ["UTC+09:00"]],
+    ["Asia/Kolkata", ["12:00 PM", "1:00 PM (UTC+05:30)"], ["UTC+05:30"]],
+  ]) {
+    const context = await f.browser.newContext({ timezoneId, locale: "en-US", viewport: { width: 360, height: 800 } });
+    try {
+      const page = await context.newPage();
+      await page.goto(`${f.origin}/sale/${sale.id}`);
+      const pickup = page.locator("#sale-pickup-window");
+      const text = (await pickup.textContent()).normalize("NFKC");
+      assert.deepEqual(text.match(/UTC[+−]\d{2}:\d{2}/g), offsets);
+      for (const endpoint of endpoints) assert.ok(text.includes(endpoint), text);
+      await page.goto(`${f.origin}/PostList`);
+      const card = page.locator(`a[href="/sale/${sale.id}"]`);
+      assert.deepEqual(await card.textContent().then(text => text.match(/UTC[+−]\d{2}:\d{2}/g)), offsets);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test("copy an available giveaway's pickup text and offer manual copy if denied", async (t) => {
   const { origin, context, page, store, input } = await fixture(t);
   const pickup = "図書館  North entrance\nUse the ramp";
