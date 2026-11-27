@@ -413,7 +413,13 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   const normalize = value => value.normalize("NFKC").toLowerCase().trim();
   const isUnavailableRow = row => row.dataset.linkStatus === "unavailable" || row.dataset.postStatus === "unavailable";
   function syncRemoveUnavailable() {
-    removeUnavailable.hidden = offline || !navigator.onLine || ![...list.children].some(isUnavailableRow);
+    const hide = offline || !navigator.onLine || ![...list.children].some(isUnavailableRow);
+    if (hide && document.activeElement === removeUnavailable) {
+      const target = filters.hidden ? heading : (statusFilter ?? search);
+      if (target === heading && !heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+      target?.focus({ preventScroll: true });
+    }
+    removeUnavailable.hidden = hide;
   }
   function applyFilters() {
     const query = normalize(search.value);
@@ -521,7 +527,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     const items = savedPosts();
     const missing = entries.filter(({ item }) => !items.some(existing => existing.path === item.path));
     if (missing.length) {
-      if (items.length >= savedLimit) {
+      if (items.length + missing.length > savedLimit) {
         recoveryStatus.textContent = t("Could not restore the link because this browser’s saved links are full.", "此浏览器的收藏已满，暂时无法恢复链接。");
         return;
       }
@@ -533,7 +539,6 @@ export function renderSavedPosts(host, { offline = false } = {}) {
         items.splice(position, 0, { path: item.path, title: item.title });
       } else {
         for (const { item, index } of missing) {
-          if (items.length >= savedLimit) break;
           if (!items.some(existing => existing.path === item.path)) {
             items.splice(Math.min(index, items.length), 0, { path: item.path, title: item.title });
           }

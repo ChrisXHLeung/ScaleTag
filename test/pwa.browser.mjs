@@ -2197,3 +2197,181 @@ test(
     assert.deepEqual(f.errors, []);
   },
 );
+
+test(
+  "code review round 51 fixes: password hygiene, bulk undo capacity, saved focus, and poll card option count",
+  { timeout: 60000 },
+  async (t) => {
+    const f = await fixture(t);
+    const { page, context, origin, store } = f;
+
+    // 1. Poll management page: whitespace-only submit, padded manageKey unlock, and copy fallback cleanup
+    const poll3 = await store.create({
+      title: "Three option poll",
+      options: ["Alpha", "Beta", "Gamma"],
+      visibility: "public",
+    });
+    const poll5 = await store.create({
+      title: "Five option poll",
+      options: ["One", "Two", "Three", "Four", "Five"],
+      visibility: "public",
+    });
+
+    await page.goto(`${origin}/vote/${poll3.id}/manage`);
+    const managePassword = page.locator("#manage-password");
+    await managePassword.waitFor();
+    await managePassword.fill("   ");
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.locator("#manage-password-form .form-error").filter({ hasText: "The management password is invalid." }).waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "manage-password");
+
+    await managePassword.fill(` ${poll3.manageKey} `);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.getByRole("heading", { name: "Manage this poll" }).waitFor();
+
+    const copyManage = page.locator("#copy-manage-link");
+    const copyFallback = page.locator("#manage-copy-fallback");
+    const copyText = page.locator("#manage-copy-text");
+
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("Clipboard denied"));
+    });
+    await copyManage.click();
+    await copyFallback.waitFor({ state: "visible" });
+    assert.equal((await copyText.inputValue()).includes(poll3.manageKey), true);
+
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.resolve();
+    });
+    await copyManage.click();
+    await copyFallback.waitFor({ state: "hidden" });
+    assert.equal(await copyText.inputValue(), "");
+
+    await page.evaluate(() => {
+      navigator.clipboard.writeText = () => Promise.reject(new Error("Clipboard denied"));
+    });
+    await copyManage.click();
+    await copyFallback.waitFor({ state: "visible" });
+    assert.equal((await copyText.inputValue()).includes(poll3.manageKey), true);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide")));
+    assert.equal(await copyFallback.isHidden(), true);
+    assert.equal(await copyText.inputValue(), "");
+
+    // 2. Task management page: short/non-64-hex password shows localized invalid password message and focuses #manage-password
+    const { password: _taskPassword, ...taskCredentials } = await createTaskCredentials();
+    const task = await store.create({
+      ...taskCredentials,
+      type: "task",
+      title: "Managed task password validation",
+      description: "Check short password behavior.",
+      reward: "$10",
+      signature: "Maya",
+      options: [],
+      visibility: "unlisted",
+    });
+    await page.goto(`${origin}/task/${task.id}/manage`);
+    await managePassword.waitFor();
+    await managePassword.fill("short");
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    const taskError = page.locator("#manage-password-form .form-error");
+    await taskError.waitFor({ state: "visible" });
+    assert.equal(await taskError.textContent(), "The management password is invalid.");
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "manage-password");
+
+    // 3. /PostList: 3-option poll card shows "+ 1 more option" and 5-option poll card shows "+ 3 more options"
+    await page.goto(`${origin}/PostList`);
+    const card3 = page.locator(".poll-list-card", { has: page.getByRole("heading", { name: poll3.title }) });
+    const card5 = page.locator(".poll-list-card", { has: page.getByRole("heading", { name: poll5.title }) });
+    await card3.waitFor();
+    await card5.waitFor();
+    assert.equal(await card3.locator(".mini-results small").textContent(), "+ 1 more option");
+    assert.equal(await card5.locator(".mini-results small").textContent(), "+ 3 more options");
+
+    // 4. /saved bulk undo capacity & focus preservation when #remove-unavailable-saved hides
+    const savedKey = "scaletag-saved-posts";
+    const unavailableIds = new Set(["dead00", "dead01", "dead02", "dead03"].map((p) => p.padEnd(24, "0")));
+    const seedEntries = [];
+    for (let i = 0; i < 96; i++) {
+      const id = `aa${String(i).padStart(22, "0")}`;
+      seedEntries.push({ path: `/vote/${id}`, title: `Available link ${i}` });
+    }
+    for (const [idx, id] of [...unavailableIds].entries()) {
+      seedEntries.push({ path: `/task/${id}`, title: `Unavailable link ${idx}` });
+    }
+
+    await page.route("**/api/posts/statuses", async (route) => {
+      const body = JSON.parse(route.request().postData() || "{}");
+      const statuses = (body.posts || []).map((p) =>
+        unavailableIds.has(p.id) ? "unavailable" : "poll_open",
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ statuses }),
+      });
+    });
+
+    await page.evaluate(
+      ([key, value]) => localStorage.setItem(key, JSON.stringify(value)),
+      [savedKey, seedEntries],
+    );
+    await page.goto(`${origin}/saved`);
+
+    const batchRemove = page.locator("#remove-unavailable-saved");
+    await batchRemove.waitFor({ state: "visible" });
+
+    // Focus #remove-unavailable-saved and toggle offline -> hides button and moves focus to #saved-status-filter
+    await batchRemove.focus();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "remove-unavailable-saved");
+    await context.setOffline(true);
+    await batchRemove.waitFor({ state: "hidden" });
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "saved-status-filter");
+    await context.setOffline(false);
+    await batchRemove.waitFor({ state: "visible" });
+
+    // Remove the 4 unavailable links (96 left)
+    await batchRemove.click();
+    await batchRemove.waitFor({ state: "hidden" });
+    const undo = page.getByRole("button", { name: "Undo removal", exact: true });
+    await undo.waitFor({ state: "visible" });
+    assert.equal(await page.locator(".saved-posts li").count(), 96);
+
+    // Add 2 new saved links (98 left)
+    await page.evaluate((key) => {
+      const current = JSON.parse(localStorage.getItem(key));
+      current.push(
+        { path: `/vote/${"bb".padEnd(24, "0")}`, title: "Extra link 1" },
+        { path: `/vote/${"cc".padEnd(24, "0")}`, title: "Extra link 2" },
+      );
+      localStorage.setItem(key, JSON.stringify(current));
+    }, savedKey);
+
+    // Click Undo removal -> 98 + 4 > 100, rejected upfront without partial drop
+    await undo.click();
+    assert.equal(await undo.isVisible(), true);
+    assert.equal(
+      await page.locator(".saved-recovery-status").textContent(),
+      "Could not restore the link because this browser’s saved links are full.",
+    );
+    assert.equal(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).length, savedKey),
+      98,
+    );
+
+    // Remove those 2 extra links (96 left) and click Undo removal again -> all 4 restored (100 total)
+    await page.evaluate((key) => {
+      const current = JSON.parse(localStorage.getItem(key)).slice(0, 96);
+      localStorage.setItem(key, JSON.stringify(current));
+    }, savedKey);
+    await undo.click();
+    await undo.waitFor({ state: "hidden" });
+    assert.equal(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).length, savedKey),
+      100,
+    );
+    assert.equal(await page.locator(".saved-posts li").count(), 100);
+
+    await page.unroute("**/api/posts/statuses");
+    assert.deepEqual(f.errors, []);
+  },
+);

@@ -158,6 +158,11 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     await api(`/api/tasks/${id}`);
     return managementPasswordForm((password) => taskPage(id, { manage: true, password }));
   }
+  if (password && !/^[a-f0-9]{64}$/i.test(password)) {
+    const err = new Error("Invalid management password");
+    err.status = 403;
+    throw err;
+  }
   const requestAuthKey = manage
     ? (authKey ?? (password ? await deriveTaskAuthKey(password) : legacyKey))
     : undefined;

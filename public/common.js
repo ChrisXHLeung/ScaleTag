@@ -322,7 +322,7 @@ export function managementPasswordForm(unlock) {
     <h1>${t("Manage this post", "管理此帖子")}</h1>
     <label for="manage-password">${t("Management password", "管理密码")}</label>
     <div class="manage-password-input">
-      <input id="manage-password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" required>
+      <input id="manage-password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="128" required>
       <button id="manage-password-toggle" type="button" class="button secondary small" aria-controls="manage-password">${t("Show password", "显示密码")}</button>
     </div>
     <button class="button" type="submit">${t("Unlock", "解锁")}</button>
@@ -344,10 +344,18 @@ export function managementPasswordForm(unlock) {
     event.preventDefault();
     if (submit.disabled) return;
     mask();
+    const value = input.value.trim();
+    if (!value) {
+      error.textContent = t("The management password is invalid.", "管理密码不正确。");
+      error.hidden = false;
+      input.focus();
+      input.select();
+      return;
+    }
     submit.disabled = toggle.disabled = true;
     error.hidden = true;
     try {
-      await unlock(input.value.trim());
+      await unlock(value);
       input.value = "";
       window.removeEventListener("pagehide", mask);
     } catch (e) {
@@ -355,6 +363,7 @@ export function managementPasswordForm(unlock) {
         ? t("The management password is invalid.", "管理密码不正确。")
         : e.message;
       error.hidden = false;
+      input.focus();
       input.select();
     } finally {
       submit.disabled = toggle.disabled = false;
@@ -403,14 +412,31 @@ export function bindLinkCopy(control, getLink, copiedMessage) {
 }
 
 export function bindManagementCopy(url, key) {
-  main.querySelector("#copy-manage-link").onclick = async () => {
+  const button = main.querySelector("#copy-manage-link");
+  const fallback = main.querySelector("#manage-copy-fallback");
+  const input = main.querySelector("#manage-copy-text");
+  function clearFallback() {
+    if (fallback) fallback.hidden = true;
+    if (input) input.value = "";
+  }
+  function onPageHide() {
+    if (!button?.isConnected) {
+      window.removeEventListener("pagehide", onPageHide);
+      return;
+    }
+    clearFallback();
+  }
+  window.addEventListener("pagehide", onPageHide);
+  button.onclick = async () => {
     const message = t(`Management URL: ${url}\nManagement password: ${key}`, `管理网址：${url}\n管理密码：${key}`);
     try {
       await navigator.clipboard.writeText(message);
+      if (!button.isConnected) return;
+      clearFallback();
       toast(t("Management details copied.", "管理信息已复制。"));
     } catch {
-      const input = main.querySelector("#manage-copy-text");
-      main.querySelector("#manage-copy-fallback").hidden = false;
+      if (!button.isConnected) return;
+      fallback.hidden = false;
       input.value = message;
       input.focus();
       input.select();

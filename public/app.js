@@ -995,7 +995,7 @@ function postList() {
       )
       .join(
         "",
-      )}${!p.resultsHidden && p.options.length > 3 ? `<small>+ ${p.options.length - 3} ${t("more options", "个其他选项")}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
+      )}${!p.resultsHidden && p.options.length > 2 ? `<small>${t(`+ ${p.options.length - 2} ${p.options.length - 2 === 1 ? "more option" : "more options"}`, `+ ${p.options.length - 2} 个其他选项`)}</small>` : ""}</div><div class="card-bottom"><span>${p.resultsHidden ? "" : `${t(`${count(p.totalVotes)} votes`, `${count(p.totalVotes)} 票`)} <span class="separator">·</span> `}♡ ${t(`${count(p.totalLikes ?? 0)} likes`, `${count(p.totalLikes ?? 0)} 次赞`)} <span class="separator">·</span> ${remaining(p.endsAt, p.serverTime)}</span>${icons.arrow}</div></a>`;
   }
   function refreshHoldBadges(list) {
     clearTimeout(listHoldTimer);

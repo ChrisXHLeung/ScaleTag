@@ -657,16 +657,16 @@ test("starting, canceling or failing nearby location keeps a failed search retry
 
 test("a failed pickup filter switch after pagination resets page count before online recovery", async (t) => {
   const { page, origin, store, input, advance } = await fixture(t);
-  const now = store.clock();
   for (let i = 0; i < 21; i++) {
     advance(1000);
+    const itemNow = store.clock();
     await store.create({
       ...input,
       title: `Paginated giveaway ${i}`,
       type: "sale",
       giveawayVersion: 1,
       pickupLocation: "Library entrance",
-      pickupWindow: { startsAt: now, endsAt: now + 240000 },
+      pickupWindow: { startsAt: itemNow, endsAt: itemNow + 240000 },
     });
   }
   await page.goto(`${origin}/PostList?type=sale`);

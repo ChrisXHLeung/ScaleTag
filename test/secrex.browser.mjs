@@ -243,7 +243,7 @@ test("Secrex supports revoke-code copy fallback and password visibility toggles 
   await sender.getByText("Revoke a previously created secret", { exact: true }).click();
   const revokeInput = sender.locator("#secrex-revoke-code");
   const revokeToggle = sender.locator("#secrex-revoke-code-toggle");
-  await revokeInput.fill(generatedCode);
+  await revokeInput.fill(` ${generatedCode} `);
   assert.equal(await revokeInput.getAttribute("type"), "password");
   assert.equal(await revokeToggle.textContent(), "Show password");
   assert.equal(await revokeToggle.getAttribute("aria-pressed"), null);
@@ -276,5 +276,17 @@ test("Secrex supports revoke-code copy fallback and password visibility toggles 
   assert.equal(await passwordToggle.textContent(), "Show password");
   await receiver.getByText(plaintext, { exact: true }).waitFor();
   assert.equal(await receiver.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+
+  await sender.goto(origin + "/secrex");
+  await sender.getByLabel("Secret text", { exact: true }).fill(plaintext);
+  await sender.getByRole("button", { name: "Create secret" }).click();
+  await sender.locator("#secrex-generated-revoke-code").waitFor();
+  const paddedRevokeCode = await sender.locator("#secrex-generated-revoke-code").inputValue();
+  await sender.getByText("Revoke a previously created secret", { exact: true }).click();
+  await revokeInput.fill(` ${paddedRevokeCode} `);
+  assert.equal((await revokeInput.inputValue()).length, 68);
+  await sender.getByRole("button", { name: "Revoke unopened secret" }).click();
+  await sender.getByRole("status").filter({ hasText: "Secret revoked." }).waitFor();
+  assert.equal(await revokeInput.inputValue(), "");
   assert.deepEqual(pageErrors, []);
 });

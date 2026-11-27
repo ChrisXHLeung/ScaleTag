@@ -158,7 +158,7 @@ function createView() {
         <form id="secrex-revoke-form" class="secrex-fields" method="post" autocomplete="off">
           <label for="secrex-revoke-code">${t("Enter your private revoke code", "输入你的私人撤回码")}</label>
           <div class="manage-password-input">
-            <input id="secrex-revoke-code" type="password" maxlength="66" required
+            <input id="secrex-revoke-code" type="password" maxlength="128" required
               spellcheck="false" autocapitalize="off" autocomplete="off">
             <button id="secrex-revoke-code-toggle" type="button" class="button secondary small" aria-controls="secrex-revoke-code">${t("Show password", "显示密码")}</button>
           </div>
