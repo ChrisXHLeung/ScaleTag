@@ -29,6 +29,13 @@ export function mountPickupRequest(host, sale) {
   const error = host.querySelector('[role="alert"]');
   let busy = false, queued = false, revision = 0, expiryTimer;
   let observedHold = sale.reservedUntil;
+  let observedWindow = JSON.stringify(sale.pickupWindow ?? null);
+
+  function syncWindowBounds(window) {
+    time.max = toLocalDateTime(window?.endsAt ?? sale.endsAt);
+    if (window) time.min = toLocalDateTime(window.startsAt);
+    else time.removeAttribute("min");
+  }
 
   function clearLocation() {
     clearTimeout(expiryTimer);
@@ -100,16 +107,18 @@ export function mountPickupRequest(host, sale) {
       void run("cancel");
     }
   };
-  time.max = toLocalDateTime(sale.pickupWindow?.endsAt ?? sale.endsAt);
-  if (sale.pickupWindow) time.min = toLocalDateTime(sale.pickupWindow.startsAt);
+  syncWindowBounds(sale.pickupWindow);
   window.addEventListener("pagehide", () => { revision++; clearLocation(); });
   window.addEventListener("pageshow", event => { if (event.persisted) void run("status"); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) void run("status"); });
   void run("status");
 
   return state => {
-    if (observedHold === state.reservedUntil) return;
+    const nextWindow = "pickupWindow" in state ? JSON.stringify(state.pickupWindow ?? null) : observedWindow;
+    if (observedHold === state.reservedUntil && nextWindow === observedWindow) return;
     observedHold = state.reservedUntil;
+    observedWindow = nextWindow;
+    if ("pickupWindow" in state) syncWindowBounds(state.pickupWindow);
     revision++;
     clearLocation();
     void run("status");
@@ -166,5 +175,5 @@ export function mountPickupManagement(host, sale, key, onChange) {
     if (!busy && button) void update("state", { state: "reserved", requestId: button.dataset.requestId });
   };
   render(sale);
-  return render;
+  return { render, refresh: () => void update("manage") };
 }

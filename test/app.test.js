@@ -462,6 +462,35 @@ test("giveaway pickup requests reveal the private address only during the select
   assert.equal(raw.replyAuthors.pickup.location, "Updated private address");
 });
 
+test("editing a pickupByRequest giveaway pickupWindow drops out-of-window pending requests and lets visitors re-apply", async (t) => {
+  const f = await fixture(t);
+  const posted = await f.request("/api/sales", input({
+    privatePickupLocation: "Private porch 456",
+    pickupByRequest: true,
+    pickupWindow: { startsAt: f.now() + 300000, endsAt: f.now() + 2 * 3600000 },
+  }));
+  assert.equal(posted.status, 201);
+  const sale = await posted.json();
+  const path = `/api/sales/${sale.id}`;
+  const privatePath = path + "/pickup-request";
+  const cookie = (await f.request(path)).headers.get("set-cookie")?.split(";")[0];
+  assert.ok(cookie);
+  const firstPickupAt = f.now() + 1800000;
+  const requested = await (await f.request(privatePath, { action: "request", pickupAt: firstPickupAt }, cookie)).json();
+  assert.equal(requested.state, "pending");
+  const updatedWindow = { startsAt: f.now() + 3 * 3600000, endsAt: f.now() + 5 * 3600000 };
+  const edited = await f.request(path + "/edit", { key: sale.manageKey, pickupWindow: updatedWindow });
+  assert.equal(edited.status, 200);
+  const managed = await (await f.request(path + "/manage", { key: sale.manageKey })).json();
+  assert.deepEqual(managed.pickupRequests, []);
+  const statusAfterEdit = await (await f.request(privatePath, { action: "status" }, cookie)).json();
+  assert.equal(statusAfterEdit.state, "none");
+  const nextPickupAt = f.now() + 4 * 3600000;
+  const reapplied = await (await f.request(privatePath, { action: "request", pickupAt: nextPickupAt }, cookie)).json();
+  assert.equal(reapplied.state, "pending");
+  assert.equal(reapplied.pickupAt, nextPickupAt);
+});
+
 test("30-day deletion removes JSON, list entry, original page, QR and crash leftovers", async (t) => {
   const f = await fixture(t);
   const p = await f.create();

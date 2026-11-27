@@ -41,6 +41,24 @@ for (const Store of [PollStore, SQLiteStore]) {
     const task = await store.create({ ...options, type: "task", authKey, contactPublicKey, encryptedPrivateKey });
     const reply = await store.reply(task.id, "applicant", { message: "I can help.", encryptedContact: {} });
     await store.setTaskAssignment(task.id, authKey, reply.replies[0].id);
+    const wantedCreds = await createTaskCredentials();
+    const wanted = await store.create({
+      ...options, type: "task", taskKind: "wanted",
+      authKey: wantedCreds.authKey, contactPublicKey: wantedCreds.contactPublicKey,
+      encryptedPrivateKey: wantedCreds.encryptedPrivateKey,
+    });
+    assert.deepEqual(await (await request([{ type: "task", id: wanted.id }])).json(), {
+      statuses: ["wanted_open"], refreshAfterMs: 30 * DAY,
+    });
+    const wantedReply = await store.reply(wanted.id, "donor", { message: "I have one.", encryptedContact: {} });
+    await store.setTaskAssignment(wanted.id, wantedCreds.authKey, wantedReply.replies[0].id);
+    assert.deepEqual(await (await request([{ type: "task", id: wanted.id }])).json(), {
+      statuses: ["wanted_in_progress"], refreshAfterMs: 30 * DAY,
+    });
+    await store.setTaskState(wanted.id, wantedCreds.authKey, "completed");
+    assert.deepEqual(await (await request([{ type: "task", id: wanted.id }])).json(), {
+      statuses: ["wanted_completed"], refreshAfterMs: 30 * DAY,
+    });
     const giveaway = await store.create({ ...options, type: "sale", giveawayVersion: 1 });
     await store.setSaleState(giveaway.id, giveaway.manageKey, "claimed");
     const held = await store.create({ ...options, type: "sale", giveawayVersion: 1 });

@@ -127,6 +127,7 @@ export class SQLiteStore extends PollStore {
   savedStatusRows(ids) {
     return this.db.prepare(`SELECT id, ends_at AS endsAt, delete_at AS deleteAt,
       json_extract(document,'$.type') AS type,
+      json_extract(document,'$.taskKind') AS taskKind,
       json_extract(document,'$.frozenAt') AS frozenAt,
       json_extract(document,'$.withdrawnAt') AS withdrawnAt,
       json_extract(document,'$.taskState') AS taskState,

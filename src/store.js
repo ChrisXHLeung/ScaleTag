@@ -64,7 +64,7 @@ function activePickupRequests(post, now) {
   const pickup = post.replyAuthors?.pickup;
   const selectedId = post.reservedUntil > now ? pickup.selectedId : undefined;
   const requests = pickup.requests.filter(request =>
-    request.id === selectedId || (request.id !== pickup.selectedId && request.pickupAt > now));
+    request.id === selectedId || (request.id !== pickup.selectedId && validPickupRequestTime(post, request.pickupAt, now)));
   return { pickup, selectedId, requests };
 }
 
@@ -188,6 +188,9 @@ function savedPostStatus(type, post, now) {
   if (type === "poll") return now < post.endsAt ? "poll_open" : "poll_final";
   if (type === "sale") return `sale_${saleStateOf(post, now)}`;
   const state = taskStateOf(post);
+  if (post.taskKind === "wanted") {
+    return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "wanted_in_progress" : `wanted_${state}`;
+  }
   return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "task_assigned" : `task_${state}`;
 }
 

@@ -178,7 +178,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
     : await api(`/api/tasks/${id}`));
   const wanted = task.taskKind === "wanted";
   const guideLink = document.querySelector("[data-feature-guide]");
-  if (wanted && guideLink) guideLink.href = localizedPath("/help#wanted");
+  if (guideLink) guideLink.href = localizedPath(manage ? "/help#manage" : wanted ? "/help#wanted" : "/help#tasks");
   let privateReplies = manage
     ? await decryptManagedTask(id, password, task)
     : [];
@@ -384,7 +384,7 @@ export async function taskPage(id, { manage = false, password, authKey, publishe
         try {
           const updated = await api(`/api/tasks/${id}/state`, { authKey: requestAuthKey, state });
           task = { ...task, ...updated, taskAssigned: Boolean(updated.taskAssigned) };
-          toast(t(`Task marked ${stateLabel(task.taskState)}.`, `任务已标记为${stateLabel(task.taskState)}。`));
+          toast(t(`Task marked ${stateLabel(task.taskState, wanted)}.`, `任务已标记为${stateLabel(task.taskState, wanted)}。`));
           social?.refresh();
         } catch (e) {
           showFormError(error, e);

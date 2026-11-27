@@ -431,10 +431,12 @@
 #pickup-time-filter select {
   max-width: 100%;
 }
-.sale-list-card {
+.sale-list-card,
+.task-list-card {
   min-width: 0;
 }
-.sale-list-card .card-top {
+.sale-list-card .card-top,
+.task-list-card .card-top {
   flex-wrap: wrap;
 }
 .nearby-controls {

@@ -172,6 +172,78 @@ test("a visitor requests pickup, sees the address after selection, and loses it 
   assert.deepEqual(f.errors, []);
 });
 
+test("pickup management refreshes when a confirmed visitor cancels and poster hides private address", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  const address = "Secret courtyard gate 7";
+  await owner.addInitScript(() => {
+    window.posterText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      window.posterText.push(String(text));
+      return fillText.call(this, text, ...args);
+    };
+  });
+  await owner.goto(f.origin + "/create/sale");
+  await owner.getByLabel("Pickup method", { exact: true }).selectOption("request", { timeout: 3500 });
+  await owner.locator("#sale-title").fill("Ceramic plant pots");
+  await owner.locator("#sale-description").fill("Set of three");
+  await owner.getByLabel("Pickup location (private)", { exact: true }).fill(address);
+  await owner.locator("#post-visibility").selectOption("unlisted");
+  await owner.locator("#sale-retention").check();
+  await owner.getByRole("button", { name: "Publish giveaway", exact: true }).click();
+  await owner.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+  const path = new URL(owner.url()).pathname.replace(/\/manage$/, "");
+
+  const contextA = await f.browser.newContext({ viewport: { width: 320, height: 844 } });
+  const visitorA = await contextA.newPage();
+  const contextB = await f.browser.newContext({ viewport: { width: 320, height: 844 } });
+  const visitorB = await contextB.newPage();
+  await Promise.all([visitorA.goto(f.origin + path), visitorB.goto(f.origin + path)]);
+  const [timeA, timeB] = await visitorA.evaluate(() => [30, 45].map(mins => {
+    const date = new Date(Date.now() + mins * 60000);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }));
+  await visitorA.getByLabel("When can you pick it up?", { exact: true }).fill(timeA);
+  await visitorA.getByRole("button", { name: "Request pickup", exact: true }).click();
+  await visitorA.getByText("Your pickup request is pending.", { exact: true }).waitFor();
+
+  await visitorB.getByLabel("When can you pick it up?", { exact: true }).fill(timeB);
+  await visitorB.getByRole("button", { name: "Request pickup", exact: true }).click();
+  await visitorB.getByText("Your pickup request is pending.", { exact: true }).waitFor();
+
+  await owner.getByRole("button", { name: "Refresh pickup requests", exact: true }).click();
+  await owner.getByRole("button", { name: "Confirm pickup request", exact: true }).first().click();
+  await owner.getByText("A pickup request is confirmed.", { exact: true }).waitFor();
+  await owner.locator("#sale-availability").getByText("Reserved", { exact: true }).waitFor();
+
+  await visitorA.getByRole("button", { name: "Check pickup request", exact: true }).click();
+  await visitorA.getByText(address, { exact: true }).waitFor();
+  visitorA.once("dialog", dialog => dialog.accept());
+  await visitorA.getByRole("button", { name: "Cancel pickup request", exact: true }).click();
+  await visitorA.getByRole("button", { name: "Request pickup", exact: true }).waitFor();
+
+  await owner.evaluate(() => window.dispatchEvent(new Event("online")));
+  await owner.locator("#sale-availability").getByText("Available", { exact: true }).waitFor();
+  await owner.getByRole("button", { name: "Confirm pickup request", exact: true }).waitFor();
+
+  await owner.evaluate(() => {
+    window.posterText = [];
+    window.__printed = 0;
+    window.print = () => { window.__printed += 1; };
+  });
+  await owner.locator("#print-poster-btn").click();
+  await owner.waitForFunction(() => window.__printed === 1);
+  const drawn = await owner.evaluate(() => window.posterText);
+  assert.ok(drawn.includes("PICKUP LOCATION"));
+  assert.ok(drawn.includes("Request before pickup"));
+  assert.ok(!drawn.includes("ASKING PRICE"));
+  assert.ok(!drawn.some(text => text.includes(address)));
+  await contextA.close();
+  await contextB.close();
+  assert.deepEqual(f.errors, []);
+});
+
 test("set a pickup window and hold a giveaway until it becomes available again", async (t) => {
   const f = await fixture(t);
   const publisher = f.page;

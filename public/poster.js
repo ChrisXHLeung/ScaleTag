@@ -356,7 +356,7 @@ export async function renderPosterCanvas(post) {
   if (post.type === "poll" && Array.isArray(post.options) && post.options.length) {
     const shownCount = Math.min(post.options.length, 6);
     highlightReserve = 140 + shownCount * 112 + (post.options.length > 6 ? 56 : 0);
-  } else if ((post.type === "task" && post.taskKind !== "wanted") || post.type === "sale") {
+  } else if ((post.type === "task" && post.taskKind !== "wanted") || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
     highlightReserve = 260;
   }
 
@@ -492,17 +492,19 @@ export async function renderPosterCanvas(post) {
       );
     }
     y += boxH;
-  } else if ((post.type === "task" && post.taskKind !== "wanted") || post.type === "sale") {
+  } else if ((post.type === "task" && post.taskKind !== "wanted") || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
     const eyebrow =
       post.type === "task"
         ? t("REWARD OFFERED", "提供的酬谢")
-        : post.pickupLocation
+        : post.pickupByRequest || post.pickupLocation
           ? t("PICKUP LOCATION", "领取地点")
           : t("ASKING PRICE", "期望价格");
     const valueText =
       post.type === "task"
         ? post.reward
-        : (post.pickupLocation ?? post.price ?? "");
+        : post.pickupByRequest
+          ? t("Request before pickup", "先申请再领取")
+          : (post.pickupLocation ?? post.price ?? "");
     ctx.font = `800 56px ${FONT_STACK}`;
     const valueLines = wrapText(ctx, valueText, CONTENT_WIDTH - 110, 2);
     const boxH = 114 + valueLines.length * 72 + 40;

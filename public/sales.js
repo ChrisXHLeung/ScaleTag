@@ -119,6 +119,7 @@ export async function salePage(id, { manage = false, password, published } = {})
     createdAt: sale.createdAt,
     endsAt: sale.endsAt,
     deleteAt: sale.deleteAt,
+    pickupByRequest: sale.pickupByRequest,
     pickupLocation: sale.pickupByRequest ? undefined : sale.pickupLocation,
     images: sale.images,
     qrUrl: `/api/sales/${id}/qr.png`,
@@ -164,6 +165,8 @@ export async function salePage(id, { manage = false, password, published } = {})
   let calendarTimer, calendarDeadline = 0;
   let holdTimer;
   let availabilityTime = 0;
+  let wasReserved = sale.saleState === 'reserved';
+  let pickupManagement;
   function refreshCalendarLink() {
     if (!calendar?.isConnected) return;
     clearTimeout(calendarTimer);
@@ -171,7 +174,7 @@ export async function salePage(id, { manage = false, password, published } = {})
     calendar.hidden = remaining <= 0;
     if (remaining > 0) calendarTimer = setTimeout(refreshCalendarLink, remaining);
   }
-  function renderAvailability(state) {
+  function renderAvailability(state, { fromOwner = false } = {}) {
     const badge = main.querySelector('#sale-availability');
     if (!badge || claimed || state.serverTime < availabilityTime) return;
     availabilityTime = state.serverTime;
@@ -201,8 +204,10 @@ export async function salePage(id, { manage = false, password, published } = {})
     const release = main.querySelector('#release-sale');
     if (release) release.hidden = !reserved;
     updateVisitorRequest?.(state);
+    if (manage && sale.pickupByRequest && wasReserved && !reserved && !fromOwner) pickupManagement?.refresh();
+    wasReserved = reserved;
     if (reserved) holdTimer = setTimeout(() => renderAvailability({
-      ...state, saleState: 'open', serverTime: state.reservedUntil,
+      ...state, saleState: 'open', reservedUntil: undefined, serverTime: state.reservedUntil,
     }), Math.max(0, state.reservedUntil - state.serverTime));
   }
   renderAvailability(sale);
@@ -233,10 +238,10 @@ export async function salePage(id, { manage = false, password, published } = {})
     else main.querySelector('#copy-manage-link').onclick=()=>copyLink(privateLink,main.querySelector('#manage-link'));
     if (!claimed) {
       const requestHost = main.querySelector('#owner-pickup-requests');
-      const updateRequests = requestHost ? mountPickupManagement(requestHost, sale, key, applyOwnerState) : undefined;
+      pickupManagement = requestHost ? mountPickupManagement(requestHost, sale, key, applyOwnerState) : undefined;
       function applyOwnerState(updated) {
-        renderAvailability(updated);
-        updateRequests?.(updated);
+        renderAvailability(updated, { fromOwner: true });
+        pickupManagement?.render(updated);
       }
       mountOwnerEdit(main.querySelector('.manage-card'), sale, `/api/sales/${id}/edit`, key, (updated) => {
         if (claimed || !main.querySelector('#sale-pickup')) return;
@@ -247,13 +252,13 @@ export async function salePage(id, { manage = false, password, published } = {})
         document.querySelector('#poster-print-root')?.remove();
         renderPoster();
       });
-      const buttons = main.querySelectorAll('#sale-management-actions button');
       const error = main.querySelector('#manage-error');
       async function updateState(state, reservedUntil) {
         const isClaim = state === 'claimed';
         if (isClaim && !confirm(t('Mark this giveaway as claimed? Its pickup location will be hidden.', '标记为已领取？领取地点将不再公开。'))) return;
         if (state === 'closed' && !confirm(t('Take this giveaway down?', '确定下架这条闲置赠予吗？'))) return;
         error.hidden = true;
+        const buttons = main.querySelectorAll('#sale-management-actions button');
         buttons.forEach(button => { button.disabled = true; });
         try {
           const updated = await api(`/api/sales/${id}/state`, { key, state, reservedUntil });
