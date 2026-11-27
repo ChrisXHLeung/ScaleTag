@@ -531,6 +531,10 @@
 .reply-length-status:empty {
   margin: 0;
 }
+.char-limit-near {
+  color: var(--red, #b42318);
+  font-weight: 600;
+}
 .reply-card[id] {
   scroll-margin-block: 24px;
 }

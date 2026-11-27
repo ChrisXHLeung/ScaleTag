@@ -329,3 +329,72 @@ test("claim a giveaway and keep its shared address without the pickup location",
   assert.equal((await visitor.reload()).status(), 404);
   assert.deepEqual(f.errors, []);
 });
+
+test("create forms show live character counts, 90% threshold warnings, and sync on draft discard", async t => {
+  const f = await fixture(t);
+
+  // 1. /create (Poll)
+  await f.page.goto(`${f.origin}/create`);
+  const pollTitleCount = f.page.locator("#title-count");
+  const pollDescCount = f.page.locator("#description-count");
+  const pollTitleStatus = f.page.locator("#title-limit-status");
+  await pollTitleCount.waitFor();
+  assert.equal(await pollTitleCount.textContent(), "0 / 140");
+  assert.equal(await pollDescCount.textContent(), "0 / 4,000");
+
+  await f.page.locator("#title").fill("a".repeat(126));
+  assert.equal(await pollTitleCount.textContent(), "126 / 140");
+  assert.equal(await pollTitleCount.evaluate(el => el.classList.contains("char-limit-near")), true);
+  assert.equal(await pollTitleStatus.textContent(), "Approaching the character limit.");
+
+  await f.page.locator("#title").fill("a".repeat(140));
+  assert.equal(await pollTitleCount.textContent(), "140 / 140");
+  assert.equal(await pollTitleStatus.textContent(), "Character limit reached.");
+
+  await f.page.locator("#description").fill("hello world");
+  assert.equal(await pollDescCount.textContent(), "11 / 4,000");
+
+  await f.page.reload();
+  await pollDescCount.waitFor();
+  assert.equal(await pollDescCount.textContent(), "11 / 4,000");
+  assert.equal(await pollTitleCount.textContent(), "140 / 140");
+
+  await f.page.getByRole("button", { name: "Clear draft", exact: true }).click();
+  await f.page.getByText("Text draft cleared.").waitFor();
+  assert.equal(await pollTitleCount.textContent(), "0 / 140");
+  assert.equal(await pollDescCount.textContent(), "0 / 4,000");
+  assert.equal(await pollTitleStatus.textContent(), "");
+  assert.equal(await pollTitleCount.evaluate(el => el.classList.contains("char-limit-near")), false);
+
+  // 2. /create/task
+  await f.page.goto(`${f.origin}/create/task`);
+  const taskTitleCount = f.page.locator("#task-title-count");
+  const taskDescCount = f.page.locator("#task-description-count");
+  const taskRewardCount = f.page.locator("#task-reward-count");
+  const taskRewardStatus = f.page.locator("#task-reward-limit-status");
+  await taskTitleCount.waitFor();
+  assert.equal(await taskTitleCount.textContent(), "0 / 140");
+  assert.equal(await taskDescCount.textContent(), "0 / 4,000");
+  assert.equal(await taskRewardCount.textContent(), "0 / 160");
+
+  await f.page.locator("#task-reward").fill("r".repeat(144));
+  assert.equal(await taskRewardCount.textContent(), "144 / 160");
+  assert.equal(await taskRewardCount.evaluate(el => el.classList.contains("char-limit-near")), true);
+  assert.equal(await taskRewardStatus.textContent(), "Approaching the character limit.");
+
+  // 3. /create/sale
+  await f.page.goto(`${f.origin}/create/sale`);
+  const saleTitleCount = f.page.locator("#sale-title-count");
+  const saleDescCount = f.page.locator("#sale-description-count");
+  const pickupCount = f.page.locator("#pickup-location-count");
+  const pickupStatus = f.page.locator("#pickup-location-limit-status");
+  await saleTitleCount.waitFor();
+  assert.equal(await saleTitleCount.textContent(), "0 / 140");
+  assert.equal(await saleDescCount.textContent(), "0 / 4,000");
+  assert.equal(await pickupCount.textContent(), "0 / 300");
+
+  await f.page.locator("#pickup-location").fill("p".repeat(300));
+  assert.equal(await pickupCount.textContent(), "300 / 300");
+  assert.equal(await pickupStatus.textContent(), "Character limit reached.");
+  assert.deepEqual(f.errors, []);
+});

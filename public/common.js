@@ -500,3 +500,28 @@ export function showFormError(node, error, { focus = true } = {}) {
     node.focus?.({ preventScroll: true });
   }
 }
+
+export function bindCharCounter(input, counterEl, statusEl) {
+  if (!input || !counterEl) return () => {};
+  const max = input.maxLength;
+  if (!(max > 0)) return () => {};
+  function update() {
+    const used = input.value.length;
+    counterEl.textContent = `${count(used)} / ${count(max)}`;
+    const near = used >= max * 0.9;
+    counterEl.classList.toggle("char-limit-near", near);
+    if (statusEl) {
+      const status = used >= max
+        ? t("Character limit reached.", "已达到字数上限。")
+        : near
+          ? t("Approaching the character limit.", "已接近字数上限。")
+          : "";
+      if (statusEl.textContent !== status) statusEl.textContent = status;
+    }
+  }
+  input.addEventListener("input", update);
+  input.addEventListener("draftreset", update);
+  input.form?.addEventListener("draftreset", update);
+  update();
+  return update;
+}

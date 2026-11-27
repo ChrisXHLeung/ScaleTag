@@ -30,6 +30,7 @@ import {
   syncPollOptionOrder,
   setActiveNav,
   showFormError,
+  bindCharCounter,
 } from "/common.js";
 import { mountOwnerEdit } from "/owner-edit.js";
 import { mountSocial } from "/social.js";
@@ -75,8 +76,8 @@ function createPoll() {
   main.innerHTML = `<section class="create-section"><aside class="section-intro"><a class="back-link" href="/">${t("← Back to home", "← 返回首页")}</a><span class="eyebrow">${t("START SOMETHING", "发起投票")}</span><h1>${t("What’s on", "有什么事")}<br> <em>${t("your mind?", "想听听大家的意见？")}</em></h1><p>${t("A neighborhood idea. A small decision.", "邻里的想法、待定的小事，")}<br> ${t("Something you’ve always wondered.", "或是一直想问的问题，都可以拿来聊聊。")}</p>${renderIntroFlow("polls")}<div class="rules"><p>${icons.pin} ${t("Public posts require location.", "公开帖需要位置信息。")}</p><p>${icons.clock} ${t("Voting stays open for up to 7 days.", "投票最多开放 7 天。")}</p><p>${icons.shield} ${t("Your signature is not verified.", "署名未经验证。")}</p></div></aside>
   <form id="create-form" class="form-card"><div class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}"><a href="/create" aria-current="page">${t("Poll", "投票")}</a><a href="/create/task">${t("Task", "任务")}</a><a href="/create/sale">${t("Free Giveaways", "闲置赠予")}</a><a href="/secrex">${t("Secrex", "Secrex 阅后即焚")}</a></div>
     <div class="form-heading"><h2>${t("Your new poll", "创建投票")}</h2><span class="pill">${t("SINGLE CHOICE", "单选")}</span></div>
-    <label for="title">${t("The question", "问题")} <span class="required">*</span></label><input id="title" name="title" maxlength="140" placeholder="${t("What should we make happen next?", "接下来做什么好？")}" required><div class="field-hint"><span>${t("Keep it clear and open to everyone.", "把问题说清楚，让大家都能参与。")}</span><span id="title-count">0 / 140</span></div>
-    <label for="description">${t("A little context", "补充说明")} <span class="optional">${t("optional", "可选")}</span></label><textarea id="description" name="description" maxlength="4000" rows="4" placeholder="${t("Tell people a bit more about your question\u2026", "补充一些背景，让大家更了解这个问题…")}"></textarea>
+    <label for="title">${t("The question", "问题")} <span class="required">*</span></label><input id="title" name="title" maxlength="140" aria-describedby="title-count" placeholder="${t("What should we make happen next?", "接下来做什么好？")}" required><div class="field-hint"><span>${t("Keep it clear and open to everyone.", "把问题说清楚，让大家都能参与。")}</span><span id="title-count">0 / 140</span></div><p id="title-limit-status" class="field-hint reply-length-status" role="status"></p>
+    <label for="description">${t("A little context", "补充说明")} <span class="optional">${t("optional", "可选")}</span></label><textarea id="description" name="description" maxlength="4000" rows="4" aria-describedby="description-count" placeholder="${t("Tell people a bit more about your question\u2026", "补充一些背景，让大家更了解这个问题…")}"></textarea><div class="field-hint"><span>${t("Character count", "字数")}</span><span id="description-count"></span></div><p id="description-limit-status" class="field-hint reply-length-status" role="status"></p>
     ${photoFields("poll", t("Photos (optional)", "投票照片（选填）"))}
     <fieldset class="options-fieldset"><legend>${t("The options", "选项")} <span class="required">*</span></legend><p class="field-hint">${t("Add 2–12 choices. Each person selects one.", "添加 2 至 12 个选项，每人可选择一项。")}</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} ${t("Add an option", "添加选项")}</button></fieldset>
     <label for="voting-hours">${t("Voting duration", "投票时长")}</label><select id="voting-hours" name="votingHours"><option value="1">${t("1 hour", "1 小时")}</option><option value="6">${t("6 hours", "6 小时")}</option><option value="24">${t("1 day", "1 天")}</option><option value="72">${t("3 days", "3 天")}</option><option value="168" selected>${t("7 days", "7 天")}</option></select>
@@ -147,14 +148,8 @@ function createPoll() {
     addOption(true);
     draft.save();
   };
-  const titleField = document.querySelector("#title");
-  function countTitle() {
-    document.querySelector("#title-count").textContent =
-      `${titleField.value.length} / 140`;
-  }
-  titleField.addEventListener("input", countTitle);
-  titleField.addEventListener("draftreset", countTitle);
-  countTitle();
+  bindCharCounter(document.querySelector("#title"), document.querySelector("#title-count"), document.querySelector("#title-limit-status"));
+  bindCharCounter(document.querySelector("#description"), document.querySelector("#description-count"), document.querySelector("#description-limit-status"));
   const locateButton = document.querySelector("#locate");
   locateButton.onclick = async () => {
     locateButton.disabled = true;
