@@ -95,8 +95,8 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   }
   form.onsubmit = async (event) => {
     event.preventDefault();
-    if (submit.disabled) return;
-    submit.disabled = true;
+    if (submit.hasAttribute("aria-disabled")) return;
+    submit.setAttribute("aria-disabled", "true");
     error.hidden = true;
     status.textContent = "";
     try {
@@ -123,12 +123,12 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       removePhotos.checked = false;
       photoRemoval.hidden = !updated.images?.length;
       status.textContent = t("Changes saved.", "已保存修改。");
-      onSaved(updated, details);
+      onSaved(updated, details, changes);
     } catch (e) {
       error.textContent = e.message;
       error.hidden = false;
     } finally {
-      submit.disabled = false;
+      submit.removeAttribute("aria-disabled");
     }
   };
   return details;

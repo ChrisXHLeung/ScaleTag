@@ -217,12 +217,12 @@ function createPoll() {
   };
 }
 
-function mountPollManagementDetails(host, poll, key) {
-  const path = `/vote/${poll.id}/manage`;
+function mountPollManagementDetails(host, id, key, title) {
+  const path = `/vote/${id}/manage`;
   const url = localizedPath(path);
   host.insertAdjacentHTML("afterbegin", managementDetails(url));
   bindManagementCopy(url, key);
-  mountSavedPost(host, { path, title: poll.title });
+  mountSavedPost(host, { path, title });
 }
 
 function bindPollLinkCopy(control, id) {
@@ -235,29 +235,60 @@ async function pollManagePage(id, key) {
   renderPollManager(poll, key);
 }
 
-function renderPollManager(poll, key, message = "", openEditor = false) {
+function renderPollManager(poll, key) {
   const id = poll.id;
   const endpoint = `/api/polls/${id}`;
   document.title = `${t("Manage: ", "管理：")}${poll.title} — ScaleTag`;
   main.innerHTML = `<section class="empty-page"><section class="manage-card" id="poll-owner-controls">
     <h1>${t("Manage this poll", "管理此投票")}</h1><h2>${escape(poll.title)}</h2>
-    <p>${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
+    <p id="poll-manager-state">${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
     <div><a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>
     <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${linkCopyFallback("owner-public-link")}</div>
     ${poll.status === "open" ? `<button type="button" class="button secondary small" data-poll-state="closed">${t("End voting now", "立即结束投票")}</button>` : ""}
     <button type="button" class="button secondary small" data-poll-state="withdrawn">${t("Take down", "下架帖子")}</button>
     <p class="form-error" role="alert" hidden></p>
-    <p class="field-hint" role="status">${escape(message)}</p>
     </section></section>`;
   const host = main.querySelector("#poll-owner-controls");
+  const heading = host.querySelector("h2");
   const management = document.createElement("div");
-  host.querySelector("h2").after(management);
-  mountPollManagementDetails(management, poll, key);
+  heading.after(management);
+  mountPollManagementDetails(management, id, key, () => poll.title);
   bindPollLinkCopy(host.querySelector("#copy-owner-public-link"), id);
-  const editor = mountOwnerEdit(host, poll, `${endpoint}/edit`, key, (updated) => {
-    renderPollManager(updated, key, t("Changes saved.", "已保存修改。"), true);
-  });
-  editor.open = openEditor;
+  const endVoting = host.querySelector('[data-poll-state="closed"]');
+  function refreshAfterSave(updated, editor, changes) {
+    if (!host.isConnected) return;
+    const permissionsChanged = updated.canEditOptions !== poll.canEditOptions;
+    const votingClosed = poll.status === "open" && updated.status === "closed";
+    const expectedOptions = changes.options ?? poll.options.map(({ label }) => label);
+    const editorChanged = updated.title !== (changes.title ?? poll.title)
+      || updated.description !== (changes.description ?? poll.description)
+      || updated.options.length !== expectedOptions.length
+      || updated.options.some(({ label }, index) => label !== expectedOptions[index]);
+    poll = updated;
+    heading.textContent = poll.title;
+    document.title = `${t("Manage: ", "管理：")}${poll.title} — ScaleTag`;
+    if (votingClosed) {
+      if (document.activeElement === endVoting) host.querySelector("#copy-owner-public-link").focus();
+      endVoting.remove();
+      host.querySelector("#poll-manager-state").textContent = t("Voting closed", "投票已结束");
+    }
+    if (permissionsChanged || editorChanged) {
+      const focused = document.activeElement;
+      const controls = editor.parentElement;
+      const restoreEditorFocus = controls.contains(focused);
+      const wasSaveButton = focused.matches("#owner-edit-form button[type=submit]");
+      controls.remove();
+      const nextEditor = mountOwnerEdit(host, poll, `${endpoint}/edit`, key, refreshAfterSave);
+      nextEditor.open = editor.open;
+      if (restoreEditorFocus) {
+        const corresponding = focused.id && document.getElementById(focused.id);
+        const fallback = nextEditor.querySelector(wasSaveButton ? "button[type=submit]" : "summary");
+        (corresponding || fallback).focus();
+      }
+      nextEditor.querySelector('[role="status"]').textContent = t("Changes saved.", "已保存修改。");
+    }
+  }
+  mountOwnerEdit(host, poll, `${endpoint}/edit`, key, refreshAfterSave);
   const stateButtons = [...host.querySelectorAll("[data-poll-state]")];
   for (const button of stateButtons) {
     button.onclick = async () => {
@@ -319,7 +350,7 @@ async function votePage(id, { ownerKey, published } = {}) {
       <div></div>
       <a class="button secondary small" href="/vote/${id}/manage">${t("Open poll management", "打开投票管理")}</a>`;
     main.querySelector(".results-section").after(owner);
-    mountPollManagementDetails(owner.querySelector("div"), poll, ownerKey);
+    mountPollManagementDetails(owner.querySelector("div"), poll.id, ownerKey, poll.title);
   }
   if (externalImages.length)
     document.querySelector("#load-images").onclick = (e) => {

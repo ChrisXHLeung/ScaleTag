@@ -377,6 +377,72 @@ test("a poll owner can reorder choices until the first vote", async (t) => {
   assert.equal(await page.locator(".poll-option-order").count(), 0);
 });
 
+test("poll edits keep keyboard focus during save, on retry, and after confirmation", async (t) => {
+  const { page, origin, store } = await fixture(t);
+  const poll = await store.create({ title: "Pickup schedule", options: ["Morning", "Evening"], visibility: "unlisted" });
+  const endpoint = `${origin}/api/polls/${poll.id}/edit`;
+  const first = Promise.withResolvers();
+  const second = Promise.withResolvers();
+  let attempts = 0;
+  await page.route(endpoint, async (route) => {
+    attempts++;
+    if (attempts === 1) {
+      await first.promise;
+      await route.fulfill({ status: 503, json: { error: "Try saving again." } });
+    } else {
+      if (attempts === 2) await second.promise;
+      await route.continue();
+    }
+  });
+  try {
+    await page.goto(`${origin}/vote/${poll.id}/manage`);
+    await page.getByLabel("Management password").fill(poll.manageKey);
+    await page.getByRole("button", { name: "Unlock", exact: true }).click();
+    await page.getByText("Edit public details", { exact: true }).click();
+    const form = page.locator("#owner-edit-form");
+    const save = form.getByRole("button", { name: "Save changes", exact: true });
+    const focused = (control) => control.evaluate(element => element === document.activeElement);
+    await page.getByLabel("Title", { exact: true }).fill("New pickup schedule");
+    const request = page.waitForRequest(endpoint);
+    await save.press("Enter");
+    await request;
+    assert.equal(await focused(save), true, "Waiting for a response must keep the save button focused");
+    assert.equal(await save.getAttribute("aria-disabled"), "true");
+    await form.evaluate(element => element.requestSubmit());
+    first.resolve();
+    await form.getByRole("alert").waitFor();
+    assert.equal(await focused(save), true, "A failed save must leave the button available for keyboard retry");
+    assert.equal(await save.isEnabled(), true);
+
+    const retry = page.waitForRequest(endpoint);
+    await save.press("Enter");
+    await retry;
+    const copy = page.getByRole("button", { name: "Copy public link", exact: true });
+    await copy.focus();
+    second.resolve();
+    await form.getByText("Changes saved.", { exact: true }).waitFor();
+    assert.equal(await focused(copy), true, "Saving must respect focus moved to another control");
+    assert.equal(attempts, 2, "A pending request must block duplicate submits");
+    await page.getByRole("heading", { name: "New pickup schedule", exact: true }).waitFor();
+
+    await page.getByLabel("Title", { exact: true }).fill("Final pickup schedule");
+    await save.press("Enter");
+    await page.getByRole("heading", { name: "Final pickup schedule", exact: true }).waitFor();
+    assert.equal(await focused(save), true, "A completed save must keep the same button focused");
+
+    await store.setPollState(poll.id, poll.manageKey, "closed");
+    await page.getByLabel("Description", { exact: true }).fill("Pickup times are final.");
+    await save.press("Enter");
+    await page.getByText("Voting closed", { exact: true }).waitFor();
+    assert.equal(await focused(save), true, "Refreshing the editor for a closed poll must restore save focus");
+    assert.equal(await page.getByRole("button", { name: "End voting now", exact: true }).count(), 0);
+    assert.equal(await page.locator("#owner-title").getAttribute("readonly"), "");
+  } finally {
+    first.resolve();
+    second.resolve();
+  }
+});
+
 test("a stale draft keeps local edits and requires a choice before replacing saved text", async (t) => {
   const { page, context, origin } = await fixture(t);
   const other = await context.newPage();

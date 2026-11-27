@@ -45,6 +45,7 @@ button {
   cursor: pointer;
 }
 button:disabled,
+#owner-edit-form button[type="submit"][aria-disabled="true"],
 #list-retry[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.55;
