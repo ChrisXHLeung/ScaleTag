@@ -2785,6 +2785,15 @@ export const TRANSLATIONS = {
     de: "Die Optionen",
     it: "Le opzioni",
   },
+  "Add 2–12 choices.": {
+    ja: "選択肢を2〜12個追加してください。",
+    ko: "선택지를 2개에서 12개까지 추가하세요.",
+    fr: "Ajoutez entre 2 et 12 choix.",
+    pt: "Adicione de 2 a 12 opções.",
+    es: "Añade entre 2 y 12 opciones.",
+    de: "Füge 2 bis 12 Optionen hinzu.",
+    it: "Aggiungi da 2 a 12 opzioni.",
+  },
   "Add 2–12 choices. Each person selects one.": {
     ja: "2〜12個の選択肢を追加してください。1人1つ選べます。",
     ko: "2~12개의 선택지를 추가하세요. 각자 하나를 고를 수 있습니다.",
