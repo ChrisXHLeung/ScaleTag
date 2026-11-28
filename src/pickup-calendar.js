@@ -34,3 +34,15 @@ export function pickupCalendar({ id, title, serverTime, pickupWindow }, origin) 
     `URL:${url.href}`, "TRANSP:TRANSPARENT", "END:VEVENT", "END:VCALENDAR", "",
   ].map(fold).join("\r\n");
 }
+
+export function pollCalendar({ id, title, options, decision }, origin) {
+  const url = new URL(`/vote/${id}`, origin);
+  const label = options.find(option => option.id === decision.optionId).label;
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ScaleTag//Poll decision//EN",
+    "BEGIN:VEVENT", `UID:poll-${id}@${url.hostname}`, `DTSTAMP:${calendarDate(decision.updatedAt)}`,
+    `SEQUENCE:${decision.revision}`, `DTSTART:${calendarDate(decision.startsAt)}`, `DTEND:${calendarDate(decision.endsAt)}`,
+    `SUMMARY:${calendarText(title)}`, `DESCRIPTION:${calendarText(`${label}\n${url.href}`)}`,
+    `URL:${url.href}`, "END:VEVENT", "END:VCALENDAR", "",
+  ].map(fold).join("\r\n");
+}

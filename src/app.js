@@ -20,7 +20,7 @@ import { canonical, createSecrexRouter } from "./secrex.js";
 import { serviceWorkerSource, STATIC_ASSETS } from "./pwa.js";
 
 import { saleImages } from "./sale-images.js";
-import { pickupCalendar } from "./pickup-calendar.js";
+import { pickupCalendar, pollCalendar } from "./pickup-calendar.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const COOKIE_PATTERN = /^[a-f0-9]{64}$/;
@@ -380,7 +380,14 @@ export function createApp(
   });
   app.post("/api/polls/:id/state", async (req, res) => {
     const key = manageKeyInput(req.body);
-    res.json(await store.setPollState(req.params.id, key, req.body.state));
+    res.set("Cache-Control", "no-store");
+    res.json(await store.setPollState(req.params.id, key, req.body.state, req.body.decision));
+  });
+  app.get("/api/polls/:id/event.ics", async (req, res) => {
+    const poll = await store.get(req.params.id, undefined, { expectedType: "poll" });
+    if (poll.decision?.startsAt === undefined) throw new AppError(404, "Poll not found.");
+    res.set({ "X-Robots-Tag": "noindex", "Cache-Control": "no-store" });
+    res.attachment(`ScaleTag-event-${poll.id}.ics`).type("text/calendar; charset=utf-8").send(pollCalendar(poll, origin));
   });
   for (const [type, collection] of [["poll", "polls"], ["task", "tasks"], ["sale", "sales"]]) {
     app.post(`/api/${collection}/:id/edit`, async (req, res) => {

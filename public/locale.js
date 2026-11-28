@@ -142,6 +142,7 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Choose an event start and end time in order.': '请按先后顺序填写活动开始和结束时间。',
   'Choose a valid task type.': '请选择有效的任务类型。',
   'Item requests are for free items only.': '求赠只接受免费物品。',
   'Choose a valid pickup method.': '请选择有效的领取方式。',

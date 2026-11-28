@@ -788,8 +788,8 @@ export class PollStore {
     }));
   }
 
-  async setPollState(id, key, state) {
-    if (!["closed", "withdrawn"].includes(state))
+  async setPollState(id, key, state, decision) {
+    if (!["closed", "withdrawn", "confirmed"].includes(state))
       throw new AppError(400, "Choose a valid poll status.");
     return this.withManagedPost(id, key, "poll", async (db) => {
       const p = db.data;
@@ -801,11 +801,31 @@ export class PollStore {
         }
         return { withdrawn: true };
       }
+      let changed = false;
+      if (state === "confirmed") {
+        const { optionId, startsAt, endsAt } = decision ?? {};
+        if (!p.options.some(option => option.id === optionId))
+          throw new AppError(400, "Please select exactly one option.");
+        const scheduled = startsAt !== undefined || endsAt !== undefined;
+        if (scheduled && (!Number.isSafeInteger(startsAt) || !Number.isSafeInteger(endsAt) ||
+            startsAt % 60000 !== 0 || endsAt % 60000 !== 0 || startsAt >= endsAt ||
+            startsAt < 0 || endsAt >= Date.UTC(10000, 0, 1)))
+          throw new AppError(400, "Choose an event start and end time in order.");
+        const previous = p.decision;
+        if (!previous || previous.optionId !== optionId || previous.startsAt !== startsAt || previous.endsAt !== endsAt) {
+          p.decision = {
+            optionId, ...(scheduled ? { startsAt, endsAt } : {}),
+            updatedAt: now, revision: (previous?.revision ?? -1) + 1,
+          };
+          changed = true;
+        }
+      }
       if (now < p.endsAt) {
         p.endsAt = now;
         p.voters = {};
-        await this.write(db);
+        changed = true;
       }
+      if (changed) await this.write(db);
       return { ...this.public(p), canEditOptions: false };
     }, { allowWithdrawn: state === "withdrawn" });
   }

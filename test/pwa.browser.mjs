@@ -1393,6 +1393,49 @@ test("new poll owner can copy management details, edit photos, end and take down
   assert.equal((await context.request.get(`${origin}/api/polls/${id}/qr.png`)).status(), 404);
 });
 
+test("a reader sees the confirmed decision and can download the event in their time zone", { timeout: 60000 }, async (t) => {
+  const { browser, context, origin, page, errors } = await fixture(t);
+  const response = await context.request.post(`${origin}/api/polls`, {
+    headers: { origin },
+    data: {
+      title: "Pick the neighborhood meetup day", options: ["Friday", "Saturday"],
+      signature: "Test", retentionAccepted: true, visibility: "unlisted",
+    },
+  });
+  assert.equal(response.status(), 201);
+  const { id, manageKey } = await response.json();
+  const visitorContext = await browser.newContext({ locale: "en-US", timezoneId: "Asia/Tokyo" });
+  const visitor = await visitorContext.newPage();
+  const publicUrl = `${origin}/vote/${id}?lang=en`;
+  await visitor.goto(publicUrl);
+  await visitor.getByRole("radio", { name: "Saturday" }).check();
+  await visitor.getByRole("button", { name: "Cast my vote" }).click();
+  await visitor.getByRole("button", { name: "Your vote is counted" }).waitFor();
+
+  await page.goto(`${origin}/vote/${id}/manage?lang=en`);
+  await page.getByLabel("Management password").fill(manageKey);
+  await page.getByRole("button", { name: "Unlock", exact: true }).click();
+  await page.getByText("Confirm a decision", { exact: true }).click();
+  await page.getByLabel("Final choice").selectOption({ label: "Saturday" });
+  await page.getByLabel("Event starts").fill("2027-01-02T20:00");
+  await page.getByRole("button", { name: "Publish decision" }).click();
+  await page.getByRole("alert").getByText("Choose an event start and end time in order.").waitFor();
+  await page.getByLabel("Event ends").fill("2027-01-02T21:00");
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Publish decision" }).click();
+  await page.getByRole("heading", { name: "Confirmed decision" }).waitFor();
+
+  await visitor.evaluate(() => window.dispatchEvent(new Event("online")));
+  const decision = visitor.locator("#confirmed-decision");
+  await decision.getByRole("heading", { name: "Confirmed decision" }).waitFor();
+  assert.match(await decision.innerText(), /Saturday[\s\S]*UTC\+09:00/);
+  const download = visitor.waitForEvent("download");
+  await decision.getByRole("link", { name: "Add event to calendar" }).click();
+  assert.equal((await download).suggestedFilename(), `ScaleTag-event-${id}.ics`);
+  assert.equal(visitor.url(), publicUrl);
+  assert.deepEqual(errors, []);
+});
+
 test("manual retry restores the original page once the public route responds", { timeout: 40000 }, async (t) => {
   const { context, errors, origin, page, setUnavailablePath } = await fixture(t);
   const path = "/vote/000000000000000000000000";

@@ -182,6 +182,52 @@ test("concurrent requests from one browser count exactly once", async (t) => {
   assert.equal(result.hasVoted, true);
 });
 
+test("publish and revise a poll decision with an optional calendar event", async (t) => {
+  const f = await fixture(t);
+  const poll = await f.create({ title: "Game night, bring snacks", options: ["Friday", "Saturday"], resultsVisibility: "after_close" });
+  const path = `/api/polls/${poll.id}`;
+  const cookie = await f.session(poll.id);
+  const key = poll.manageKey;
+  const startsAt = Date.UTC(2027, 0, 2, 20);
+  const endsAt = startsAt + 3600000;
+  const confirm = (decision, password = key) =>
+    f.request(`${path}/state`, { key: password, state: "confirmed", decision });
+  assert.equal((await f.request(`${path}/event.ics`)).status, 404);
+  assert.equal((await confirm({ optionId: 2 }, "0".repeat(64))).status, 403);
+  assert.equal((await confirm({ optionId: 99 })).status, 400);
+  assert.equal((await confirm({ optionId: 2, startsAt })).status, 400);
+  assert.equal((await confirm({ optionId: 2, startsAt, endsAt: startsAt })).status, 400);
+  assert.equal((await f.request(`${path}/votes`, { optionId: 1 }, cookie)).status, 200);
+  const result = await confirm({ optionId: 2 });
+  assert.equal(result.status, 200);
+  const closed = await result.json();
+  assert.equal(closed.status, "closed");
+  assert.equal(closed.resultsHidden, false);
+  assert.equal(closed.totalVotes, 1);
+  assert.equal(closed.decision.optionId, 2);
+  assert.equal((await f.request(`${path}/votes`, { optionId: 2 }, cookie)).status, 409);
+  assert.equal((await f.request(`${path}/event.ics`)).status, 404);
+
+  const event = { optionId: 2, startsAt, endsAt };
+  assert.equal((await confirm(event)).status, 200);
+  const detail = await (await f.request(path)).json();
+  assert.equal(detail.decision.startsAt, startsAt);
+  assert.equal(detail.decision.endsAt, endsAt);
+  assert.equal(detail.manageKey, undefined);
+  const download = await f.request(`${path}/event.ics`);
+  assert.match(download.headers.get("content-type"), /^text\/calendar/);
+  assert.match(download.headers.get("x-robots-tag"), /noindex/);
+  const content = await download.text();
+  assert.ok(content.includes("DTSTART:20270102T200000Z\r\nDTEND:20270102T210000Z"));
+  assert.ok(content.includes("SUMMARY:Game night\\, bring snacks"));
+  assert.ok(content.includes("DESCRIPTION:Saturday\\nhttp"));
+  assert.ok(content.includes("SEQUENCE:1"));
+  assert.equal((await confirm(event)).status, 200);
+  assert.equal(await (await f.request(`${path}/event.ics`)).text(), content);
+  await f.request(`${path}/state`, { key, state: "withdrawn" });
+  assert.equal((await f.request(`${path}/event.ics`)).status, 404);
+});
+
 test("multiple-choice polls count anonymous ballots atomically and conceal results until close", async (t) => {
   const f = await fixture(t);
   assert.equal((await f.request("/api/polls", input({ selectionMode: "ranked" }))).status, 400);

@@ -26,6 +26,8 @@ const features = [
       [actor.pollCreator, "Publish and share the link or QR code", "发布并分享链接或二维码"],
       [actor.voter, "Vote", "投票"],
       [actor.pollReader, "View results when available", "结果公布后查看"],
+      [actor.pollCreator, "Confirm a decision if needed", "需要时确认最终决定"],
+      [actor.pollReader, "See the decision and download its calendar event if set", "查看最终决定，若有活动时间可加入日历"],
     ]],
   ["tasks", "/create/task", ["Tasks and replies", "任务与回复"],
     ["Publish a task with a reward description. A reply’s name and message are visible to task readers. The separate phone or email field is encrypted in the respondent’s browser. The publisher can unlock contacts and privately choose one respondent, which pauses new replies. Reopening clears the selection. Completed and Closed are final. After replying, you can open, copy or save the specific public reply link.",

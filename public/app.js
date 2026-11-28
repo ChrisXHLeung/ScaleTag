@@ -39,7 +39,7 @@ import { mountSocial } from "/social.js";
 import { mountPosterActions, mountResultExports } from "/poster.js";
 import { createTask, taskPage, stateLabel, isFinalState } from "/tasks.js";
 import { createSale, salePage, saleStateLabel } from "/sales.js";
-import { pickupWindowText } from "/pickup.js";
+import { pickupWindowText, localTimeRangeText, readLocalDateTime, toLocalDateTime } from "/pickup.js";
 import { bindTextDraft, mountSavedPost, renderSavedPosts } from "/local-posts.js";
 function showError(error) {
   document.title = t("Post unavailable — ScaleTag", "帖子不可用 — ScaleTag");
@@ -250,7 +250,26 @@ function renderPollManager(poll, key) {
     <button type="button" class="button secondary small" id="copy-owner-public-link">${t("Copy public link", "复制公开链接")}</button>${linkCopyFallback("owner-public-link")}</div>
     ${poll.status === "open" ? `<button type="button" class="button secondary small" data-poll-state="closed">${t("End voting now", "立即结束投票")}</button>` : ""}
     <button type="button" class="button secondary small" data-poll-state="withdrawn">${t("Take down", "下架帖子")}</button>
-    <p class="form-error" role="alert" hidden></p>
+    <p id="poll-state-error" class="form-error" role="alert" hidden></p>
+    <details id="poll-decision-editor">
+      <summary>${t("Confirm a decision", "确认最终决定")}</summary>
+      <form id="poll-decision-form">
+        <label for="decision-option">${t("Final choice", "最终选项")}</label>
+        <select id="decision-option" required></select>
+        <fieldset class="options-fieldset">
+          <legend>${t("Calendar event (optional)", "日历活动（选填）")}</legend>
+          <label for="decision-start">${t("Event starts", "活动开始")}</label>
+          <input id="decision-start" type="datetime-local" value="${toLocalDateTime(poll.decision?.startsAt)}">
+          <label for="decision-end">${t("Event ends", "活动结束")}</label>
+          <input id="decision-end" type="datetime-local" value="${toLocalDateTime(poll.decision?.endsAt)}">
+          <p class="field-hint">${t("Times use your device’s time zone.", "时间以设备所在时区为准。")}</p>
+          <p id="decision-preview"></p>
+        </fieldset>
+        <p class="form-error" role="alert" hidden></p>
+        <button type="submit" class="button small">${t("Publish decision", "公布决定")}</button>
+      </form>
+    </details>
+    <section id="confirmed-decision" hidden></section>
     </section></section>`;
   const host = main.querySelector("#poll-owner-controls");
   const heading = host.querySelector("h2");
@@ -259,6 +278,32 @@ function renderPollManager(poll, key) {
   mountPollManagementDetails(management, id, key, () => poll.title);
   bindPollLinkCopy(host.querySelector("#copy-owner-public-link"), id);
   const endVoting = host.querySelector('[data-poll-state="closed"]');
+  const decisionEditor = host.querySelector("#poll-decision-editor");
+  const decisionForm = host.querySelector("#poll-decision-form");
+  const choice = decisionForm.querySelector("#decision-option");
+  const start = decisionForm.querySelector("#decision-start");
+  const end = decisionForm.querySelector("#decision-end");
+  const stateButtons = [...host.querySelectorAll("[data-poll-state]")];
+  let changingState = false;
+  function populateDecisionOptions() {
+    const selected = choice.value || String(poll.decision?.optionId ?? "");
+    choice.replaceChildren(new Option(t("Choose one option", "选择一个选项"), ""),
+      ...poll.options.map(option => new Option(option.label, option.id)));
+    choice.value = poll.options.some(option => String(option.id) === selected) ? selected : "";
+  }
+  function decisionTimes() {
+    const startsAt = readLocalDateTime(start);
+    const endsAt = readLocalDateTime(end);
+    return startsAt < endsAt ? { startsAt, endsAt } : null;
+  }
+  function preview() {
+    const times = decisionTimes();
+    decisionForm.querySelector("#decision-preview").textContent = times ? localTimeRangeText(times) : "";
+  }
+  start.oninput = end.oninput = preview;
+  preview();
+  populateDecisionOptions();
+  renderPollDecision(host.querySelector("#confirmed-decision"), poll);
   function refreshAfterSave(updated, editor, changes) {
     if (!host.isConnected) return;
     const permissionsChanged = updated.canEditOptions !== poll.canEditOptions;
@@ -269,11 +314,12 @@ function renderPollManager(poll, key) {
       || updated.options.length !== expectedOptions.length
       || updated.options.some(({ label }, index) => label !== expectedOptions[index]);
     poll = updated;
+    populateDecisionOptions();
     heading.textContent = poll.title;
     document.title = `${t("Manage: ", "管理：")}${poll.title} — ScaleTag`;
     if (votingClosed) {
       if (document.activeElement === endVoting) host.querySelector("#copy-owner-public-link").focus();
-      endVoting.remove();
+      endVoting?.remove();
       host.querySelector("#poll-manager-state").textContent = t("Voting closed", "投票已结束");
     }
     if (permissionsChanged || editorChanged) {
@@ -293,8 +339,36 @@ function renderPollManager(poll, key) {
     }
   }
   mountOwnerEdit(host, poll, `${endpoint}/edit`, key, refreshAfterSave);
-  const stateButtons = [...host.querySelectorAll("[data-poll-state]")];
-  let changingState = false;
+  decisionForm.onsubmit = async event => {
+    event.preventDefault();
+    if (changingState) return;
+    const error = decisionForm.querySelector(".form-error");
+    error.hidden = true;
+    const times = decisionTimes();
+    if ((start.value || end.value) && !times) {
+      showFormError(error, new Error(t("Choose an event start and end time in order.", "请按先后顺序填写活动开始和结束时间。")));
+      return;
+    }
+    if (!window.confirm(poll.status === "open"
+      ? t("End voting and publish this decision?", "结束投票并公布这个决定？")
+      : t("Publish this decision on the poll link?", "在原投票链接上公布这个决定？"))) return;
+    const decision = { optionId: Number(choice.value), ...times };
+    const submit = decisionForm.querySelector("button");
+    changingState = true;
+    submit.disabled = true;
+    try {
+      const updated = await api(`${endpoint}/state`, { key, state: "confirmed", decision });
+      if (!host.isConnected) return;
+      const restoreFocus = decisionEditor.contains(document.activeElement) || document.activeElement === document.body;
+      renderPollManager(updated, key);
+      if (restoreFocus) main.querySelector("#confirmed-decision h2").focus();
+    } catch (e) {
+      showFormError(error, e);
+    } finally {
+      changingState = false;
+      submit.disabled = false;
+    }
+  };
   for (const button of stateButtons) {
     button.onclick = async () => {
       if (changingState) return;
@@ -304,7 +378,7 @@ function renderPollManager(poll, key) {
         : t("Take this poll down? The shared link and QR code will stop working.", "下架这项投票？共享链接和二维码将失效。"))) return;
       changingState = true;
       stateButtons.forEach(control => control.setAttribute("aria-disabled", "true"));
-      const error = host.querySelector(".form-error");
+      const error = host.querySelector("#poll-state-error");
       error.hidden = true;
       try {
         const updated = await api(`${endpoint}/state`, { key, state });
@@ -331,6 +405,19 @@ function renderPollManager(poll, key) {
       }
     };
   }
+}
+
+function renderPollDecision(section, poll) {
+  const decision = poll.decision;
+  const option = poll.options.find(option => option.id === decision?.optionId);
+  if (!option || section.dataset.revision === String(decision.revision)) return;
+  section.hidden = false;
+  section.dataset.revision = decision.revision;
+  section.className = "manage-card";
+  section.innerHTML = `<h2 tabindex="-1">${t("Confirmed decision", "已确认的决定")}</h2>
+    <p><strong>${escape(option.label)}</strong></p>
+    ${decision.startsAt === undefined ? "" : `<p>${escape(localTimeRangeText(decision))}</p>
+      <a class="button secondary small" href="/api/polls/${poll.id}/event.ics" download>${t("Add event to calendar", "将活动加入日历")}</a>`}`;
 }
 
 function pollBallotOptions(options, multiple) {
@@ -361,6 +448,7 @@ async function votePage(id, { ownerKey, published } = {}) {
     ${new URLSearchParams(location.search).has("created") ? `<div class="success-banner" role="status">${t("Your poll is live. Share its QR code to start the conversation.", "投票已发布，分享二维码邀请大家参与吧。")}</div>` : ""}
     <div class="poll-meta"><span id="poll-status" class="status-badge"></span><span>${multiple ? t("Multiple choices", "多选") : t("Single choice", "单选")}</span><span id="time-left"></span></div><h1 class="poll-title">${escape(poll.title)}</h1><p class="byline">${t("Started by", "发起人：")} <strong>${escape(poll.signature)}</strong> <span>· ${date(poll.createdAt)}</span></p>
     ${poll.description ? `<p class="poll-description">${escape(poll.description)}</p>` : ""}
+    <section id="confirmed-decision" hidden></section>
     ${uploadedPhotosHtml(uploadedImages, "Poll photo", "投票照片")}
     ${externalImages.length ? `<div class="external-images"><button class="button secondary small" id="load-images">${t(`Show ${externalImages.length} external image${externalImages.length > 1 ? "s" : ""}`, `显示 ${externalImages.length} 张外部图片`)}</button><p class="field-hint">${t("Images load from third-party hosts, which may receive your IP address.", "图片从第三方服务器加载，该服务可能接收你的 IP 地址。")}</p><div id="poll-images"></div></div>` : ""}
     <section class="ballot-card"><div class="ballot-heading"><h2>${t("Have your say.", "投下你的一票")}</h2><span class="tiny-label">${multiple ? t("Choose all that work for you", "选择所有合适的选项") : t("PICK ONE", "选择一项")}</span></div><form id="vote-form"><fieldset id="vote-options">${ballotMarkup}</fieldset><p id="vote-message" class="vote-message" role="status"></p><p id="vote-error" class="form-error" role="alert" hidden></p><button class="button" id="cast-vote" type="submit">${t("Cast my vote", "提交投票")} ${icons.arrow}</button><p class="field-hint">${t("One vote per browser, as far as an anonymous cookie allows.", "我们使用匿名 Cookie 尽量限制每个浏览器只能投一票。")}</p></form></section>
@@ -426,6 +514,7 @@ async function votePage(id, { ownerKey, published } = {}) {
   let refreshController;
   let lastResultsHtml;
   function render() {
+    renderPollDecision(main.querySelector("#confirmed-decision"), poll);
     updateResultExports(poll);
     const title = main.querySelector(".poll-title");
     if (title.textContent !== poll.title) {
@@ -1285,6 +1374,7 @@ function privacy() {
     <h2>${t("What other people can see", "其他人能看到什么")}</h2>
     <ul>
       <li>${t("Polls: Questions and options are public. The publisher sets the deadline and can hide results until voting closes. Results remain until day 30.", "投票：问题和选项公开。发布者设置截止时间，可以选择截止后公布结果。结果保留至发布后第 30 天。")}</li>
+      <li>${t("Anyone who can view a poll can see its confirmed decision and any event time the publisher adds.", "能查看投票的人也能看到已确认的决定，以及发布者填写的活动时间。")}</li>
       <li>${t("Tasks: The task, reward, reply names and reply messages are public. Completed and Closed tasks stop accepting replies.", "任务：任务内容、酬谢、回复者的名字和留言会公开。标为已完成或已关闭的任务停止接收回复。")}</li>
       <li>${t("Giveaways: The pickup location is public while the item is available. After the publisher marks it claimed, it leaves discovery and the original link shows the claimed status until expiry.", "闲置赠予：物品可领取时，领取地点会公开。发布者标记已领取后，帖子不再出现在列表和地图，原链接仍显示已领取状态，直到到期。")}</li>
     </ul>

@@ -16,7 +16,11 @@ flowchart TD
     B --> C["<b>Voter</b><br/>Vote before the deadline"]
     B --> D["<b>ScaleTag</b><br/>Show live results or unlock them when voting closes"]
     D --> E["<b>Poll reader</b><br/>View results, copy them, or download the result card"]
+    D --> F["<b>Poll creator</b><br/>Optionally confirm a choice and set an event time"]
+    F --> G["<b>Poll reader</b><br/>See the decision on the same link and download its calendar event"]
 ```
+
+Open poll management to confirm the group’s choice. Confirming ends any open voting and publishes the decision on the original link. An optional event start and end give readers an `.ics` they can import into their own calendars. If the decision or time changes, share the original link again so participants can see the update and download the revised event.
 
 ### Tasks and replies
 

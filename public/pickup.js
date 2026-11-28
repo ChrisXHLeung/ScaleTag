@@ -41,9 +41,13 @@ function utcOffset(time) {
   return `UTC${minutes < 0 ? "−" : "+"}${hours}:${remainder}`;
 }
 
-export function pickupWindowText({ startsAt, endsAt }) {
+export function localTimeRangeText({ startsAt, endsAt }) {
   const startOffset = utcOffset(startsAt);
   const endOffset = utcOffset(endsAt);
   const startLabel = startOffset === endOffset ? "" : ` (${startOffset})`;
-  return `${t("Pickup window", "领取时段")} · ${date(startsAt)}${startLabel} – ${date(endsAt)} (${endOffset})`;
+  return `${date(startsAt)}${startLabel} – ${date(endsAt)} (${endOffset})`;
+}
+
+export function pickupWindowText(window) {
+  return `${t("Pickup window", "领取时段")} · ${localTimeRangeText(window)}`;
 }
