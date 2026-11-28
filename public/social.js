@@ -134,7 +134,8 @@ export function mountSocial(id, allowReplies, onUnavailable, onState, taskTitle,
     // Legacy tasks without a management link cannot accept replies because contacts cannot be retrieved.
     const final = ["completed", "closed"].includes(state.taskState);
     const legacy = state.acceptsPrivateContacts === false;
-    const closed = final || legacy || state.taskAssigned;
+    const pastDeadline = state.taskDueAt <= state.serverTime;
+    const closed = final || legacy || state.taskAssigned || pastDeadline;
     const closedNote = host.querySelector("#replies-closed");
     closedNote.hidden = !closed;
     closedNote.textContent = found && closed
@@ -147,7 +148,7 @@ export function mountSocial(id, allowReplies, onUnavailable, onState, taskTitle,
         ? t("This older task has no private management link, so its poster cannot retrieve contact details. It no longer accepts replies.", "此旧任务没有私人管理链接，发布者无法获取联系方式，因此不再接受回复。")
         : state.taskAssigned
           ? t("This task already has someone assigned.", "此任务已有接单人，暂不接受新回复。")
-          : "";
+          : pastDeadline ? t("The deadline for new replies has passed.", "新回复的截止时间已过。") : "";
     host.querySelector("#reply-form").hidden = closed;
     host.querySelector("#send-reply").disabled =
       closed ||

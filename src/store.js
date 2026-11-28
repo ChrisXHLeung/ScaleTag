@@ -107,6 +107,11 @@ function validatePickupWindow(window, createdAt, expiresAt, now) {
     throw new AppError(400, "Choose a pickup window within the giveaway lifetime that has not ended.");
 }
 
+function validateTaskDeadline(dueAt, expiresAt, now) {
+  if (dueAt != null && (dueAt <= now || dueAt > expiresAt))
+    throw new AppError(400, "Choose a future deadline within the task’s 30-day lifetime.");
+}
+
 const onMapGrid = ({ latitude, longitude }) => ({
   latitude: Math.round(latitude * 100) / 100 || 0,
   longitude: Math.round(longitude * 100) / 100 || 0,
@@ -195,6 +200,7 @@ function savedPostStatus(type, post, now) {
   if (post.taskKind === "found") {
     return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "found_in_progress" : `found_${state}`;
   }
+  if (post.taskDueAt <= now && !post.taskAssigned && !FINAL_TASK_STATES.includes(state)) return "task_reply_closed";
   return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "task_assigned" : `task_${state}`;
 }
 
@@ -264,6 +270,7 @@ export class PollStore {
       pickupByRequest: p.pickupByRequest,
       giveawayVersion: p.giveawayVersion,
       taskState: p.taskState,
+      taskDueAt: p.taskDueAt,
       ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
       frozenAt: p.frozenAt,
       withdrawnAt: p.withdrawnAt,
@@ -374,13 +381,14 @@ export class PollStore {
       const lifetime = type === "sale" ? 3 * DAY :
         type === "task" ? 30 * DAY : votingHours * 3600000;
       if (type === "sale") validatePickupWindow(input.pickupWindow, now, now + lifetime, now);
+      if (type === "task") validateTaskDeadline(input.taskDueAt, now + lifetime, now);
       const p = {
         version: 1,
         ...postInput,
         type,
         id,
         createdAt: now,
-        endsAt: now + lifetime,
+        endsAt: type === "task" ? (input.taskDueAt ?? now + lifetime) : now + lifetime,
         deleteAt: now + 30 * DAY,
         options: input.options.map((label, n) => ({
           id: n + 1,
@@ -509,6 +517,8 @@ export class PollStore {
         nextChange = Math.min(nextChange, expiration);
         if (status === "sale_reserved") nextChange = Math.min(nextChange, post.reservedUntil);
         if (status === "poll_open") nextChange = Math.min(nextChange, post.endsAt);
+        if (type === "task" && post.taskDueAt > now && !FINAL_TASK_STATES.includes(taskStateOf(post)))
+          nextChange = Math.min(nextChange, post.taskDueAt);
       }
       return status;
     });
@@ -638,6 +648,7 @@ export class PollStore {
         price: p.price,
         ...publicSaleAvailability(p, now),
         ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
+        ...(p.taskDueAt ? { taskDueAt: p.taskDueAt } : {}),
         title: p.title,
         ...(p.selectionMode === "multiple" ? { selectionMode: p.selectionMode } : {}),
         ...(p.pickupByRequest ? { pickupByRequest: true } : {}),
@@ -670,6 +681,7 @@ export class PollStore {
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
       ...publicSaleAvailability(p, this.clock()),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
+      ...(p.taskDueAt ? { taskDueAt: p.taskDueAt } : {}),
       ...(p.type === "task" && p.assignedReplyId ? { taskAssigned: true } : {}),
       deleteAt: p.type === "sale" ? p.endsAt : p.deleteAt,
       serverTime: this.clock(),
@@ -853,7 +865,7 @@ export class PollStore {
   }
 
   async editManagedPost(id, key, type, changes, prepareImages) {
-    const { options, images, privatePickupLocation, ...copy } = changes;
+    const { options, images, privatePickupLocation, taskDueAt, ...copy } = changes;
     return this.withManagedPost(id, key, type, async (db, preparedImages) => {
       const post = db.data;
       const now = this.clock();
@@ -863,6 +875,12 @@ export class PollStore {
         throw new AppError(400, "Item requests are for free items only.");
       if (post.taskKind === "found" && (images?.length || Object.hasOwn(copy, "reward")))
         throw new AppError(400, "Found notices cannot include photos or a reward.");
+      if (taskDueAt !== undefined) {
+        if (post.taskKind) throw new AppError(400, "Only local tasks can have a help deadline.");
+        if (FINAL_TASK_STATES.includes(taskStateOf(post)))
+          throw new AppError(409, "The deadline cannot change after a task is completed or closed.");
+        validateTaskDeadline(taskDueAt, post.deleteAt, now);
+      }
       if (type === "sale") validatePickupWindow(copy.pickupWindow, post.createdAt, post.endsAt, now);
       const questionChanged = type === "poll" && copy.title !== undefined && copy.title !== post.title;
       const optionsChanged = options && (options.length !== post.options.length ||
@@ -876,6 +894,11 @@ export class PollStore {
         throw new AppError(400, "Choose a valid pickup method.");
       if (privatePickupLocation !== undefined) post.replyAuthors.pickup.location = privatePickupLocation;
       Object.assign(post, copy);
+      if (taskDueAt !== undefined) {
+        if (taskDueAt === null) delete post.taskDueAt;
+        else post.taskDueAt = taskDueAt;
+        post.endsAt = taskDueAt ?? post.deleteAt;
+      }
       if (preparedImages) post.images = preparedImages;
       if (ballotChanged) {
         // A ballot loaded before a rewrite can never cast a vote for a new option.

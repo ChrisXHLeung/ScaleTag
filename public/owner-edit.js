@@ -2,7 +2,7 @@ import {
   api, bindPhotoInput, escape, mountPollOptionOrder, photoFields, syncPollOptionOrder, t, uploadedPhotosHtml,
 } from "/common.js";
 import { mountDraftCopy } from "/local-posts.js";
-import { pickupWindowFields, readPickupWindow } from "/pickup.js";
+import { pickupWindowFields, readLocalDateTime, readPickupWindow, toLocalDateTime } from "/pickup.js";
 
 export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   const controls = document.createElement("div");
@@ -17,6 +17,10 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       <textarea id="owner-description" name="description" rows="4" maxlength="4000" ${post.type === "poll" ? "" : "required"}>${escape(post.description)}</textarea>
       ${post.type === "task" && !post.taskKind ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
         <input id="owner-reward" name="reward" value="${escape(post.reward)}" maxlength="160" required>` : ""}
+      ${post.type === "task" && !post.taskKind && !["completed", "closed"].includes(post.taskState) ? `
+        <label for="owner-task-deadline">${t("Help needed by (optional)", "需要帮忙的截止时间（选填）")}</label>
+        <input id="owner-task-deadline" type="datetime-local" value="${toLocalDateTime(post.taskDueAt)}" max="${toLocalDateTime(post.deleteAt)}">
+        <p class="field-hint">${t("New replies stop at this time. Times use your device’s time zone.", "到时停止接收新回复。时间以设备所在时区为准。")}</p>` : ""}
       ${post.type === "sale" ? `<label for="owner-pickup">${post.pickupByRequest ? t("Pickup location (private)", "领取地点（私密）") : t("Pickup location (public)", "领取地点（公开）")}</label>
         <input id="owner-pickup" name="${post.pickupByRequest ? "privatePickupLocation" : "pickupLocation"}" value="${escape(post.pickupLocation)}" maxlength="300" required>
         ${pickupWindowFields("owner", post.pickupWindow)}` : ""}
@@ -48,6 +52,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   const addOption = form.querySelector("#owner-add-option");
   const pickupStart = form.querySelector("#owner-pickup-start");
   const pickupEnd = form.querySelector("#owner-pickup-end");
+  const taskDeadline = form.querySelector("#owner-task-deadline");
   let current = post;
   mountDraftCopy(controls, () => current);
   let optionLabels = post.options?.map(({ label }) => label);
@@ -111,6 +116,11 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       }
       if (pickupStart && (pickupStart.value !== pickupStart.defaultValue || pickupEnd.value !== pickupEnd.defaultValue))
         changes.pickupWindow = readPickupWindow(pickupStart, pickupEnd);
+      if (taskDeadline && taskDeadline.value !== taskDeadline.defaultValue) {
+        changes.taskDueAt = taskDeadline.value ? readLocalDateTime(taskDeadline) : null;
+        if (changes.taskDueAt !== null && !Number.isSafeInteger(changes.taskDueAt))
+          throw new Error(t("Choose a valid date and time for this task.", "请选择有效的任务日期和时间。"));
+      }
       if (replacement && (replacement.files.length || removePhotos.checked)) changes.images = await photos.readImages();
       const updated = await api(endpoint, changes);
       current = updated;
@@ -119,6 +129,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         pickupStart.defaultValue = pickupStart.value;
         pickupEnd.defaultValue = pickupEnd.value;
       }
+      if (taskDeadline) taskDeadline.defaultValue = taskDeadline.value;
       if (replacement) {
         replacement.value = "";
         replacement.dispatchEvent(new Event("change"));

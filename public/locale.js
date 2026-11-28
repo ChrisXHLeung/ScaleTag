@@ -142,6 +142,10 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Choose a valid date and time for this task.': '请选择有效的任务日期和时间。',
+  'Choose a future deadline within the task’s 30-day lifetime.': '请选择任务发布后 30 天以内的未来时间。',
+  'Only local tasks can have a help deadline.': '只有本地任务可以设置帮忙截止时间。',
+  'The deadline cannot change after a task is completed or closed.': '任务已完成或关闭后，截止时间无法更改。',
   'Enter a whole quantity from 1 to 99.': '请输入 1 至 99 之间的整数件数。',
   'Multiple items require direct pickup.': '多件物品请选择直接领取。',
   'This giveaway has no quantity to update.': '这条赠予没有可更新的件数。',

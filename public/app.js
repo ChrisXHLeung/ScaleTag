@@ -37,7 +37,7 @@ import {
 import { mountOwnerEdit } from "/owner-edit.js";
 import { mountSocial } from "/social.js";
 import { mountPosterActions, mountResultExports } from "/poster.js";
-import { createTask, taskPage, stateLabel, taskKindLabel, isFinalState } from "/tasks.js";
+import { createTask, taskPage, stateLabel, taskKindLabel, isFinalState, taskDeadlinePassed, taskStatusLabel } from "/tasks.js";
 import { createSale, salePage, saleStateLabel, remainingItemsText } from "/sales.js";
 import { pickupWindowText, localTimeRangeText, readLocalDateTime, toLocalDateTime } from "/pickup.js";
 import { bindTextDraft, mountSavedPost, renderSavedPosts } from "/local-posts.js";
@@ -1029,7 +1029,7 @@ function postList() {
         const li = document.createElement("li");
         const a = document.createElement("a");
         a.href = `/${p.type === "sale" ? "sale" : p.type === "task" ? "task" : "vote"}/${p.id}`;
-        a.textContent = `${p.title} · ${p.type === "sale" ? `${t("Free Giveaways", "闲置赠予")} · ${saleStateLabel(p.saleState)}` : p.type === "task" ? `${taskKindLabel(p.taskKind)} · ${stateLabel(p.taskState, p.taskKind)}` : p.status === "open" ? t("Open", "进行中") : t("Ended", "已结束")}`;
+        a.textContent = `${p.title} · ${p.type === "sale" ? `${t("Free Giveaways", "闲置赠予")} · ${saleStateLabel(p.saleState)}` : p.type === "task" ? `${taskKindLabel(p.taskKind)} · ${p.taskDueAt ? taskStatusLabel(p) : stateLabel(p.taskState, p.taskKind)}` : p.status === "open" ? t("Open", "进行中") : t("Ended", "已结束")}`;
         if (p.type === "sale" && p.pickupWindow) a.append(` · ${pickupWindowText(p.pickupWindow)}`);
         li.append(a);
         mappedLinks.append(li);
@@ -1209,7 +1209,7 @@ function postList() {
       return `<a class="poll-list-card sale-list-card" href="/sale/${p.id}"><div class="card-top"><span class="status-badge">${t("Free Giveaways", "闲置赠予")}</span><span class="status-badge ${hold ? "in-progress" : ""}" ${hold}>${saleStateLabel(p.saleState)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="card-bottom"><span>${Number.isInteger(p.remainingQuantity) ? remainingItemsText(p.remainingQuantity) + " · " : ""}${p.pickupByRequest ? t("Request before pickup", "先申请再领取") : p.pickupWindow ? pickupWindowText(p.pickupWindow) : t("Free · Available for 72 hours", "免费领取 · 发布后保留 72 小时")}</span>${icons.arrow}</div></a>`;
     }
     if (p.type === "task") {
-      return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${taskKindLabel(p.taskKind)}</span><span class="status-badge ${isFinalState(p.taskState) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${stateLabel(p.taskState, p.taskKind)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p>${p.taskKind ? "" : `<div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div>`}<div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
+      return `<a class="poll-list-card task-list-card" href="/task/${p.id}"><div class="card-top"><span class="status-badge">${taskKindLabel(p.taskKind)}</span><span class="status-badge ${isFinalState(p.taskState) || (taskDeadlinePassed(p) && !p.taskAssigned) ? "closed" : p.taskState === "in_progress" ? "in-progress" : ""}">${p.taskDueAt ? taskStatusLabel(p) : stateLabel(p.taskState, p.taskKind)}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p>${p.taskDueAt ? `<p class="field-hint">${t("Help needed by", "需要帮忙的截止时间")} · ${date(p.taskDueAt)}</p>` : ""}${p.taskKind ? "" : `<div class="task-card-reward"><span>${t("Reward offered", "提供的酬谢")}</span><strong>${escape(p.reward)}</strong></div>`}<div class="card-bottom"><span>♡ ${t(`${count(p.totalLikes ?? 0)} likes · ${count(p.replyCount ?? 0)} replies`, `${count(p.totalLikes ?? 0)} 次赞 · ${count(p.replyCount ?? 0)} 条回复`)}</span>${icons.arrow}</div></a>`;
     }
     return `<a class="poll-list-card" href="/vote/${p.id}"><div class="card-top"><span class="status-badge ${p.status === "closed" ? "closed" : ""}">${p.status === "closed" ? t("Ended", "已结束") : t("Open", "进行中")}</span><span>${shortDate(p.createdAt)}</span></div><h2>${escape(p.title)}</h2><p class="card-signature">${t("by", "发布者：")} ${escape(p.signature)}</p><div class="mini-results">${!p.resultsHidden && p.selectionMode === "multiple" ? `<small>${t("Share of ballots", "占选票比例")}</small>` : ""}${p.resultsHidden ? t("Results will appear when voting closes.", "投票截止后公布结果。") : p.options
       .slice(0, 2)

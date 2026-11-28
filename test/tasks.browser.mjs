@@ -77,6 +77,48 @@ async function fixture(t) {
   };
 }
 
+test("task deadline is shown to a visitor, closes replies, and can be rescheduled", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  await owner.goto(f.origin + "/create/task");
+  const toInput = time => owner.evaluate(value => {
+    const date = new Date(value);
+    return new Date(value - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }, time);
+  const first = Math.floor(Date.now() / 60000) * 60000 + 180000;
+  await owner.locator("#task-title").fill("Help move a bookshelf");
+  await owner.locator("#task-description").fill("A short move between two rooms.");
+  await owner.locator("#task-reward").fill("A coffee");
+  await owner.locator("#task-due-at").fill(await toInput(first));
+  await owner.locator("#post-visibility").selectOption("unlisted");
+  await owner.locator("#task-retention").check();
+  await owner.locator("#publish-task").click();
+  await owner.getByRole("heading", { name: "Manage this task" }).waitFor();
+  const path = new URL(owner.url()).pathname.replace("/manage", "");
+
+  const visitor = await f.browser.newPage({ locale: "en-US", timezoneId: "Asia/Tokyo" });
+  await visitor.goto(f.origin + path);
+  const deadline = visitor.locator("#task-deadline time");
+  await deadline.waitFor();
+  assert.equal(await deadline.getAttribute("datetime"), new Date(first).toISOString());
+  await visitor.locator("#reply-form").waitFor();
+  f.advance(240000);
+  await visitor.evaluate(() => window.dispatchEvent(new Event("online")));
+  await visitor.getByText("The deadline for new replies has passed.", { exact: true }).waitFor();
+  assert.equal(await visitor.locator("#reply-form").isVisible(), false);
+  assert.equal(await visitor.locator("#task-state").textContent(), "Reply deadline passed");
+
+  await owner.getByText("Edit public details", { exact: true }).click();
+  const later = first + 600000;
+  await owner.locator("#owner-task-deadline").fill(await toInput(later));
+  await owner.getByRole("button", { name: "Save changes", exact: true }).click();
+  await owner.getByText("Changes saved.", { exact: true }).waitFor();
+  await visitor.evaluate(() => window.dispatchEvent(new Event("online")));
+  await visitor.locator("#reply-form").waitFor();
+  assert.equal(await deadline.getAttribute("datetime"), new Date(later).toISOString());
+  assert.deepEqual(f.errors, []);
+});
+
 test("the finder can publish, privately verify a claim, and mark an item returned", async t => {
   const f = await fixture(t);
   const title = "Found a keyring near the park";

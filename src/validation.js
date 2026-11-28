@@ -174,6 +174,7 @@ export function ownerEditInput(body, type) {
   if (Object.hasOwn(body, "images")) changes.images = photoInput(body.images);
   if (type === "poll" && Object.hasOwn(body, "options")) changes.options = pollOptionsInput(body.options);
   if (type === "task" && Object.hasOwn(body, "reward")) changes.reward = publicText(body.reward, "Reward", 160);
+  if (type === "task" && Object.hasOwn(body, "taskDueAt")) changes.taskDueAt = taskDeadlineInput(body.taskDueAt);
   if (type === "sale" && Object.hasOwn(body, "pickupLocation"))
     changes.pickupLocation = publicText(body.pickupLocation, "Pickup location", 300);
   if (type === "sale" && Object.hasOwn(body, "privatePickupLocation"))
@@ -182,6 +183,12 @@ export function ownerEditInput(body, type) {
     changes.pickupWindow = pickupWindowInput(body.pickupWindow);
   if (!Object.keys(changes).length) throw new AppError(400, "Choose something to update.");
   return { key, changes };
+}
+
+function taskDeadlineInput(value) {
+  if (value !== null && !Number.isSafeInteger(value))
+    throw new AppError(400, "Choose a valid date and time for this task.");
+  return value;
 }
 
 export function encryptedPrivateKeyInput(value) {
@@ -258,12 +265,16 @@ export function taskInput(body) {
   });
   if (found && (common.images.length || Object.hasOwn(body, "reward")))
     throw new AppError(400, "Found notices cannot include photos or a reward.");
+  const taskDueAt = body.taskDueAt === undefined ? null : taskDeadlineInput(body.taskDueAt);
+  if ((wanted || found) && taskDueAt !== null)
+    throw new AppError(400, "Only local tasks can have a help deadline.");
   return {
     ...common,
     type: "task",
     options: [],
     description: publicText(body.description, "Description", 4000),
     ...(wanted || found ? { taskKind: body.taskKind } : { reward: publicText(body.reward, "Reward", 160) }),
+    ...(taskDueAt === null ? {} : { taskDueAt }),
     ...credentials,
   };
 }

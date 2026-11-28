@@ -591,6 +591,7 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     ["poll_final", t("Final results", "最终结果")],
     ["task_open", t("Open", "开放中")],
     ["task_assigned", t("Already assigned", "已有接单人")],
+    ["task_reply_closed", t("Reply deadline passed", "已截止回复")],
     ["task_in_progress", t("In progress", "进行中")],
     ["task_completed", t("Completed", "已完成")],
     ["task_closed", t("Closed", "已关闭")],

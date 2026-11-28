@@ -30,9 +30,11 @@ When the publisher enables ballot changes at creation, a voter can change or wit
 
 Readers can sort public replies oldest or newest first. After submitting, they can open, copy, or save a link to their individual reply. The publisher can select a respondent privately, which pauses new replies. They can reopen the task or finish it with **Completed** or **Closed**, both final states. The task and replies leave the website 30 days after publication. [Task help](https://www.scaletag.top/help#tasks)
 
+Set a help deadline when the task is time-sensitive. The page shows when help is needed and stops accepting new replies at that time. The original link and earlier replies stay available during the usual retention period. The publisher can update or remove the deadline before marking the task completed or closed.
+
 ```mermaid
 flowchart TD
-    A["<b>Task publisher</b><br/>Publish a task and reward"] --> B["<b>Respondent</b><br/>Enter a public reply and private contact details"]
+    A["<b>Task publisher</b><br/>Publish a task, reward, and optional deadline"] --> B["<b>Respondent</b><br/>Reply before the deadline with private contact details"]
     B --> D["<b>Respondent's browser</b><br/>Encrypt the private phone or email before sending"]
     D --> C["<b>ScaleTag</b><br/>Show the public name and message"]
     D --> E["<b>Task publisher</b><br/>Unlock the contact details on the management page"]

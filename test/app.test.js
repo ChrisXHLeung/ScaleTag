@@ -1021,6 +1021,40 @@ async function replyBody(task, extra = {}) {
   return { name, message, encryptedContact, privacyAccepted: Object.hasOwn(extra, "privacyAccepted") ? privacyAccepted : true, ...rest };
 }
 
+test("a task deadline closes replies without removing the task and the publisher can reschedule", async t => {
+  const f = await fixture(t);
+  const taskDueAt = f.now() + 120000;
+  const task = await createTask(f, { title: "Help tomorrow morning", taskDueAt });
+  const path = `/api/tasks/${task.id}`;
+  const post = `/api/posts/${task.id}`;
+  const { cookie } = await socialSession(f, task.id);
+  assert.equal(task.taskDueAt, taskDueAt);
+  assert.equal(task.endsAt, taskDueAt);
+  assert.equal(task.deleteAt, f.now() + 30 * DAY);
+  const body = await replyBody(task);
+  assert.equal((await f.request(post + "/replies", body, cookie)).status, 201);
+  f.advance(120000);
+  const after = await (await f.request(path)).json();
+  assert.equal(after.status, "closed");
+  assert.equal(after.taskDueAt, taskDueAt);
+  assert.equal((await f.request(post + "/replies", body, cookie)).status, 409);
+  const publicSocial = await (await f.request(post + "/social")).json();
+  assert.equal(publicSocial.taskDueAt, taskDueAt);
+  assert.equal(publicSocial.replies.length, 1);
+  const active = await (await f.request("/api/posts/search", { type: "task", status: "open" })).json();
+  assert.ok(active.polls.every(item => item.id !== task.id));
+  assert.equal((await f.request(path + "/edit", { key: task.manageKey, taskDueAt: f.now() - 1000 })).status, 400);
+  const edit = await f.request(path + "/edit", { key: task.manageKey, taskDueAt: f.now() + 180000 });
+  assert.equal(edit.status, 200);
+  assert.equal((await edit.json()).status, "open");
+  assert.equal((await f.request(post + "/replies", body, cookie)).status, 201);
+  const clear = await f.request(path + "/edit", { key: task.manageKey, taskDueAt: null });
+  assert.equal(clear.status, 200);
+  const reopened = await clear.json();
+  assert.equal(reopened.taskDueAt, undefined);
+  assert.equal(reopened.endsAt, task.deleteAt);
+});
+
 test("found items appear in their own filter and ownership details are private to the finder", async t => {
   const f = await fixture(t);
   await createTask(f);
