@@ -70,6 +70,8 @@ flowchart TD
 
 The publisher can hold the item until a chosen time or release it sooner. Marking it claimed removes it from discovery and hides the pickup details. The original link shows the claimed status until the giveaway expires 72 hours after publication. Active storage retains the record until day 30. [Giveaway help](https://www.scaletag.top/help#giveaways)
 
+For direct pickup, enter a quantity at publication. Readers see how many are left in PostList and on the giveaway page. Update the remaining number after each pickup. Setting it to zero marks the giveaway claimed.
+
 ```mermaid
 flowchart TD
     A["<b>Giver</b><br/>Post the item and pickup directions"] --> B["<b>Pickup visitor</b><br/>Read the directions for an available item"]
@@ -77,6 +79,8 @@ flowchart TD
     C -->|"Hold ends or is released"| B
     B --> F["<b>Pickup visitor</b><br/>Pick up the item in person"]
     C --> F
+    F -->|"Some items remain"| H["<b>Giver</b><br/>Update the remaining quantity"]
+    H --> B
     F --> D["<b>Giver</b><br/>Mark the item claimed"]
     D --> E["<b>ScaleTag</b><br/>Show Claimed and hide pickup details"]
 ```

@@ -71,6 +71,44 @@ async function fixture(t) {
   };
 }
 
+test("a giveaway can show multiple items left and close when the last one is collected", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  await owner.goto(f.origin + "/create/sale");
+  await owner.getByLabel("Number of items", { exact: true }).fill("4");
+  await owner.getByLabel("Pickup method", { exact: true }).selectOption("request");
+  assert.equal(await owner.getByLabel("Number of items", { exact: true }).isVisible(), false);
+  await owner.getByLabel("Pickup method", { exact: true }).selectOption("direct");
+  await owner.locator("#sale-title").fill("Four moving boxes");
+  await owner.locator("#sale-description").fill("Take as many as you need.");
+  await owner.locator("#pickup-location").fill("Library pickup shelf");
+  await owner.locator("#sale-map-consent").check();
+  await owner.locator("#sale-retention").check();
+  await owner.locator("#publish-sale").click();
+  await owner.getByRole("heading", { name: "Manage giveaway" }).waitFor();
+  const publicPath = new URL(owner.url()).pathname.replace("/manage", "");
+  const visitor = await f.browser.newPage({ viewport: { width: 320, height: 844 } });
+  await visitor.goto(f.origin + "/PostList?type=sale");
+  const item = visitor.getByRole("link", { name: /Four moving boxes/ }).first();
+  await item.getByText(/Items left · 4/).waitFor();
+  await item.click();
+  await visitor.locator("#sale-quantity-label").filter({ hasText: "Items left · 4" }).waitFor();
+  await owner.getByLabel("Items left", { exact: true }).fill("2");
+  await owner.getByRole("button", { name: "Update quantity" }).click();
+  await owner.locator("#sale-quantity-label").filter({ hasText: "Items left · 2" }).waitFor();
+  await visitor.evaluate(() => window.dispatchEvent(new Event("online")));
+  await visitor.locator("#sale-quantity-label").filter({ hasText: "Items left · 2" }).waitFor();
+  assert.equal(await visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await owner.getByLabel("Items left", { exact: true }).fill("0");
+  owner.once("dialog", dialog => dialog.accept());
+  await owner.getByRole("button", { name: "Update quantity" }).click();
+  await owner.locator("#sale-claimed").waitFor();
+  await visitor.goto(f.origin + publicPath);
+  await visitor.locator("#sale-claimed").waitFor();
+  assert.equal(await visitor.getByText("Library pickup shelf", { exact: true }).count(), 0);
+  assert.deepEqual(f.errors, []);
+});
+
 test("publish a giveaway, like it and take it down", async t => {
   const f=await fixture(t);
   await f.page.setViewportSize({ width: 320, height: 900 });

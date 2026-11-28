@@ -385,12 +385,18 @@ function pickupWindowInput(value) {
 
 export function saleInput(body) {
   const common = baseInput({ ...body, images: [], signature: body?.signature || "Anonymous" });
+  const { quantity = 1 } = body;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99)
+    throw new AppError(400, "Enter a whole quantity from 1 to 99.");
   if (body.pickupByRequest !== undefined && typeof body.pickupByRequest !== "boolean")
     throw new AppError(400, "Choose a valid pickup method.");
+  if (quantity > 1 && body.pickupByRequest)
+    throw new AppError(400, "Multiple items require direct pickup.");
   return { ...common, type: "sale", options: [],
     description: publicText(body.description, "Description", 4000),
     pickupLocation: publicText(body.pickupByRequest ? body.privatePickupLocation : body.pickupLocation, "Pickup location", 300), giveawayVersion: 1,
     ...(body.pickupByRequest ? { pickupByRequest: true } : {}),
+    ...(quantity > 1 ? { quantity, remainingQuantity: quantity } : {}),
     ...(Object.hasOwn(body, "pickupWindow") ? { pickupWindow: pickupWindowInput(body.pickupWindow) } : {}),
   };
 }

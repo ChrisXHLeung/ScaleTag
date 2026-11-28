@@ -451,6 +451,12 @@ export function createApp(
     const state = await store.setSaleState(req.params.id, key, req.body.state, req.body.reservedUntil, req.body.requestId);
     res.set("Cache-Control", "no-store, private, max-age=0").json(state);
   });
+  app.post("/api/sales/:id/quantity", async (req, res) => {
+    const key = manageKeyInput(req.body);
+    const { expected, remainingQuantity } = req.body;
+    const updated = await store.setSaleQuantity(req.params.id, key, expected, remainingQuantity);
+    res.set("Cache-Control", "no-store, private, max-age=0").json(updated);
+  });
   app.get("/api/sales/:id/qr.png", async (req, res) => {
     const sale = await store.get(req.params.id);
     if (sale.type !== "sale") throw new AppError(404, "Sale not found.");

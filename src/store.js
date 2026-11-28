@@ -55,6 +55,7 @@ function publicSaleAvailability(post, now) {
   const saleState = saleStateOf(post, now);
   return {
     saleState,
+    ...(Number.isInteger(post.remainingQuantity) ? { remainingQuantity: post.remainingQuantity } : {}),
     ...(saleState === "reserved" ? { reservedUntil: post.reservedUntil } : {}),
     ...(["open", "reserved"].includes(saleState) && post.pickupWindow ? { pickupWindow: post.pickupWindow } : {}),
   };
@@ -257,6 +258,7 @@ export class PollStore {
       reward: p.reward,
       price: p.price,
       saleState: p.saleState,
+      remainingQuantity: p.remainingQuantity,
       reservedUntil: p.reservedUntil,
       pickupWindow: p.pickupWindow,
       pickupByRequest: p.pickupByRequest,
@@ -1035,6 +1037,30 @@ export class PollStore {
         if (state === "open" && post.reservedUntil === undefined) return this.public(post);
         delete post.reservedUntil;
         post.saleState = state;
+        if (state === "claimed" && post.quantity) post.remainingQuantity = 0;
+      }
+      await this.write(db);
+      return this.public(post);
+    });
+  }
+
+  async setSaleQuantity(id, key, expected, remainingQuantity) {
+    return this.withManagedPost(id, key, "sale", async db => {
+      const post = db.data;
+      if (!post.quantity || post.pickupByRequest)
+        throw new AppError(409, "This giveaway has no quantity to update.");
+      if (!Number.isSafeInteger(expected) || !Number.isSafeInteger(remainingQuantity) ||
+          remainingQuantity < 0 || remainingQuantity > post.quantity)
+        throw new AppError(400, "Choose a valid remaining quantity.");
+      if (remainingQuantity === post.remainingQuantity) return this.public(post);
+      if (post.saleState === "claimed")
+        throw new AppError(409, "This giveaway has already been claimed.");
+      if (expected !== post.remainingQuantity)
+        throw new AppError(409, "The remaining quantity changed. Refresh before saving.");
+      post.remainingQuantity = remainingQuantity;
+      if (remainingQuantity === 0) {
+        post.saleState = "claimed";
+        delete post.reservedUntil;
       }
       await this.write(db);
       return this.public(post);

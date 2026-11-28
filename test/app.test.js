@@ -182,6 +182,44 @@ test("concurrent requests from one browser count exactly once", async (t) => {
   assert.equal(result.hasVoted, true);
 });
 
+test("direct giveaways update the remaining quantity and become claimed at zero", async (t) => {
+  const f = await fixture(t);
+  const body = input({ title: "Four moving boxes", pickupLocation: "Library", images: [], quantity: 4 });
+  for (const quantity of [0, 1.5, 100, "4", null])
+    assert.equal((await f.request("/api/sales", { ...body, quantity })).status, 400);
+  const post = await f.request("/api/sales", body);
+  assert.equal(post.status, 201);
+  const sale = await post.json();
+  assert.equal(sale.quantity, 4);
+  assert.equal(sale.remainingQuantity, 4);
+  const path = `/api/sales/${sale.id}`;
+  const update = (expected, remainingQuantity, key = sale.manageKey) =>
+    f.request(path + "/quantity", { key, expected, remainingQuantity });
+  assert.equal((await update(4, 2, "0".repeat(64))).status, 403);
+  assert.equal((await update(4, 5)).status, 400);
+  const changed = await update(4, 2);
+  assert.equal(changed.status, 200);
+  assert.equal((await changed.json()).remainingQuantity, 2);
+  assert.equal((await update(4, 2)).status, 200);
+  assert.equal((await update(4, 1)).status, 409);
+  const detail = await (await f.request(path)).json();
+  assert.equal(detail.saleState, "open");
+  assert.equal(detail.remainingQuantity, 2);
+  const list = await (await f.request("/api/posts/search", { type: "sale" })).json();
+  assert.equal(list.polls.find(item => item.id === sale.id).remainingQuantity, 2);
+  const social = await (await f.request(`/api/posts/${sale.id}/social`)).json();
+  assert.equal(social.remainingQuantity, 2);
+  const finished = await (await update(2, 0)).json();
+  assert.equal(finished.saleState, "claimed");
+  assert.equal(finished.remainingQuantity, 0);
+  assert.equal(finished.pickupLocation, undefined);
+  assert.equal((await update(0, 1)).status, 409);
+  assert.equal((await update(2, 0)).status, 200);
+  assert.equal((await f.request("/api/sales", {
+    ...body, pickupByRequest: true, privatePickupLocation: "Library",
+  })).status, 400);
+});
+
 test("an opted-in poll accepts anonymous ballot changes and withdrawals until closing", async (t) => {
   const f = await fixture(t);
   const poll = await f.create({ allowBallotChanges: true, selectionMode: "multiple", options: ["A", "B", "C"] });

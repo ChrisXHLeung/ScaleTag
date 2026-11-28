@@ -2,6 +2,51 @@
 const NUM = "[\\d,.\\s\\u00a0\\u202f]+";
 
 export const TRANSLATIONS = {
+  "Items left": {
+    ja: "残りの個数",
+    ko: "남은 수량",
+    fr: "Articles restants",
+    pt: "Itens restantes",
+    es: "Unidades restantes",
+    de: "Verbleibende Stückzahl",
+    it: "Articoli rimasti",
+  },
+  "Number of items": {
+    ja: "品物の個数",
+    ko: "물품 수량",
+    fr: "Nombre d’articles",
+    pt: "Quantidade de itens",
+    es: "Cantidad de artículos",
+    de: "Anzahl der Artikel",
+    it: "Numero di articoli",
+  },
+  "Update quantity": {
+    ja: "残りの個数を更新",
+    ko: "남은 수량 업데이트",
+    fr: "Mettre à jour la quantité",
+    pt: "Atualizar quantidade",
+    es: "Actualizar cantidad",
+    de: "Stückzahl aktualisieren",
+    it: "Aggiorna quantità",
+  },
+  "Update the remaining quantity or mark the item claimed": {
+    ja: "残りの個数を更新するか、受け取り済みにする",
+    ko: "남은 수량을 수정하거나 수령 완료 표시",
+    fr: "Mettre à jour la quantité restante ou marquer l’objet comme récupéré",
+    pt: "Atualizar a quantidade restante ou marcar como retirado",
+    es: "Actualizar la cantidad restante o marcar como recogido",
+    de: "Übrige Stückzahl anpassen oder als abgeholt markieren",
+    it: "Aggiorna la quantità rimanente o segna come ritirato",
+  },
+  "For direct pickup, you can publish multiple items in one giveaway and update how many are left after each pickup.": {
+    ja: "直接受け取りでは、複数の品物を一つの投稿にまとめ、受け取りのたびに残りの個数を更新できます。",
+    ko: "직접 수령을 선택하면 한 게시물에 여러 물품을 등록하고 수령이 끝날 때마다 남은 수량을 수정할 수 있습니다.",
+    fr: "Pour un retrait direct, publiez plusieurs articles dans une seule annonce et mettez à jour la quantité après chaque retrait.",
+    pt: "Para retirada direta, publique vários itens no mesmo anúncio e atualize a quantidade restante após cada retirada.",
+    es: "Para recogida directa, publica varios artículos en un anuncio y actualiza la cantidad después de cada recogida.",
+    de: "Bei direkter Abholung kannst du mehrere Artikel in einem Angebot veröffentlichen und die Stückzahl nach jeder Abholung anpassen.",
+    it: "Con il ritiro diretto puoi pubblicare più articoli in un unico annuncio e aggiornare il numero rimasto dopo ogni ritiro.",
+  },
   "Changing a vote": {
     ja: "投票の変更",
     ko: "투표 변경",
@@ -8287,6 +8332,51 @@ export const DYNAMIC_TRANSLATIONS = [
 ];
 
 export const SERVER_ERRORS = {
+  "Enter a whole quantity from 1 to 99.": {
+    ja: "1～99の整数を入力してください。",
+    ko: "1에서 99 사이의 정수를 입력하세요.",
+    fr: "Saisissez un nombre entier de 1 à 99.",
+    pt: "Informe uma quantidade inteira de 1 a 99.",
+    es: "Introduce un número entero del 1 al 99.",
+    de: "Gib eine ganze Zahl von 1 bis 99 ein.",
+    it: "Inserisci un numero intero da 1 a 99.",
+  },
+  "Multiple items require direct pickup.": {
+    ja: "複数の品物には直接受け取りを選んでください。",
+    ko: "여러 물품은 직접 수령을 선택해야 합니다.",
+    fr: "Plusieurs articles nécessitent le retrait direct.",
+    pt: "Vários itens exigem retirada direta.",
+    es: "Varios artículos requieren recogida directa.",
+    de: "Mehrere Artikel erfordern die direkte Abholung.",
+    it: "Più articoli richiedono il ritiro diretto.",
+  },
+  "This giveaway has no quantity to update.": {
+    ja: "この投稿には更新できる個数がありません。",
+    ko: "이 게시물에는 수정할 수량이 없습니다.",
+    fr: "Ce don n’a pas de quantité à mettre à jour.",
+    pt: "Esta doação não tem uma quantidade para atualizar.",
+    es: "Este regalo no tiene una cantidad que actualizar.",
+    de: "Für dieses Angebot lässt sich keine Stückzahl ändern.",
+    it: "Questo regalo non ha una quantità da aggiornare.",
+  },
+  "Choose a valid remaining quantity.": {
+    ja: "有効な残り個数を選んでください。",
+    ko: "올바른 남은 수량을 선택하세요.",
+    fr: "Choisissez une quantité restante valide.",
+    pt: "Escolha uma quantidade restante válida.",
+    es: "Elige una cantidad restante válida.",
+    de: "Wähle eine gültige verbleibende Stückzahl.",
+    it: "Scegli una quantità rimanente valida.",
+  },
+  "The remaining quantity changed. Refresh before saving.": {
+    ja: "残りの個数が変わりました。保存する前に再読み込みしてください。",
+    ko: "남은 수량이 바뀌었습니다. 저장하기 전에 새로고침하세요.",
+    fr: "La quantité a changé. Actualisez avant d’enregistrer.",
+    pt: "A quantidade mudou. Atualize a página antes de salvar.",
+    es: "La cantidad cambió. Actualiza la página antes de guardar.",
+    de: "Die Stückzahl hat sich geändert. Lade die Seite vor dem Speichern neu.",
+    it: "La quantità è cambiata. Ricarica la pagina prima di salvare.",
+  },
   "Choose a valid ballot change setting.": {
     ja: "有効な投票変更設定を選んでください。",
     ko: "올바른 투표 변경 설정을 선택하세요.",

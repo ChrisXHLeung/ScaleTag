@@ -142,6 +142,11 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Enter a whole quantity from 1 to 99.': '请输入 1 至 99 之间的整数件数。',
+  'Multiple items require direct pickup.': '多件物品请选择直接领取。',
+  'This giveaway has no quantity to update.': '这条赠予没有可更新的件数。',
+  'Choose a valid remaining quantity.': '请选择有效的剩余件数。',
+  'The remaining quantity changed. Refresh before saving.': '剩余件数已变化，请刷新后保存。',
   'Choose a valid ballot change setting.': '请选择有效的改选设置。',
   'A withdrawal cannot include options.': '撤回时不能同时提交选项。',
   'There is no editable ballot for this browser.': '此浏览器没有可修改的选票。',
