@@ -333,6 +333,8 @@ window.addEventListener("pageshow", (event) => {
 export function renderSavedPosts(host, { offline = false } = {}) {
   const page = document.createElement("section");
   page.className = "list-page";
+  const header = document.createElement("header");
+  header.className = "list-heading saved-heading";
   const heading = document.createElement("h1");
   heading.textContent = t("Saved links", "已保存链接");
   heading.tabIndex = -1;
@@ -393,9 +395,9 @@ export function renderSavedPosts(host, { offline = false } = {}) {
   filterFeedback.classList.add("saved-filter-message");
   const empty = notice("");
   empty.classList.add("saved-filter-message");
-  page.append(heading, description);
-  if (offline) page.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
-  page.append(filters);
+  header.append(heading, description);
+  if (offline) header.append(notice(t("Reconnect to open posts and check their current status.", "重新联网即可打开帖子并查看最新状态。")));
+  page.append(header, filters);
   if (!offline) page.append(refreshControls, filterFeedback);
   page.append(recovery, list, empty);
   host.replaceChildren(page);

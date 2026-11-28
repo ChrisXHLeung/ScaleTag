@@ -248,7 +248,7 @@ function renderPollManager(poll, key) {
   const id = poll.id;
   const endpoint = `/api/polls/${id}`;
   document.title = `${t("Manage: ", "管理：")}${poll.title} — ScaleTag`;
-  main.innerHTML = `<section class="empty-page"><section class="manage-card" id="poll-owner-controls">
+  main.innerHTML = `<section class="manage-page"><section class="manage-card" id="poll-owner-controls">
     <h1>${t("Manage this poll", "管理此投票")}</h1><h2>${escape(poll.title)}</h2>
     <p id="poll-manager-state" tabindex="-1">${poll.status === "closed" ? t("Voting closed", "投票已结束") : t("Open for votes", "投票进行中")}</p>
     <div><a class="button secondary small" href="/vote/${id}">${t("View poll", "查看投票")}</a>

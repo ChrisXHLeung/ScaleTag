@@ -45,21 +45,6 @@
   margin-top: 8px;
 }
 
-.secrex-fields input[type="password"],
-.secrex-fields input[type="text"],
-.secrex-fields select,
-.secrex-fields textarea {
-  width: 100%;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid #b9c6ce;
-  border-radius: 5px;
-  background: var(--white, #fff);
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1.5;
-}
-
 .secrex-fields textarea {
   resize: vertical;
   min-height: 130px;
@@ -115,15 +100,6 @@
 .secrex-new {
   display: inline-block;
   margin-top: 10px;
-}
-
-@media (max-width: 760px) {
-  .secrex-fields input[type="password"],
-  .secrex-fields input[type="text"],
-  .secrex-fields select,
-  .secrex-fields textarea {
-    font-size: 16px;
-  }
 }
 
 @media (max-width: 440px) {

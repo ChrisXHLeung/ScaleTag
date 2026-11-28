@@ -4396,6 +4396,15 @@ export const TRANSLATIONS = {
     de: "Abholung wird vereinbart",
     it: "Ritiro in organizzazione",
   },
+  "Looking for something?": {
+    ja: "何かお探しですか？",
+    ko: "찾는 물건이 있나요?",
+    fr: "Vous cherchez quelque chose ?",
+    pt: "Procurando alguma coisa?",
+    es: "¿Buscas algo?",
+    de: "Suchst du etwas?",
+    it: "Cerchi qualcosa?",
+  },
   "Ask for an item": {
     ja: "品物を探す",
     ko: "물품 요청",
@@ -7933,14 +7942,14 @@ export const TRANSLATIONS = {
     de: "BRING ETWAS INS ROLLEN",
     it: "FAI SUCCEDERE QUALCOSA",
   },
-  "A little help.<br>A local <em>connection.</em>": {
-    ja: "ちょっとした助け合い。<br>地域の<em>つながり。</em>",
-    ko: "작은 도움 하나,<br>동네의 <em>연결.</em>",
-    fr: "Un petit coup de main.<br>Un lien <em>local.</em>",
-    pt: "Uma ajudinha.<br>Uma <em>conexão</em> local.",
-    es: "Un poco de ayuda.<br>Una <em>conexión local.</em>",
-    de: "Ein wenig Hilfe.<br>Eine lokale <em>Verbindung.</em>",
-    it: "Un piccolo aiuto.<br>Un <em>legame</em> locale.",
+  "A little help.<br><em>A local connection.</em>": {
+    ja: "ちょっとした助け合い。<br><em>地域のつながり。</em>",
+    ko: "작은 도움 하나,<br><em>동네의 연결.</em>",
+    fr: "Un petit coup de main.<br><em>Un lien local.</em>",
+    pt: "Uma ajudinha.<br><em>Uma conexão local.</em>",
+    es: "Un poco de ayuda.<br><em>Una conexión local.</em>",
+    de: "Ein wenig Hilfe.<br><em>Eine lokale Verbindung.</em>",
+    it: "Un piccolo aiuto.<br><em>Un legame locale.</em>",
   },
   "Share a task and the reward you offer. People can reply with a way to reach them.": {
     ja: "お願いしたいタスクとお礼を共有しましょう。協力できる人が連絡先付きで返信できます。",

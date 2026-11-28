@@ -289,21 +289,39 @@ test('browser language, manual preference, storage fallback and offline switchin
       ['Set the question and deadline', ['Poll creator', 'Poll creator', 'Voter', 'Poll reader', 'Poll creator', 'Poll reader']],
       ['Publish a task', ['Task publisher', 'Respondent', 'Task publisher', 'Task publisher']],
       ['Publish an item and pickup details', ['Giver', 'Pickup visitor', 'Giver']],
+      ['Publish an item request', ['Requester', 'Giver', 'Requester']],
+      ['Publish a found notice', ['Finder', 'Claimant', 'Finder', 'Finder']],
+      ['Publish a lost notice', ['Item owner', 'Neighbour', 'Item owner']],
       ['Enter the message to encrypt', ['Sender', 'Sender', 'Recipient', 'Recipient', 'ScaleTag']],
     ]],
     ['zh-CN', [
       ['设置问题和截止时间', ['投票发起者', '投票发起者', '投票者', '查看结果的人', '投票发起者', '查看结果的人']],
       ['发布任务', ['任务发布者', '回复者', '任务发布者', '任务发布者']],
       ['发布物品与领取安排', ['赠予者', '领取者', '赠予者']],
+      ['发布求赠', ['求赠者', '赠予者', '求赠者']],
+      ['发布招领', ['拾获者', '认领者', '拾获者', '拾获者']],
+      ['发布寻物', ['失主', '邻居', '失主']],
       ['输入要加密的消息', ['发送者', '发送者', '收件人', '收件人', 'ScaleTag']],
     ]],
   ]) {
     const context = await browser.newContext({ locale, viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     await page.goto(`${origin}/create`);
-    for (const [index, path] of ['/create', '/create/task', '/create/sale', '/secrex'].entries()) {
-      if (index) await page.locator(`.post-kind-switch a[href="${path}"]`).click();
+    const routes = ['/create', '/create/task', '/create/sale', '/create/wanted', '/create/found', '/create/lost', '/secrex'];
+    for (const [index, path] of routes.entries()) {
+      const tabSelector = path === '/create/lost' ? '.lost-found-switch' : '.post-kind-switch';
+      if (index) await page.locator(`${tabSelector} a[href="${path}"]`).click();
       assert.equal(new URL(page.url()).pathname, path);
+      const activeTab = path === '/create/lost' ? '/create/found' : path;
+      assert.equal(await page.locator('.post-kind-switch [aria-current="page"]').getAttribute('href'), activeTab);
+      if (activeTab === '/create/found') {
+        const mode = page.locator('.lost-found-switch [aria-current="page"]');
+        assert.equal(await mode.getAttribute('href'), path);
+        assert.equal(await mode.evaluate(el => getComputedStyle(el).backgroundColor),
+          await page.locator('.post-kind-switch [aria-current="page"]').evaluate(el => getComputedStyle(el).backgroundColor));
+      }
+      assert.deepEqual(await page.locator('.site-header nav a').evaluateAll(links =>
+        links.map(link => link.pathname)), ['/create', '/saved', '/PostList']);
       const flow = page.locator('.section-intro .help-flow');
       await flow.waitFor();
       const accent = page.locator('.section-intro h1 em');
@@ -317,10 +335,18 @@ test('browser language, manual preference, storage fallback and offline switchin
       assert.deepEqual(await flow.locator('.help-step-actor').allTextContents(), actors);
       assert.ok(await flow.evaluate(el =>
         el.getBoundingClientRect().right < document.querySelector('.form-card').getBoundingClientRect().left));
-      await page.setViewportSize({ width: 360, height: 800 });
-      assert.notEqual(await page.locator('.section-intro h1 br').evaluate(br => getComputedStyle(br).display), 'none');
-      assert.ok(await flow.isVisible());
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      for (const [width, expectedRows] of [[1440, [6]], [768, [3, 3]], [320, [3, 3]]]) {
+        await page.setViewportSize({ width, height: 900 });
+        const boxes = await page.locator('.post-kind-switch a').evaluateAll(links =>
+          links.map(link => link.getBoundingClientRect().toJSON()));
+        const rows = [...new Set(boxes.map(box => box.top))];
+        assert.deepEqual(rows.map(top => boxes.filter(box => box.top === top).length), expectedRows, path);
+        assert.ok(Math.max(...boxes.map(box => box.width)) - Math.min(...boxes.map(box => box.width)) <= 1);
+        assert.ok(boxes.every(box => box.height >= 44));
+        assert.ok(await flow.isVisible());
+        assert.notEqual(await page.locator('.section-intro h1 br').evaluate(br => getComputedStyle(br).display), 'none');
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), path);
+      }
       await page.setViewportSize({ width: 1440, height: 900 });
     }
     const savedLink = page.locator('.site-header nav')
@@ -329,4 +355,13 @@ test('browser language, manual preference, storage fallback and offline switchin
     assert.equal(new URL(page.url()).pathname, '/saved');
     await context.close();
   }
+
+  const longLabels = await browser.newContext({ locale: 'de-DE', viewport: { width: 320, height: 800 } });
+  const longPage = await longLabels.newPage();
+  for (const path of ['/help', '/privacy', '/secrex']) {
+    await longPage.goto(origin + path);
+    await longPage.locator('main h1').waitFor();
+    assert.ok(await longPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), path);
+  }
+  await longLabels.close();
 });

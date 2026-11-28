@@ -332,7 +332,7 @@ export {
 };
 
 export function managementPasswordForm(unlock) {
-  main.innerHTML = `<section class="empty-page"><form id="manage-password-form" class="form-card">
+  main.innerHTML = `<section class="manage-page"><form id="manage-password-form" class="form-card">
     <h1>${t("Manage this post", "管理此帖子")}</h1>
     <label for="manage-password">${t("Management password", "管理密码")}</label>
     <div class="manage-password-input">
