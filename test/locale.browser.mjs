@@ -286,13 +286,13 @@ test('browser language, manual preference, storage fallback and offline switchin
   // Each creation tab shows its own flow in the introduction beside the form.
   for (const [locale, flows] of [
     ['en-US', [
-      ['Set the question and deadline', ['Poll creator', 'Poll creator', 'Voter', 'Poll reader']],
+      ['Set the question and deadline', ['Poll creator', 'Poll creator', 'Voter', 'Poll reader', 'Poll creator', 'Poll reader']],
       ['Publish a task', ['Task publisher', 'Respondent', 'Task publisher', 'Task publisher']],
       ['Publish an item and pickup details', ['Giver', 'Pickup visitor', 'Giver']],
       ['Enter the message to encrypt', ['Sender', 'Sender', 'Recipient', 'Recipient', 'ScaleTag']],
     ]],
     ['zh-CN', [
-      ['设置问题和截止时间', ['投票发起者', '投票发起者', '投票者', '查看结果的人']],
+      ['设置问题和截止时间', ['投票发起者', '投票发起者', '投票者', '查看结果的人', '投票发起者', '查看结果的人']],
       ['发布任务', ['任务发布者', '回复者', '任务发布者', '任务发布者']],
       ['发布物品与领取安排', ['赠予者', '领取者', '赠予者']],
       ['输入要加密的消息', ['发送者', '发送者', '收件人', '收件人', 'ScaleTag']],
