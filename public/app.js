@@ -82,6 +82,10 @@ function createPoll() {
     <label for="description">${t("A little context", "补充说明")} <span class="optional">${t("optional", "可选")}</span></label><textarea id="description" name="description" maxlength="4000" rows="4" aria-describedby="description-count" placeholder="${t("Tell people a bit more about your question\u2026", "补充一些背景，让大家更了解这个问题…")}"></textarea><div class="field-hint"><span>${t("Character count", "字数")}</span><span id="description-count"></span></div><p id="description-limit-status" class="field-hint reply-length-status" role="status"></p>
     ${photoFields("poll", t("Photos (optional)", "投票照片（选填）"))}
     <label for="selection-mode">${t("Ballot type", "投票类型")}</label><select id="selection-mode" name="selectionMode"><option value="single">${t("Single choice", "单选")}</option><option value="multiple">${t("Multiple choices", "多选")}</option></select>
+    <label for="ballot-changes">${t("Changing a vote", "改选设置")}</label><select id="ballot-changes" name="ballotChanges">
+      <option value="fixed">${t("Keep votes fixed", "提交后锁定选票")}</option>
+      <option value="allowed">${t("Allow changes before voting closes", "截止前可改选或撤回")}</option>
+    </select>
     <fieldset class="options-fieldset"><legend>${t("The options", "选项")} <span class="required">*</span></legend><p class="field-hint">${t("Add 2–12 choices.", "添加 2 至 12 个选项。")}</p><div id="option-inputs"></div><button class="add-option" type="button" id="add-option">${icons.plus} ${t("Add an option", "添加选项")}</button></fieldset>
     <label for="voting-hours">${t("Voting duration", "投票时长")}</label><select id="voting-hours" name="votingHours"><option value="1">${t("1 hour", "1 小时")}</option><option value="6">${t("6 hours", "6 小时")}</option><option value="24">${t("1 day", "1 天")}</option><option value="72">${t("3 days", "3 天")}</option><option value="168" selected>${t("7 days", "7 天")}</option></select>
     <label for="results-visibility">${t("Show results", "公布结果")}</label><select id="results-visibility" name="resultsVisibility"><option value="live">${t("As votes come in", "实时公布")}</option><option value="after_close">${t("After voting closes", "截止后公布")}</option></select>
@@ -139,7 +143,7 @@ function createPoll() {
   addOption();
   addOption();
   const choices = () => [...inputs.querySelectorAll("input")].map((el) => el.value);
-  const draft = bindTextDraft(form, "poll", ["#title", "#description", "#signature", "#voting-hours", "#results-visibility", "#post-visibility", "#selection-mode"], {
+  const draft = bindTextDraft(form, "poll", ["#title", "#description", "#signature", "#voting-hours", "#results-visibility", "#post-visibility", "#selection-mode", "#ballot-changes"], {
     read: choices,
     contains: (target) => inputs.contains(target),
     restore(values) {
@@ -198,6 +202,7 @@ function createPoll() {
         votingHours: Number(form.elements.votingHours.value),
         resultsVisibility: form.elements.resultsVisibility.value,
         selectionMode: form.elements.selectionMode.value,
+        allowBallotChanges: form.elements.ballotChanges.value === "allowed",
         images,
         ...visibility.payload(location),
         retentionAccepted: document.querySelector("#retention").checked,
@@ -507,10 +512,20 @@ async function votePage(id, { ownerKey, published } = {}) {
   );
   const options = main.querySelector("#vote-options");
   const button = main.querySelector("#cast-vote");
+  button.insertAdjacentHTML("afterend", `<button class="button secondary small" id="cancel-vote-change" type="button" hidden>${t("Cancel changes", "取消修改")}</button>
+    <div id="ballot-actions" class="local-post-controls" hidden>
+      <button class="button secondary small" id="change-vote" type="button">${t("Change my vote", "修改我的投票")}</button>
+      <button class="button secondary small" id="withdraw-vote" type="button">${t("Withdraw my vote", "撤回我的投票")}</button>
+    </div>`);
+  const ballotActions = main.querySelector("#ballot-actions");
+  const change = main.querySelector("#change-vote");
+  const withdraw = main.querySelector("#withdraw-vote");
+  const cancel = main.querySelector("#cancel-vote-change");
   const voteMessage = main.querySelector("#vote-message");
   const resultBasis = main.querySelector("#result-basis");
   voteMessage.tabIndex = -1;
   let submitting = false;
+  let changingVote = false;
   let refreshController;
   let lastResultsHtml;
   function render() {
@@ -551,20 +566,35 @@ async function votePage(id, { ownerKey, published } = {}) {
     // innerHTML, which may normalise entities/attributes differently).
     if (resultsHtml !== lastResultsHtml) results.innerHTML = lastResultsHtml = resultsHtml;
     const focused = document.activeElement;
-    const ballotDisabled = !sessionReady || closed || poll.hasVoted;
-    const shouldFocusMessage = ballotDisabled && (focused === button || options.contains(focused));
+    const canChange = !closed && Array.isArray(poll.yourOptionIds);
+    changingVote &&= canChange;
+    ballotActions.hidden = !canChange || changingVote;
+    cancel.hidden = !changingVote;
+    const ballotDisabled = !sessionReady || closed || (poll.hasVoted && !changingVote);
+    const shouldFocusMessage = ballotDisabled && (focused === button || options.contains(focused) ||
+      (closed && (ballotActions.contains(focused) || focused === cancel)));
     const updatedBallot = pollBallotOptions(poll.options, multiple);
     if (ballotMarkup !== updatedBallot) options.innerHTML = ballotMarkup = updatedBallot;
+    if (!changingVote && canChange) {
+      for (const input of options.querySelectorAll("input"))
+        input.checked = poll.yourOptionIds.includes(Number(input.value));
+    }
     options.disabled = ballotDisabled;
     button.disabled = ballotDisabled;
     button.innerHTML = closed
       ? t("Voting has ended", "投票已结束")
-      : poll.hasVoted
+      : changingVote
+        ? t("Save changes", "保存修改")
+        : poll.hasVoted
         ? t("Your vote is counted ✓", "你的投票已计入 ✓")
         : `${t("Cast my vote", "提交投票")} ${icons.arrow}`;
     const voteMessageText = closed
       ? t("This poll has ended. You can still view the results and share its QR code until deletion.", "投票已结束。在投票被移除前，你仍可查看结果和分享二维码。")
-      : poll.hasVoted
+      : changingVote
+        ? t("Select your updated choices and save them.", "更新选项后保存。")
+        : canChange
+        ? t("You can update or withdraw this vote from this browser until voting closes.", "投票截止前，可在此浏览器中改选或撤回。")
+        : poll.hasVoted
         ? t("Thanks for adding your voice. This browser has already voted.", "这个浏览器已经投过票，感谢参与。")
         : poll.resultsHidden
           ? t("Results will appear when voting closes.", "投票截止后公布结果。")
@@ -580,6 +610,23 @@ async function votePage(id, { ownerKey, published } = {}) {
         : t("Results refresh every 15 seconds while this page is visible.", "页面可见时，每 15 秒刷新结果。");
   }
   render();
+  change.onclick = () => {
+    if (submitting || !Array.isArray(poll.yourOptionIds)) return;
+    changingVote = true;
+    render();
+    (options.querySelector("input:checked") ?? options.querySelector("input"))?.focus();
+  };
+  cancel.onclick = () => {
+    if (submitting) return;
+    changingVote = false;
+    main.querySelector("#vote-error").hidden = true;
+    render();
+    change.focus();
+  };
+  withdraw.onclick = () => {
+    if (submitting || !confirm(t("Withdraw your vote from this poll?", "撤回你在此投票中的选票？"))) return;
+    void submitVote({ withdraw: true }, true);
+  };
   document.querySelector("#vote-form").onsubmit = async (e) => {
     e.preventDefault();
     if (submitting || button.disabled) return;
@@ -590,6 +637,10 @@ async function votePage(id, { ownerKey, published } = {}) {
       return;
     }
     const vote = multiple ? { optionIds: selected } : { optionId: selected[0] };
+    await submitVote(vote, changingVote);
+  };
+  async function submitVote(vote, update) {
+    const error = main.querySelector("#vote-error");
     submitting = true;
     refreshController?.abort();
     button.setAttribute("aria-disabled", "true");
@@ -598,20 +649,27 @@ async function votePage(id, { ownerKey, published } = {}) {
     voteMessage.textContent = t("Submitting your vote…", "正在提交投票…");
     error.hidden = true;
     try {
-      poll = await api(`/api/polls/${id}/votes`, vote);
-      toast(t("Your vote is in. Thank you!", "投票已提交，谢谢参与！"));
+      poll = await api(`/api/polls/${id}/${update ? "ballot" : "votes"}`, vote);
+      changingVote = false;
+      if (vote.withdraw) {
+        for (const input of options.querySelectorAll("input")) input.checked = false;
+        toast(t("Your vote was withdrawn.", "你的投票已撤回。"));
+      } else {
+        toast(update ? t("Your vote was updated.", "你的投票已更新。") : t("Your vote is in. Thank you!", "投票已提交，谢谢参与！"));
+      }
     } catch (e) {
       showFormError(error, e, { focus: false });
       try {
         poll = await api(`/api/polls/${id}`);
-        if (poll.hasVoted) error.hidden = true;
+        if (!update && poll.hasVoted) error.hidden = true;
       } catch {}
     } finally {
       submitting = false;
       button.removeAttribute("aria-disabled");
       render();
+      if (vote.withdraw && !poll.hasVoted) voteMessage.focus();
     }
-  };
+  }
   const social = mountSocial(id, false);
   let timer;
   let stopped = false;
@@ -1425,6 +1483,7 @@ function privacy() {
       "Poll votes use a random cookie for each poll. Likes, replies and reports share a separate random cookie for each post. We save hashes to limit repeat votes, likes and reports from the same browser. Vote hashes are removed after voting closes. A cookie cannot verify who you are. Clearing cookies or changing browsers can allow another vote, like or report. ScaleTag does not keep web request access logs. Cloudflare processes network requests, and host security logs may contain connection information.",
       "每个投票使用随机 Cookie 记录投票。点赞、回复和举报共用另一个按帖子生成的随机 Cookie。系统保存哈希值，以限制同一浏览器重复投票、点赞或举报。投票关闭后会删除投票去重哈希。Cookie 无法验证身份。清除 Cookie 或换浏览器后，可以再次投票、点赞或举报。ScaleTag 不保留网站请求访问日志。Cloudflare 会处理网络请求，主机安全日志也可能包含连接信息。",
     )}</p>
+    <p>${t("When ballot changes are enabled, the selections are kept alongside the anonymous hash so the same browser can edit or withdraw them. ScaleTag clears this record from active storage after voting closes.", "启用改选时，所选选项会暂时与匿名哈希一起保存，以便在同一浏览器改选或撤回。投票结束后，ScaleTag 会从在线数据库清除此记录。")}</p>
 
     <p>${t("Pickup requests save a proposed time and a hash of a random cookie for that giveaway. They do not ask for contact details.", "领取申请会保存预计领取时间和这条赠予专用随机 Cookie 的哈希值。申请时无需填写联系方式。")}</p>
 

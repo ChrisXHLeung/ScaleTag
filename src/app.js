@@ -359,7 +359,7 @@ export function createApp(
     }
     res.json(poll);
   });
-  app.post("/api/polls/:id/votes", async (req, res) => {
+  const ballotRequest = changing => async (req, res) => {
     const token = tokenFor(req, req.params.id);
     if (!token)
       throw new AppError(
@@ -367,12 +367,19 @@ export function createApp(
         "Please allow this poll’s anonymous cookie and reload the page before voting.",
       );
     const { optionId, optionIds } = req.body ?? {};
+    if (changing && req.body?.withdraw === true) {
+      if (optionId !== undefined || optionIds !== undefined)
+        throw new AppError(400, "A withdrawal cannot include options.");
+      return res.json(await store.vote(req.params.id, token, null, true));
+    }
     if (optionIds !== undefined && (optionId !== undefined || !Array.isArray(optionIds)))
       throw new AppError(400, "Please select one or more different options.");
     if (optionIds === undefined && !Number.isInteger(optionId))
       throw new AppError(400, "Please select exactly one option.");
-    res.json(await store.vote(req.params.id, token, optionIds ?? optionId));
-  });
+    res.json(await store.vote(req.params.id, token, optionIds ?? optionId, changing));
+  };
+  app.post("/api/polls/:id/votes", ballotRequest(false));
+  app.post("/api/polls/:id/ballot", ballotRequest(true));
   app.post("/api/polls/:id/manage", async (req, res) => {
     res.set({ "Cache-Control": "no-store, private, max-age=0", Pragma: "no-cache",
       "X-Robots-Tag": "noindex" });

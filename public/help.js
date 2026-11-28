@@ -26,7 +26,7 @@ const features = [
     [
       [actor.pollCreator, "Set the question and deadline", "设置问题和截止时间"],
       [actor.pollCreator, "Publish and share the link or QR code", "发布并分享链接或二维码"],
-      [actor.voter, "Vote", "投票"],
+      [actor.voter, "Vote and update your ballot if allowed", "投票，获准时可改选或撤回"],
       [actor.pollReader, "View results when available", "结果公布后查看"],
       [actor.pollCreator, "Confirm a decision if needed", "需要时确认最终决定"],
       [actor.pollReader, "See the decision and download its calendar event if set", "查看最终决定，若有活动时间可加入日历"],

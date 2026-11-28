@@ -157,7 +157,12 @@ export function pollInput(body) {
     throw new AppError(400, "Choose when to publish poll results.");
   if (!["single", "multiple"].includes(selectionMode))
     throw new AppError(400, "Choose a valid ballot type.");
-  return { ...common, options, votingHours, resultsVisibility, selectionMode };
+  if (body.allowBallotChanges !== undefined && typeof body.allowBallotChanges !== "boolean")
+    throw new AppError(400, "Choose a valid ballot change setting.");
+  return {
+    ...common, options, votingHours, resultsVisibility, selectionMode,
+    ...(body.allowBallotChanges ? { allowBallotChanges: true } : {}),
+  };
 }
 
 export function ownerEditInput(body, type) {

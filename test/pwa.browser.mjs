@@ -1393,6 +1393,53 @@ test("new poll owner can copy management details, edit photos, end and take down
   assert.equal((await context.request.get(`${origin}/api/polls/${id}/qr.png`)).status(), 404);
 });
 
+test("voters can update an opted-in ballot in the original browser or withdraw it", { timeout: 60000 }, async (t) => {
+  const { browser, context, origin, page, errors } = await fixture(t);
+  const created = await context.request.post(`${origin}/api/polls`, {
+    headers: { origin },
+    data: {
+      title: "Which days work?", options: ["Friday", "Saturday", "Sunday"],
+      signature: "Test", retentionAccepted: true, visibility: "unlisted",
+      selectionMode: "multiple", allowBallotChanges: true,
+    },
+  });
+  assert.equal(created.status(), 201);
+  const { id } = await created.json();
+  const url = `${origin}/vote/${id}?lang=en`;
+  await page.goto(url);
+  const friday = page.getByRole("checkbox", { name: "Friday" });
+  const saturday = page.getByRole("checkbox", { name: "Saturday" });
+  const sunday = page.getByRole("checkbox", { name: "Sunday" });
+  await friday.check();
+  await saturday.check();
+  await page.getByRole("button", { name: "Cast my vote" }).click();
+  const change = page.getByRole("button", { name: "Change my vote" });
+  await change.waitFor();
+
+  const other = await browser.newPage();
+  await other.goto(url);
+  assert.equal(await other.getByRole("button", { name: "Change my vote" }).count(), 0);
+  await page.reload();
+  await change.click();
+  assert.equal(await friday.isChecked(), true);
+  assert.equal(await saturday.isChecked(), true);
+  await friday.uncheck();
+  await page.getByRole("button", { name: "Cancel changes" }).click();
+  assert.equal(await friday.isChecked(), true);
+  await change.click();
+  await friday.uncheck();
+  await sunday.check();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByText("Your vote was updated.", { exact: true }).waitFor();
+  assert.deepEqual(await page.locator("#results meter").evaluateAll(meters => meters.map(meter => meter.value)), [0, 1, 1]);
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Withdraw my vote" }).click();
+  await page.getByText("Your vote was withdrawn.", { exact: true }).waitFor();
+  assert.deepEqual(await page.locator("#results meter").evaluateAll(meters => meters.map(meter => meter.value)), [0, 0, 0]);
+  assert.equal(await saturday.isChecked(), false);
+  assert.deepEqual(errors, []);
+});
+
 test("a reader sees the confirmed decision and can download the event in their time zone", { timeout: 60000 }, async (t) => {
   const { browser, context, origin, page, errors } = await fixture(t);
   const response = await context.request.post(`${origin}/api/polls`, {

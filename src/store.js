@@ -198,7 +198,7 @@ function savedPostStatus(type, post, now) {
 }
 
 function pollOptionsEditable(p, now) {
-  return p.totalVotes === 0 && now < p.endsAt;
+  return !p.ballotStarted && p.totalVotes === 0 && now < p.endsAt;
 }
 
 const INVALID_MANAGE_LINK = "This management link is invalid for this task.";
@@ -437,6 +437,7 @@ export class PollStore {
     const {
       location,
       voters,
+      ballotStarted,
       version,
       needsPrune,
       searchDescription,
@@ -463,6 +464,7 @@ export class PollStore {
     } = p;
     const now = this.clock();
     const resultsHidden = pollResultsHidden(p, now);
+    const ownVote = token && voters?.[voterHash(token)];
     return {
       ...result,
       type: p.type ?? "poll",
@@ -476,9 +478,8 @@ export class PollStore {
       totalLikes: p.totalLikes ?? 0,
       replyCount: p.replies?.length ?? p.replyCount ?? 0,
       status: postStatus(p, now),
-      hasVoted: Boolean(
-        token && voters && Object.hasOwn(voters, voterHash(token)),
-      ),
+      hasVoted: Boolean(ownVote),
+      ...(now < p.endsAt && Array.isArray(ownVote) ? { yourOptionIds: ownVote } : {}),
       serverTime: now,
     };
   }
@@ -512,7 +513,7 @@ export class PollStore {
     return { statuses, refreshAfterMs: Number.isFinite(nextChange) ? nextChange - now : null };
   }
 
-  async vote(id, token, selection) {
+  async vote(id, token, selection, changing = false) {
     return this.exclusive(id, async () => {
       const db = await this.live(id);
       const p = db.data;
@@ -523,26 +524,40 @@ export class PollStore {
           409,
           "Voting has ended. You can still view results and share the QR code.",
         );
-      if (Object.hasOwn(p.voters, voterHash(token)))
+      const hash = voterHash(token);
+      const previous = p.voters[hash];
+      if (changing && (!p.allowBallotChanges || !Array.isArray(previous)))
+        throw new AppError(409, "There is no editable ballot for this browser.");
+      if (!changing && previous)
         throw new AppError(409, "This browser has already voted in this poll.");
+      const withdrawing = changing && selection === null;
       const multiple = p.selectionMode === "multiple";
-      const selectedIds = Array.isArray(selection) ? selection : [selection];
-      if (multiple && (!Array.isArray(selection) || selectedIds.length < 1 ||
+      const selectedIds = withdrawing ? [] : Array.isArray(selection) ? selection : [selection];
+      if (!withdrawing && multiple && (!Array.isArray(selection) || selectedIds.length < 1 ||
           selectedIds.length > p.options.length || new Set(selectedIds).size !== selectedIds.length))
         throw new AppError(400, "Please select one or more different options.");
-      if (!multiple && !Number.isInteger(selection))
+      if (!withdrawing && !multiple && !Number.isInteger(selection))
         throw new AppError(400, "Please select exactly one option.");
       const selected = p.options.filter(option => selectedIds.includes(option.id));
       if (selected.length !== selectedIds.length)
         throw new AppError(400, multiple ? "Please select one or more different options." : "Please select a valid option.");
-      if (p.totalVotes >= this.maxVotes)
+      if (!changing && p.totalVotes >= this.maxVotes)
         throw new AppError(
           503,
           "This poll has reached its current vote limit.",
         );
-      for (const option of selected) option.votes += 1;
-      p.totalVotes += 1;
-      p.voters[voterHash(token)] = true;
+      if (changing) {
+        for (const option of p.options) if (previous.includes(option.id)) option.votes -= 1;
+      }
+      if (withdrawing) {
+        delete p.voters[hash];
+        p.totalVotes -= 1;
+      } else {
+        for (const option of selected) option.votes += 1;
+        if (!changing) p.totalVotes += 1;
+        p.voters[hash] = p.allowBallotChanges ? selected.map(option => option.id) : true;
+        if (p.allowBallotChanges) p.ballotStarted = true;
+      }
       await this.write(db);
       return this.public(p, token);
     });

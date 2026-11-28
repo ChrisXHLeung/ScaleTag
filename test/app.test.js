@@ -182,6 +182,37 @@ test("concurrent requests from one browser count exactly once", async (t) => {
   assert.equal(result.hasVoted, true);
 });
 
+test("an opted-in poll accepts anonymous ballot changes and withdrawals until closing", async (t) => {
+  const f = await fixture(t);
+  const poll = await f.create({ allowBallotChanges: true, selectionMode: "multiple", options: ["A", "B", "C"] });
+  const path = `/api/polls/${poll.id}`;
+  const a = await f.session(poll.id);
+  const b = await f.session(poll.id);
+  const vote = async (operation, data, session = a) => f.request(path + operation, data, session);
+  assert.equal((await vote("/ballot", { optionIds: [2, 3] }, b)).status, 409);
+  const voted = await vote("/votes", { optionIds: [1, 2] });
+  assert.equal(voted.status, 200);
+  assert.deepEqual((await voted.json()).yourOptionIds, [1, 2]);
+  assert.equal((await (await f.request(path, undefined, b)).json()).yourOptionIds, undefined);
+  assert.equal((await vote("/votes", { optionIds: [2] })).status, 409);
+  assert.equal((await vote("/ballot", { optionIds: [2, 2] })).status, 400);
+  const changed = await (await vote("/ballot", { optionIds: [2, 3] })).json();
+  assert.deepEqual(changed.yourOptionIds, [2, 3]);
+  assert.deepEqual(changed.options.map(option => option.votes), [0, 1, 1]);
+  assert.equal(changed.totalVotes, 1);
+  const withdrawn = await (await vote("/ballot", { withdraw: true })).json();
+  assert.equal(withdrawn.hasVoted, false);
+  assert.equal(withdrawn.totalVotes, 0);
+  assert.deepEqual(withdrawn.options.map(option => option.votes), [0, 0, 0]);
+  assert.equal((await (await f.request(path + "/manage", { key: poll.manageKey })).json()).canEditOptions, false);
+  assert.equal((await vote("/votes", { optionIds: [3] })).status, 200);
+  const closed = await f.request(path + "/state", { key: poll.manageKey, state: "closed" });
+  assert.equal(closed.status, 200);
+  assert.equal((await vote("/ballot", { withdraw: true })).status, 409);
+  assert.equal((await (await f.request(path, undefined, a)).json()).yourOptionIds, undefined);
+  assert.deepEqual((await f.store.read(poll.id)).data.voters, {});
+});
+
 test("publish and revise a poll decision with an optional calendar event", async (t) => {
   const f = await fixture(t);
   const poll = await f.create({ title: "Game night, bring snacks", options: ["Friday", "Saturday"], resultsVisibility: "after_close" });

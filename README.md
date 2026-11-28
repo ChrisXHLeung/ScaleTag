@@ -13,7 +13,7 @@ ScaleTag is an installable web app for local polls, tasks, free giveaways, and o
 ```mermaid
 flowchart TD
     A["<b>Poll creator</b><br/>Set a question, choices, and a results schedule"] --> B["<b>Poll creator</b><br/>Publish and share the poll link or QR code"]
-    B --> C["<b>Voter</b><br/>Vote before the deadline"]
+    B --> C["<b>Voter</b><br/>Vote before the deadline and update the ballot if allowed"]
     B --> D["<b>ScaleTag</b><br/>Show live results or unlock them when voting closes"]
     D --> E["<b>Poll reader</b><br/>View results, copy them, or download the result card"]
     D --> F["<b>Poll creator</b><br/>Optionally confirm a choice and set an event time"]
@@ -21,6 +21,8 @@ flowchart TD
 ```
 
 Open poll management to confirm the group’s choice. Confirming ends any open voting and publishes the decision on the original link. An optional event start and end give readers an `.ics` they can import into their own calendars. If the decision or time changes, share the original link again so participants can see the update and download the revised event.
+
+When the publisher enables ballot changes at creation, a voter can change or withdraw their vote in the same browser until voting closes. ScaleTag keeps selections against an anonymous poll hash for this purpose and clears that record from active storage after voting closes. Existing and new polls with fixed ballots offer one submission per browser cookie.
 
 ### Tasks and replies
 
