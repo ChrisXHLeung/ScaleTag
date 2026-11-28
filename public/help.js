@@ -55,8 +55,8 @@ const features = [
       [actor.giver, "Mark the item as claimed", "标记为已领取"],
     ]],
   ["secrex", "/secrex", ["Secrex one-time secrets", "Secrex 阅后即焚"],
-    ["The sender’s browser encrypts the text. Share the generated link and password separately. A valid password starts one reading session of up to five minutes within the seven-day expiry. The sender can revoke an unopened secret. Use End and destroy to end the session explicitly. For details about leaving the tab and server deletion, see the privacy page.",
-      "发送者的浏览器会加密文本。请分开发送生成的链接和密码。正确密码可在七天有效期内开启一轮最长五分钟的阅读。发送者可以撤销尚未打开的秘密。「结束并销毁」可主动结束阅读。关闭标签页和服务器清理的细节见隐私页面。"],
+    ["Choose an unread link lifetime and share the encrypted message link and password separately. A valid password starts one reading session that ends within five minutes or at the original deadline, whichever comes first. The sender can revoke an unopened secret. The reader can use End and destroy to end the session early.",
+      "选择未读链接有效期，并分开发送加密消息的链接和密码。正确密码可开启一次阅读，最迟在五分钟后或原截止时间结束，以先到者为准。发送者可撤回尚未打开的消息，收件人可点击「结束并销毁」提前结束。"],
     [
       [actor.sender, "Enter the message to encrypt", "输入要加密的消息"],
       [actor.sender, "Send the link or QR code separately from the password", "将链接或二维码与密码分开发送"],

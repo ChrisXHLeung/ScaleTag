@@ -70,7 +70,7 @@ flowchart TD
 
 ### Secrex
 
-[Create a Secrex secret](https://www.scaletag.top/secrex) to send text for one reading session. The sender's browser encrypts the secret and provides a link, a QR code, and a separate share password. Send the link or QR code and the password through separate channels. The first valid claim opens a session of up to five minutes. The reader can select **End and destroy**. The server removes the secret when the session expires or after seven days if nobody opens it. The browser also generates a private code the sender can use to revoke an unopened secret. Secrex is excluded from PostList and the ScaleTag post archive. [Secrex help](https://www.scaletag.top/help#secrex)
+[Create a Secrex secret](https://www.scaletag.top/secrex) to send text for one reading session. Choose when the unread link expires (15 minutes, 1 hour, 1 day, or 7 days). The sender's browser encrypts the secret and provides a link, a QR code, and a separate share password. Send the link or QR code and the password through separate channels. The first valid claim opens a session that ends after at most five minutes or at the original expiry, whichever comes first. The reader can select **End and destroy**. The browser also generates a private code the sender can use to revoke an unopened secret. Secrex is excluded from PostList and the ScaleTag post archive. [Secrex help](https://www.scaletag.top/help#secrex)
 
 ```mermaid
 flowchart TD
@@ -79,7 +79,7 @@ flowchart TD
     C -->|"Recipient selects End and destroy or session expires"| D["<b>ScaleTag</b><br/>Delete the encrypted text"]
     B -->|"Still unopened"| E["<b>Sender</b><br/>Optionally revoke the secret"]
     E --> D
-    B -->|"Unopened for seven days"| D
+    B -->|"Unread at the sender's deadline"| D
 ```
 
 ### Discovery, maps, and sharing
@@ -239,7 +239,7 @@ Secrex ([`/secrex`](https://www.scaletag.top/secrex), [`/create/secrex`](https:/
    - A 256-bit AES-GCM wrapping key (`secrex-v1-wrap`) that stays in the browser.
    The browser encrypts the plaintext with the DEK (`AES-256-GCM`, 12-byte random nonce) and wraps the DEK with the wrapping key (`AES-256-GCM`, 12-byte random nonce). Both ciphertexts authenticate length-prefixed AAD binding `secrex-v1`, the secret ID, and the purpose (`body` or `wrap`).
 2. **Split delivery.** The browser displays `/secrex/<id>`, a QR code (`/api/secrex/<id>/qr.png`), and the generated share password. Neither the URL nor the QR code carries the password or wrapping key; senders should transmit the link/QR code and the password through separate channels.
-3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), capped at the original seven-day deadline and rejecting competing devices or tabs. A successful **End and destroy** request (`POST /api/secrex/:id/end`) deletes the payload row. Closing the reading page clears the displayed text. Server cleanup deletes the payload when the 5-minute session or the seven-day unopened TTL (`pendingMs = 604800000`) expires. Deletion leaves only minimal metadata (`id`, `created_at`, `state`, `finished_at`) in `secrex_history`.
+3. **Server verification, single session, and destruction.** `SecrexStore` stores the ciphertext envelope and an Argon2id v1.3 verifier (`m=65536` KiB, `t=3`, `p=1`, 16-byte random salt) of the claim credential in a dedicated `secrex.sqlite` database (`PRAGMA secure_delete=ON`), deliberately excluded from the ScaleTag post archive. On `POST /api/secrex/:id/claim`, the first valid claim and random 32-byte session token lock the record inside an immediate SQLite transaction for up to 5 minutes (`sessionMs = 300000`), capped at the sender’s original expiry and rejecting competing devices or tabs. A successful **End and destroy** request (`POST /api/secrex/:id/end`) deletes the payload row. Closing the reading page clears the displayed text. Server cleanup deletes the payload when the 5-minute session or the chosen unopened lifetime expires (seven days by default). Deletion leaves only minimal metadata (`id`, `created_at`, `state`, `finished_at`) in `secrex_history`.
 
 4. **Sender revocation.** A private code lets the sender revoke an unopened secret. The server stores a verifier for the independently generated random code. Revocation competes with the first valid claim in a database transaction and cannot retrieve or decrypt a payload. Keep the code separate from the recipient link and password.
 

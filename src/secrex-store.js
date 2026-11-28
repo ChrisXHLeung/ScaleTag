@@ -76,19 +76,21 @@ export class SecrexStore {
     }
   }
 
-  async create({ id, claim, ...envelope }, revokeVerifier) {
+  async create({ id, claim, ...envelope }, revokeVerifier, lifetime = this.pendingMs) {
     const verifier = await this.argon(() => hash(claim, { ...ARGON, salt: randomBytes(16) }));
-    this.db.transaction(() => {
+    return this.db.transaction(() => {
       if (this.db.prepare("SELECT 1 FROM secrex_history WHERE id=?").get(id))
         throw new AppError(409, "This share address already exists.");
       if (this.db.prepare("SELECT count(*) AS count FROM secrex_payload").get().count >= 2000)
         throw new AppError(503, "Secrex is currently at capacity.");
       const now = this.clock();
+      const expiresAt = now + Math.min(lifetime, this.pendingMs);
       this.db.prepare("INSERT INTO secrex_history VALUES (?, ?, 'pending', NULL)").run(id, now);
       this.db.prepare("INSERT INTO secrex_payload VALUES (?, ?, ?, ?, NULL, NULL)")
-        .run(id, JSON.stringify(envelope), verifier, now + this.pendingMs);
+        .run(id, JSON.stringify(envelope), verifier, expiresAt);
       if (revokeVerifier)
         this.db.prepare("INSERT INTO secrex_revocation VALUES (?, ?)").run(id, revokeVerifier);
+      return expiresAt;
     }).immediate();
   }
 

@@ -1416,8 +1416,8 @@ function privacy() {
       "Secrex 会在浏览器中加密你的消息，再发送到 ScaleTag。请通过不同渠道发送链接或二维码与分享密码。Secrex 消息不会进入 PostList、地图或 ScaleTag 帖子备份。消息被打开前，发送者可以使用单独的撤回码撤回消息。",
     )}</p>
     <p>${t(
-      "An unopened message expires after seven days. The first successful unlock starts one reading session of up to five minutes, within that same seven-day limit. Closing or reloading the page clears the session in that browser. Use End and destroy to remove the encrypted message immediately once the server confirms. Otherwise the server removes it at expiry. ScaleTag retains the message ID, creation time, status and completion time as lifecycle records. Recipients can keep any copies they make.",
-      "未打开的消息在七天后过期。首次成功解锁只开启一次阅读会话，最长五分钟，并且不能超过这七天的期限。关闭或重新加载页面会清除该浏览器中的阅读会话。选择“结束并销毁”后，服务器确认时会立即删除加密消息。否则，服务器会在到期时删除。ScaleTag 保留消息编号、创建时间、状态和结束时间作为状态记录。收件人可以保留自己保存的副本。",
+      "The sender chooses when an unread message expires, up to seven days after creation. The first successful unlock starts one reading session of up to five minutes within the original deadline. Closing or reloading the page clears the session in that browser. Use End and destroy to remove the encrypted message immediately once the server confirms. Otherwise the server removes it at expiry. ScaleTag retains the message ID, creation time, status and completion time as lifecycle records. Recipients can keep any copies they make.",
+      "发送者选择未读消息的截止时间，最长为创建后七天。首次成功解锁开启一次最长五分钟的阅读会话，且不会超过原截止时间。关闭或重新加载页面会清除该浏览器中的阅读会话。点击「结束并销毁」后，服务器确认时会立即删除加密消息。否则，服务器会在到期时删除。ScaleTag 保留消息编号、创建时间、状态和结束时间作为状态记录。收件人可以保留自己保存的副本。",
     )}</p>
 
     <h2>${t("No account or device fingerprinting", "无需账户，不使用设备指纹。")}</h2>

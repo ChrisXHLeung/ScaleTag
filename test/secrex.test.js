@@ -85,6 +85,33 @@ test("Secrex preview and wrong credential preserve the secret; one session wins 
   assert.ok(history.finished_at >= history.created_at);
 });
 
+test("short unopened lifetimes limit both the link and any reading session", async (t) => {
+  const f = await fixture(t);
+  const { id, payload } = await encryptSecret("Temporary test message");
+  const expectedExpiry = f.secrex.clock() + 15 * 60000;
+  for (const expiresInMinutes of [0, 14, "15", 15.5, null, 10081]) {
+    assert.equal((await f.post("/", { ...payload, expiresInMinutes })).status, 400);
+  }
+  const created = await f.post("/", { ...payload, expiresInMinutes: 15 });
+  assert.equal(created.status, 201);
+  assert.equal((await created.json()).expiresAt, expectedExpiry);
+  assert.equal(JSON.parse(f.secrex.db.prepare("SELECT envelope FROM secrex_payload WHERE id=?").get(id).envelope).expiresInMinutes, undefined);
+  f.advance(14 * 60000);
+  const session = token(32);
+  const claim = { claim: payload.claim, session };
+  const opened = await f.post(`/${id}/claim`, claim);
+  assert.equal(opened.status, 200);
+  assert.equal((await opened.json()).expiresAt, expectedExpiry);
+  f.advance(60000);
+  assert.equal((await f.post(`/${id}/claim`, claim)).status, 404);
+  assert.equal(f.secrex.db.prepare("SELECT 1 FROM secrex_payload WHERE id=?").get(id), undefined);
+
+  const unopened = await encryptSecret("Unread test message");
+  assert.equal((await f.post("/", { ...unopened.payload, expiresInMinutes: 15 })).status, 201);
+  f.advance(15 * 60000);
+  assert.equal((await f.post(`/${unopened.id}/claim`, { claim: unopened.payload.claim, session: token(32) })).status, 404);
+});
+
 test("only the independent sender code revokes an unopened Secrex", async (t) => {
   const f = await fixture(t);
   const revoke = token(32);

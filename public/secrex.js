@@ -1,5 +1,5 @@
 import { renderIntroFlow } from "/help.js";
-import { t, icons, postKindSwitch, setActiveNav } from "/common.js";
+import { t, icons, date, postKindSwitch, setActiveNav } from "/common.js";
 import {
   decryptSecret,
   deriveClaim,
@@ -77,8 +77,8 @@ function createView() {
           "浏览器端加密，服务器永远接触不到明文和分享密码。",
         )}</p>
         <p>${icons.clock} ${t(
-          "Single reading session (~5 min); expires in 7 days if unread.",
-          "仅限单次阅读（约 5 分钟），无人打开 7 天后自动销毁。",
+          "One reading session of up to 5 minutes. You choose when the unread link expires.",
+          "仅限一次阅读，最长 5 分钟。你可选择未读链接的有效期。",
         )}</p>
         <p>${icons.qr} ${t(
           "Share the link/QR code and password through separate channels.",
@@ -111,6 +111,13 @@ function createView() {
           "Encrypted in your browser with AES-256-GCM before upload. Never appears in PostList.",
           "提交前将在浏览器使用 AES-256-GCM 加密，绝不会出现在帖子列表中。",
         )}</p>
+        <label for="secrex-lifetime">${t("Unread link lifetime", "未读链接有效期")}</label>
+        <select id="secrex-lifetime">
+          <option value="15">${t("15 minutes", "15 分钟")}</option>
+          <option value="60">${t("1 hour", "1 小时")}</option>
+          <option value="1440">${t("1 day", "1 天")}</option>
+          <option value="10080" selected>${t("7 days", "7 天")}</option>
+        </select>
         <button id="secrex-create" class="button publish-button" type="button">${t("Create secret", "生成加密信息")} ${icons.arrow}</button>
       </div>
       <div id="secrex-share" class="secrex-fields" hidden>
@@ -130,10 +137,7 @@ function createView() {
           <button id="secrex-copy-password" class="button secondary small" type="button">${t("Copy password", "复制密码")}</button>
         </div>
         <img id="secrex-qr" width="192" height="192" alt="${t("QR code for the share link", "分享链接二维码")}">
-        <p class="secrex-note">${t(
-          "The link expires after 7 days if nobody opens it. Once opened, it locks to that single reading session and is destroyed right after.",
-          "如果 7 天内无人打开，链接将自动过期失效。一旦有人打开，其他会话将被拒绝，阅读结束即销毁。",
-        )}</p>
+        <p class="secrex-note">${t("Unread link expires", "未读链接截止时间")} · <time id="secrex-expiry"></time></p>
         <div id="secrex-revoke-details" class="secrex-fields" hidden>
           <label for="secrex-generated-revoke-code">${t("Private revoke code", "私人撤回码")}</label>
           <div class="secrex-copy">
@@ -168,6 +172,7 @@ function createView() {
   const status = main.querySelector(".secrex-status");
   const compose = document.querySelector("#secrex-compose");
   const text = document.querySelector("#secrex-text");
+  const lifetime = document.querySelector("#secrex-lifetime");
   const button = document.querySelector("#secrex-create");
   const share = document.querySelector("#secrex-share");
   const link = document.querySelector("#secrex-link");
@@ -178,6 +183,7 @@ function createView() {
   const revokeCodeInput = document.querySelector("#secrex-revoke-code");
   const revokeCodeToggle = document.querySelector("#secrex-revoke-code-toggle");
   const qr = document.querySelector("#secrex-qr");
+  const expiry = document.querySelector("#secrex-expiry");
   let activeShareId;
   let leaving = false;
   copy(document.querySelector("#secrex-copy-link"), link, status);
@@ -199,6 +205,8 @@ function createView() {
     revokeCode.value = "";
     revokeDetails.hidden = true;
     qr.removeAttribute("src");
+    expiry.textContent = "";
+    expiry.removeAttribute("datetime");
   }
 
   const clearRevokeForm = bindRevokeForm(revokeForm, (id) => {
@@ -227,14 +235,17 @@ function createView() {
     }
     button.disabled = true;
     text.readOnly = true;
+    lifetime.disabled = true;
     status.textContent = t("Encrypting…", "正在本地加密…");
     try {
       const sealed = await encryptSecret(text.value);
       const revocation = await generateRevokeCredentials(sealed.id);
-      const created = await post("/", sealed.payload, {
+      const created = await post("/", { ...sealed.payload, expiresInMinutes: Number(lifetime.value) }, {
         "X-Secrex-Revoke-Verifier": revocation.verifier,
       });
       if (leaving) return;
+      expiry.dateTime = new Date(created.expiresAt).toISOString();
+      expiry.textContent = date(created.expiresAt);
       activeShareId = sealed.id;
       text.value = "";
       link.value = new URL(`/secrex/${sealed.id}`, location.origin).href;
@@ -265,6 +276,7 @@ function createView() {
     } finally {
       button.disabled = false;
       text.readOnly = false;
+      lifetime.disabled = false;
     }
   });
   window.addEventListener(
@@ -581,8 +593,8 @@ if (!globalThis.crypto?.subtle) {
   showUnavailable(
     t("This secret is unavailable.", "此加密信息不可用。"),
     t(
-      "The secret may have already been read, destroyed, or expired after 7 days.",
-      "该信息可能已被阅读并销毁，或超过 7 天已过期失效。",
+      "The secret may have already been read, destroyed, or expired.",
+      "该信息可能已被阅读、销毁或过期。",
     ),
   );
 }

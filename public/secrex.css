@@ -47,6 +47,7 @@
 
 .secrex-fields input[type="password"],
 .secrex-fields input[type="text"],
+.secrex-fields select,
 .secrex-fields textarea {
   width: 100%;
   min-width: 0;
@@ -119,6 +120,7 @@
 @media (max-width: 760px) {
   .secrex-fields input[type="password"],
   .secrex-fields input[type="text"],
+  .secrex-fields select,
   .secrex-fields textarea {
     font-size: 16px;
   }

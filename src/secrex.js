@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { AppError } from "./validation.js";
 
+const LIFETIME_MINUTES = new Set([15, 60, 1440, 10080]);
+
 export function canonical(value, min, max = min) {
   if (typeof value !== "string" || value.length > Math.ceil(max * 4 / 3) ||
       !/^[A-Za-z0-9_-]+$/.test(value)) return false;
@@ -28,9 +30,12 @@ export function createSecrexRouter(store) {
     next();
   });
   router.post("/", async (req, res) => {
-    const input = readFields(req.body, {
+    const { expiresInMinutes, ...envelope } = req.body ?? {};
+    const input = readFields(envelope, {
       id: [16], claim: [32], body: [17, 12016], bodyNonce: [12], wrapped: [48], wrapNonce: [12],
     });
+    if (expiresInMinutes !== undefined && !LIFETIME_MINUTES.has(expiresInMinutes))
+      throw new AppError(400, "Invalid Secrex request.");
     // The legacy request body works with either slot during a rolling release.
     const revokeVerifier = req.get("X-Secrex-Revoke-Verifier");
     if (revokeVerifier !== undefined && !canonical(revokeVerifier, 32))
@@ -45,8 +50,13 @@ export function createSecrexRouter(store) {
       throw new AppError(429, "Too many secrets are being created. Try again shortly.");
     }
     creations++;
-    await store.create(input, revokeVerifier);
-    res.status(201).json({ id: input.id, ...(revokeVerifier ? { revocable: true } : {}) });
+    const lifetime = expiresInMinutes === undefined ? undefined : expiresInMinutes * 60000;
+    const expiresAt = await store.create(input, revokeVerifier, lifetime);
+    res.status(201).json({
+      id: input.id,
+      ...(revokeVerifier ? { revocable: true } : {}),
+      ...(lifetime === undefined ? {} : { expiresAt }),
+    });
   });
   router.post("/:id/claim", async (req, res) => {
     const { claim, session } = readFields(req.body, { claim: [32], session: [32] });

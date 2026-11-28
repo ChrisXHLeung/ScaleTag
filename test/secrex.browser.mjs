@@ -100,9 +100,18 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
   await sender.locator(".secrex-guide").getByText("什么是 Secrex").waitFor();
   assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await sender.getByLabel(/Secret text|私密内容/, { exact: true }).fill(plaintext);
+  const lifetime = sender.getByLabel("未读链接有效期", { exact: true });
+  assert.equal(await lifetime.inputValue(), "10080");
+  await lifetime.selectOption({ label: "15 分钟" });
+  const beforeCreation = Date.now();
+  const created = sender.waitForResponse(response =>
+    response.url() === origin + "/api/secrex/" && response.request().method() === "POST");
   await sender.getByRole("button", { name: /Create secret|生成加密信息/ }).click();
   const link = sender.getByLabel(/Share link|分享链接/, { exact: true });
   await link.waitFor();
+  const { expiresAt } = await (await created).json();
+  assert.ok(expiresAt >= beforeCreation + 900000 && expiresAt <= Date.now() + 900000);
+  assert.equal(await sender.locator("#secrex-expiry").getAttribute("datetime"), new Date(expiresAt).toISOString());
   const url = await link.inputValue();
   const password = await sender.getByLabel(/Share password|分享密码/, { exact: true }).inputValue();
   const openedCode = await sender.locator("#secrex-generated-revoke-code").inputValue();
