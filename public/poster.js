@@ -199,6 +199,15 @@ function drawCoverImage(ctx, img, x, y, w, h, radius) {
 }
 
 function typeMeta(type) {
+  if (type === "found") {
+    return {
+      badge: t("Found items", "失物招领"),
+      bylinePrefix: t("Posted by", "发布者："),
+      scanEyebrow: t("Claim this item", "认领此物品"),
+      scanHeadline: t("Found items", "失物招领"),
+      scanPrompt: t("Point your phone camera at the QR code to read full details or send a reply.", "用手机相机扫描二维码，即可查看详情或回复。"),
+    };
+  }
   if (type === "wanted") {
     return {
       badge: t("Wanted", "求赠"),
@@ -264,7 +273,7 @@ export async function renderPosterCanvas(post) {
   ctx.lineTo(POSTER_WIDTH, headerH);
   ctx.stroke();
 
-  const meta = typeMeta(post.taskKind === "wanted" ? "wanted" : post.type);
+  const meta = typeMeta(post.taskKind ?? post.type);
   const qrPromise = loadImage(post.qrUrl);
   const validPhotos = (post.images ?? [])
     .filter((src) => DATA_IMAGE_PATTERN.test(src))
@@ -356,7 +365,7 @@ export async function renderPosterCanvas(post) {
   if (post.type === "poll" && Array.isArray(post.options) && post.options.length) {
     const shownCount = Math.min(post.options.length, 6);
     highlightReserve = 140 + shownCount * 112 + (post.options.length > 6 ? 56 : 0);
-  } else if ((post.type === "task" && post.taskKind !== "wanted") || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
+  } else if ((post.type === "task" && !post.taskKind) || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
     highlightReserve = 260;
   }
 
@@ -492,7 +501,7 @@ export async function renderPosterCanvas(post) {
       );
     }
     y += boxH;
-  } else if ((post.type === "task" && post.taskKind !== "wanted") || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
+  } else if ((post.type === "task" && !post.taskKind) || (post.type === "sale" && (post.pickupByRequest || post.pickupLocation || post.price))) {
     const eyebrow =
       post.type === "task"
         ? t("REWARD OFFERED", "提供的酬谢")

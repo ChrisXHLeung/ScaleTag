@@ -142,6 +142,9 @@ if (typeof document !== 'undefined') {
 }
 
 export const serverErrors = {
+  'Found notices cannot include photos or a reward.': '招领帖不能包含照片或酬谢。',
+  'Submit ownership details in the encrypted claim form.': '请在加密认领表单中提交物品特征。',
+  'Use the reply or claim form for this post.': '请使用该帖对应的回复或认领表单。',
   'Choose an event start and end time in order.': '请按先后顺序填写活动开始和结束时间。',
   'Choose a valid task type.': '请选择有效的任务类型。',
   'Item requests are for free items only.': '求赠只接受免费物品。',

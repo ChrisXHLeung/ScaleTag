@@ -72,6 +72,7 @@ export function postKindSwitch(current) {
     ["/create/task", t("Task", "任务")],
     ["/create/sale", t("Free Giveaways", "闲置赠予")],
     ["/create/wanted", t("Wanted", "求赠")],
+    ["/create/found", t("Found items", "失物招领")],
     ["/secrex", t("Secrex", "Secrex 阅后即焚")],
   ];
   const links = entries.map(([path, label]) =>

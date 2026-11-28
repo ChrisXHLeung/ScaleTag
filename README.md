@@ -51,6 +51,17 @@ flowchart TD
     C --> D["<b>Requester</b><br/>Mark the item received"]
 ```
 
+### Found items
+
+[Publish a found item](https://www.scaletag.top/create/found) with the approximate area, time, and a general description. Keep distinctive features private so the owner can describe them. In PostList or the map, choose **Found items** to find nearby notices. A claimant sends identifying details and an email or phone number. Their browser encrypts the claim for the finder, who can use the management password to review it, arrange a return, and mark the item returned. [Found items help](https://www.scaletag.top/help#found)
+
+```mermaid
+flowchart TD
+    A["<b>Finder</b><br/>Publish a general description"] --> B["<b>Claimant</b><br/>Send encrypted identifying details and contact information"]
+    B --> C["<b>Finder</b><br/>Unlock and verify the claim, then arrange the return"]
+    C --> D["<b>Finder</b><br/>Mark the item returned"]
+```
+
 ### Free giveaways
 
 [Publish a giveaway](https://www.scaletag.top/create/sale) for direct pickup or pickup by request, with an optional pickup window. Pickup times use the viewer’s device time zone and show the UTC offset, including both offsets when the window spans a daylight-saving change. For direct pickup, visitors can copy the pickup directions or download a calendar entry when the item is available. For pickup by request, the visitor proposes a time without signing in, then checks the same browser for confirmation. The publisher selects one request in the management page. Only that browser can retrieve the exact instructions while its hold is active. The hold ends one hour after the proposed pickup time or when the giveaway expires, whichever comes first. The visitor can cancel and the publisher can release the hold.

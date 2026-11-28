@@ -15,7 +15,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       <input id="owner-title" name="title" value="${escape(post.title)}" maxlength="140" ${post.type === "poll" && !canEditOptions ? "readonly" : "required"}>
       <label for="owner-description">${t("Description", "说明")}</label>
       <textarea id="owner-description" name="description" rows="4" maxlength="4000" ${post.type === "poll" ? "" : "required"}>${escape(post.description)}</textarea>
-      ${post.type === "task" && post.taskKind !== "wanted" ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
+      ${post.type === "task" && !post.taskKind ? `<label for="owner-reward">${t("Reward", "酬谢")}</label>
         <input id="owner-reward" name="reward" value="${escape(post.reward)}" maxlength="160" required>` : ""}
       ${post.type === "sale" ? `<label for="owner-pickup">${post.pickupByRequest ? t("Pickup location (private)", "领取地点（私密）") : t("Pickup location (public)", "领取地点（公开）")}</label>
         <input id="owner-pickup" name="${post.pickupByRequest ? "privatePickupLocation" : "pickupLocation"}" value="${escape(post.pickupLocation)}" maxlength="300" required>
@@ -25,7 +25,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         <div id="owner-options"></div>
         <button class="add-option" type="button" id="owner-add-option">${t("Add an option", "添加选项")}</button>
       </fieldset>` : `<p class="field-hint">${t("The poll question and options can change only before the first vote and before voting closes.", "投票问题和选项只能在第一票产生前且投票尚未截止时修改。")}</p>` : ""}
-      ${photoFields("owner", t("Replace photos (optional)", "替换照片（选填）"))}
+      ${post.taskKind === "found" ? "" : photoFields("owner", t("Replace photos (optional)", "替换照片（选填）"))}
       <div id="owner-photo-removal" ${post.images?.length ? "" : "hidden"}>
         <label class="checkbox-row"><input type="checkbox" id="owner-remove-photos">
           <span>${t("Remove current photos", "移除现有照片")}</span></label>
@@ -37,7 +37,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   controls.append(details);
   host.append(controls);
   const form = details.querySelector("form");
-  const photos = bindPhotoInput(form, "owner");
+  const photos = post.taskKind === "found" ? null : bindPhotoInput(form, "owner");
   const submit = form.querySelector("[type=submit]");
   const error = form.querySelector("[role=alert]");
   const status = form.querySelector("[role=status]");
@@ -111,7 +111,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
       }
       if (pickupStart && (pickupStart.value !== pickupStart.defaultValue || pickupEnd.value !== pickupEnd.defaultValue))
         changes.pickupWindow = readPickupWindow(pickupStart, pickupEnd);
-      if (replacement.files.length || removePhotos.checked) changes.images = await photos.readImages();
+      if (replacement && (replacement.files.length || removePhotos.checked)) changes.images = await photos.readImages();
       const updated = await api(endpoint, changes);
       current = updated;
       optionLabels = updated.options?.map(({ label }) => label);
@@ -119,8 +119,10 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         pickupStart.defaultValue = pickupStart.value;
         pickupEnd.defaultValue = pickupEnd.value;
       }
-      replacement.value = "";
-      replacement.dispatchEvent(new Event("change"));
+      if (replacement) {
+        replacement.value = "";
+        replacement.dispatchEvent(new Event("change"));
+      }
       removePhotos.checked = false;
       photoRemoval.hidden = !updated.images?.length;
       status.textContent = t("Changes saved.", "已保存修改。");
@@ -148,7 +150,7 @@ export function refreshOwnerPreview(host, post) {
   description.hidden = !post.description;
   host.querySelector(".sale-photos")?.remove();
   description.insertAdjacentHTML("afterend", uploadedPhotosHtml(post.images));
-  if (post.type === "task" && post.taskKind !== "wanted") host.querySelector(".task-reward h2").textContent = post.reward;
+  if (post.type === "task" && !post.taskKind) host.querySelector(".task-reward h2").textContent = post.reward;
   const pickup = host.querySelector("#sale-pickup h2");
   if (post.type === "sale" && pickup) pickup.textContent = post.pickupLocation;
 }

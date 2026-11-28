@@ -95,7 +95,7 @@ test("Secrex shares a URL and password independently and keeps secrets out of lo
   await sender.locator(".post-kind-switch").getByRole("link", { name: /Secrex/ }).click();
   await sender.waitForURL("**/secrex");
   await sender.locator(".create-section").waitFor();
-  assert.equal(await sender.locator(".post-kind-switch a").count(), 5);
+  assert.equal(await sender.locator(".post-kind-switch a").count(), 6);
   assert.equal(await sender.locator(".post-kind-switch").getByRole("link", { name: /Secrex/ }).getAttribute("aria-current"), "page");
   await sender.locator(".secrex-guide").getByText("什么是 Secrex").waitFor();
   assert.equal(await sender.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

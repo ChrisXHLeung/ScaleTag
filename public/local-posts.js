@@ -85,6 +85,10 @@ const draftCopyFields = {
     path: "/create/wanted",
     fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
   },
+  found: {
+    path: "/create/found",
+    fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
+  },
   sale: {
     path: "/create/sale",
     fields: { "#sale-title": "title", "#sale-description": "description", "#sale-name": "signature" },
@@ -106,7 +110,7 @@ export function mountDraftCopy(host, getPost) {
   copy.onclick = async () => {
     status.hidden = true;
     const post = getPost();
-    const kind = post.taskKind === "wanted" ? "wanted" : post.type;
+    const kind = post.taskKind ?? post.type;
     const preset = draftCopyFields[kind];
     if (!preset) return;
     const key = textDraftKey(kind);
@@ -594,6 +598,10 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     ["wanted_in_progress", t("Arranging pickup", "正在安排领取")],
     ["wanted_completed", t("Item received", "已收到")],
     ["wanted_closed", t("Closed", "已关闭")],
+    ["found_open", t("Accepting claims", "接受认领")],
+    ["found_in_progress", t("Arranging return", "正在安排归还")],
+    ["found_completed", t("Returned", "已归还")],
+    ["found_closed", t("Closed", "已关闭")],
     ["sale_open", t("Available", "可领取")],
     ["sale_reserved", t("Reserved", "已保留")],
     ["sale_claimed", t("Claimed", "已领取")],

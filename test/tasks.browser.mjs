@@ -77,6 +77,49 @@ async function fixture(t) {
   };
 }
 
+test("the finder can publish, privately verify a claim, and mark an item returned", async t => {
+  const f = await fixture(t);
+  const title = "Found a keyring near the park";
+  const proof = "Three keys with a blue tag numbered 14.";
+  const email = "claimant@example.com";
+  await f.page.goto(f.origin + "/create/found");
+  await f.page.getByLabel("Item found", { exact: true }).fill(title);
+  await f.page.getByLabel("Description", { exact: true }).fill("Found yesterday near the north entrance of the park.");
+  assert.equal(await f.page.locator("#task-images, #task-reward").count(), 0);
+  await f.page.locator("#task-map-consent").check();
+  await f.page.locator("#task-retention").check();
+  await f.page.getByRole("button", { name: "Publish a found notice", exact: true }).click();
+  await f.page.getByRole("heading", { name: "Manage found notice" }).waitFor();
+
+  const visitor = await f.browser.newPage({ viewport: { width: 320, height: 844 } });
+  await visitor.goto(f.origin + "/PostList?type=found");
+  assert.equal(await visitor.locator("#content-type").inputValue(), "found");
+  await visitor.getByRole("link", { name: new RegExp(title) }).first().click();
+  await visitor.getByLabel("Ownership details", { exact: true }).fill(proof);
+  await visitor.locator("#reply-email").fill(email);
+  await visitor.locator("#contact-consent").check();
+  const request = visitor.waitForRequest(r => r.url().endsWith("/replies") && r.method() === "POST");
+  await visitor.getByRole("button", { name: "Send private claim" }).click();
+  const sent = (await request).postData();
+  assert.ok(!sent.includes(proof) && !sent.includes(email));
+  await visitor.getByText("Private claim sent.", { exact: true }).waitFor();
+  assert.equal(await visitor.getByText(proof, { exact: true }).count(), 0);
+  assert.equal(await visitor.evaluate(() => document.documentElement.scrollWidth), 320);
+
+  await f.page.locator("#refresh-private-replies").click();
+  await f.page.getByText(proof, { exact: true }).waitFor();
+  await f.page.getByRole("link", { name: new RegExp(email) }).waitFor();
+  f.page.once("dialog", dialog => dialog.accept());
+  await f.page.getByRole("button", { name: "Choose this person" }).click();
+  await f.page.getByText("Selected claimant", { exact: true }).waitFor();
+  f.page.once("dialog", dialog => dialog.accept());
+  await f.page.getByRole("button", { name: "Returned", exact: true }).click();
+  await f.page.locator("#task-state").getByText("Returned").waitFor();
+  await visitor.reload();
+  await visitor.getByText("This notice is not accepting claims.").waitFor();
+  assert.deepEqual(f.errors, []);
+});
+
 test("wanted publisher receives a private donor contact and marks the item received", async t => {
   const f = await fixture(t);
   const owner = f.page;

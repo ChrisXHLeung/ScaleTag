@@ -952,6 +952,43 @@ async function replyBody(task, extra = {}) {
   return { name, message, encryptedContact, privacyAccepted: Object.hasOwn(extra, "privacyAccepted") ? privacyAccepted : true, ...rest };
 }
 
+test("found items appear in their own filter and ownership details are private to the finder", async t => {
+  const f = await fixture(t);
+  await createTask(f);
+  const found = await createTask(f, { taskKind: "found", title: "Found a keyring near the park", reward: undefined });
+  const taskPath = `/api/tasks/${found.id}`;
+  const postPath = `/api/posts/${found.id}`;
+  const proof = "There are three keys and a blue tag with a number.";
+  const email = "claimant@example.com";
+  const encryptedContact = await encryptReplyContact(found.contactPublicKey, { email, proof }, found.id);
+  const claim = { encryptedContact, privateClaim: true, privacyAccepted: true };
+  const { cookie } = await socialSession(f, found.id);
+  assert.equal((await f.request(postPath + "/replies", { ...claim, proof }, cookie)).status, 400);
+  assert.equal((await f.request(postPath + "/replies", await replyBody(found), cookie)).status, 400);
+  const submitted = await f.request(postPath + "/replies", claim, cookie);
+  assert.equal(submitted.status, 201);
+  const result = await submitted.json();
+  assert.equal(result.createdReplyId, undefined);
+  assert.deepEqual(result.replies, []);
+  for (const path of [taskPath, postPath + "/social"]) {
+    const body = await (await f.request(path)).text();
+    assert.ok(!body.includes(email) && !body.includes(proof) && !body.includes(encryptedContact.ciphertext));
+  }
+  const listing = await f.request("/api/posts/search", { type: "found" });
+  assert.equal(listing.status, 200);
+  assert.deepEqual((await listing.json()).polls.map(post => post.id), [found.id]);
+  const second = await socialSession(f, found.id);
+  const incomplete = await encryptReplyContact(found.contactPublicKey, { email }, found.id);
+  assert.equal((await f.request(postPath + "/replies", { ...claim, encryptedContact: incomplete }, second.cookie)).status, 201);
+  const managed = await (await f.request(taskPath + "/manage", { authKey: found.manageKey })).json();
+  const [decoded, unreadable] = await decryptReplyContacts(found.password, managed, found.id);
+  assert.equal(decoded.email, email);
+  assert.equal(decoded.proof, proof);
+  assert.equal(unreadable.unreadable, true);
+  assert.equal((await f.request(taskPath + "/state", { authKey: found.manageKey, state: "completed" })).status, 200);
+  assert.equal((await f.request(postPath + "/replies", claim, cookie)).status, 409);
+});
+
 test("wanted posts have their own discovery filter and accept encrypted donor replies without a reward", async t => {
   const f = await fixture(t);
   const normal = await createTask(f);

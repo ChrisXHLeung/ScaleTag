@@ -200,6 +200,9 @@ export async function encryptReplyContact(contactPublicKey, contact, context = '
   if (!payload.phone && !payload.email) {
     throw new Error('Reply contact must include a phone number or email address');
   }
+  if (typeof contact.proof === 'string' && contact.proof.trim()) {
+    payload.proof = contact.proof.trim();
+  }
 
   const recipientPublicKey = await subtle.importKey(
     'spki',
@@ -258,52 +261,63 @@ export async function decryptReplyContacts(password, task, context = '') {
       decryptedReplies.push({ ...reply });
       continue;
     }
-    const envelope = typeof reply.encryptedContact === 'string'
-      ? JSON.parse(reply.encryptedContact)
-      : reply.encryptedContact;
-    if (!envelope || envelope.version !== 1) {
-      throw new Error('Unsupported encrypted contact version');
-    }
-    const iv = base64ToBytes(envelope.iv);
-    const ciphertext = base64ToBytes(envelope.ciphertext);
-    if (iv.length !== 12 || ciphertext.length < 17) {
-      throw new Error('Invalid encrypted contact envelope');
-    }
-    const senderEphemeralKey = await subtle.importKey(
-      'spki',
-      base64ToBytes(envelope.ephemeralPublicKey),
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false,
-      [],
-    );
-    const sharedBits = await subtle.deriveBits(
-      { name: 'ECDH', public: senderEphemeralKey },
-      privateKey,
-      256,
-    );
-    const cipherKey = await deriveReplyCipherKey(
-      sharedBits,
-      iv,
-      contactPublicKey,
-      envelope.ephemeralPublicKey,
-      context,
-    );
-    const plaintext = await subtle.decrypt(
-      {
-        name: 'AES-GCM',
+    try {
+      const envelope = typeof reply.encryptedContact === 'string'
+        ? JSON.parse(reply.encryptedContact)
+        : reply.encryptedContact;
+      if (!envelope || envelope.version !== 1) {
+        throw new Error('Unsupported encrypted contact version');
+      }
+      const iv = base64ToBytes(envelope.iv);
+      const ciphertext = base64ToBytes(envelope.ciphertext);
+      if (iv.length !== 12 || ciphertext.length < 17) {
+        throw new Error('Invalid encrypted contact envelope');
+      }
+      const senderEphemeralKey = await subtle.importKey(
+        'spki',
+        base64ToBytes(envelope.ephemeralPublicKey),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,
+        [],
+      );
+      const sharedBits = await subtle.deriveBits(
+        { name: 'ECDH', public: senderEphemeralKey },
+        privateKey,
+        256,
+      );
+      const cipherKey = await deriveReplyCipherKey(
+        sharedBits,
         iv,
-        additionalData: encoder.encode(`scaletag:task:reply-contact-aad:v1:${contactPublicKey}:${envelope.ephemeralPublicKey}:${context}`),
-      },
-      cipherKey,
-      ciphertext,
-    );
-    const contact = JSON.parse(decoder.decode(plaintext));
-    decryptedReplies.push({
-      ...reply,
-      phone: contact.phone,
-      email: contact.email,
-      encryptedContact: undefined,
-    });
+        contactPublicKey,
+        envelope.ephemeralPublicKey,
+        context,
+      );
+      const plaintext = await subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv,
+          additionalData: encoder.encode(`scaletag:task:reply-contact-aad:v1:${contactPublicKey}:${envelope.ephemeralPublicKey}:${context}`),
+        },
+        cipherKey,
+        ciphertext,
+      );
+      const contact = JSON.parse(decoder.decode(plaintext));
+      if (task.taskKind === "found" && (!contact.proof?.trim() ||
+          !(typeof contact.phone === "string" || typeof contact.email === "string") ||
+          (contact.phone !== undefined && typeof contact.phone !== "string") ||
+          (contact.email !== undefined && typeof contact.email !== "string")))
+        throw new Error("Incomplete encrypted claim");
+      decryptedReplies.push({
+        ...reply,
+        phone: contact.phone,
+        email: contact.email,
+        ...(typeof contact.proof === 'string' ? { proof: contact.proof } : {}),
+        encryptedContact: undefined,
+      });
+    } catch (error) {
+      if (task.taskKind !== "found") throw error;
+      decryptedReplies.push({ id: reply.id, createdAt: reply.createdAt, unreadable: true });
+    }
   }
   return decryptedReplies;
 }

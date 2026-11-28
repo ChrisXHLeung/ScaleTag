@@ -8,6 +8,8 @@ const actor = {
   respondent: ["Respondent", "回复者"],
   giver: ["Giver", "赠予者"],
   requester: ["Requester", "求赠者"],
+  finder: ["Finder", "拾获者"],
+  claimant: ["Claimant", "认领者"],
   pickupVisitor: ["Pickup visitor", "领取者"],
   sender: ["Sender", "发送者"],
   recipient: ["Recipient", "收件人"],
@@ -53,6 +55,14 @@ const features = [
       [actor.giver, "Publish an item and pickup details", "发布物品与领取安排"],
       [actor.pickupVisitor, "Check the directions and pick up the item", "查看领取地点并现场领取"],
       [actor.giver, "Mark the item as claimed", "标记为已领取"],
+    ]],
+  ["found", "/create/found", ["Found items", "失物招领"],
+    ["Publish a general description of a found item. Keep distinctive details private so the owner can describe them. The finder can unlock private claims and arrange the return directly.", "公开发布拾获物品的大致描述，把可辨认的特征留给失主说明。拾获者可解密认领信息，并直接安排归还。"],
+    [
+      [actor.finder, "Publish a found notice", "发布招领"],
+      [actor.claimant, "Send encrypted ownership details", "发送加密的认领信息"],
+      [actor.finder, "Check the details and arrange the return", "核对特征并安排归还"],
+      [actor.finder, "Mark the item returned", "标记物品已归还"],
     ]],
   ["secrex", "/secrex", ["Secrex one-time secrets", "Secrex 阅后即焚"],
     ["Choose an unread link lifetime and share the encrypted message link and password separately. A valid password starts one reading session that ends within five minutes or at the original deadline, whichever comes first. The sender can revoke an unopened secret. The reader can use End and destroy to end the session early.",
@@ -171,4 +181,5 @@ export function helpTopic(path) {
   if (path === "/create/task" || path.startsWith("/task/")) return "tasks";
   if (path === "/create/sale" || path.startsWith("/sale/")) return "giveaways";
   if (path === "/create/wanted") return "wanted";
+  if (path === "/create/found") return "found";
 }

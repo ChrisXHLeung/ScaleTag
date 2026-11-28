@@ -144,7 +144,7 @@ function searchFilter(query) {
   };
 }
 
-const discoveryType = post => post.taskKind === "wanted" ? "wanted" : (post.type ?? "poll");
+const discoveryType = post => post.taskKind ?? post.type ?? "poll";
 
 // Tasks created before progress states existed have no taskState and are open.
 const taskStateOf = (p) =>
@@ -190,6 +190,9 @@ function savedPostStatus(type, post, now) {
   const state = taskStateOf(post);
   if (post.taskKind === "wanted") {
     return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "wanted_in_progress" : `wanted_${state}`;
+  }
+  if (post.taskKind === "found") {
+    return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "found_in_progress" : `found_${state}`;
   }
   return post.taskAssigned && !FINAL_TASK_STATES.includes(state) ? "task_assigned" : `task_${state}`;
 }
@@ -645,7 +648,8 @@ export class PollStore {
       hasReported: Boolean(token && p.reportHashes?.includes(reportHash(token))),
       ...(this.reportReviewEnabled ? { reportReviewEnabled: true } : {}),
       // Unauthenticated: never includes phone or email.
-      replies: task ? (p.replies ?? []).map(publicReply) : [],
+      replies: task && p.taskKind !== "found" ? (p.replies ?? []).map(publicReply) : [],
+      ...(p.taskKind === "found" ? { claimCount: p.replies?.length ?? 0 } : {}),
       ...(task ? { acceptsPrivateContacts: hasManageKey(p) && (p.type !== "task" || Boolean(p.contactPublicKey && p.encryptedPrivateKey)) } : {}),
       ...publicSaleAvailability(p, this.clock()),
       ...(taskStateOf(p) ? { taskState: taskStateOf(p) } : {}),
@@ -702,6 +706,8 @@ export class PollStore {
         p = db.data;
       if (!["task", "sale"].includes(p.type))
         throw new AppError(400, "Replies are available on tasks and sales only.");
+      if ((p.taskKind === "found") !== (input.privateClaim === true))
+        throw new AppError(400, "Use the reply or claim form for this post.");
       // Check final task states first: postStatus also reports them as closed.
       if (FINAL_TASK_STATES.includes(taskStateOf(p)))
         throw new AppError(
@@ -735,8 +741,7 @@ export class PollStore {
         );
       const reply = {
         id: randomBytes(12).toString("hex"),
-        name: input.name ?? "Anonymous",
-        message: input.message,
+        ...(input.privateClaim ? {} : { name: input.name ?? "Anonymous", message: input.message }),
         ...(p.type === "sale" ? { amount: input.amount } : {}),
         ...(p.type === "task" ? { encryptedContact: input.encryptedContact } : {
           ...(input.phone ? { phone: input.phone } : {}),
@@ -747,7 +752,7 @@ export class PollStore {
       p.replies.push(reply);
       p.replyAuthors[hash] = now;
       await this.write(db);
-      return { ...this.social(p, token), createdReplyId: reply.id };
+      return { ...this.social(p, token), ...(input.privateClaim ? {} : { createdReplyId: reply.id }) };
     });
   }
 
@@ -839,6 +844,8 @@ export class PollStore {
         throw new AppError(409, "This giveaway has already been claimed.");
       if (post.taskKind === "wanted" && Object.hasOwn(copy, "reward"))
         throw new AppError(400, "Item requests are for free items only.");
+      if (post.taskKind === "found" && (images?.length || Object.hasOwn(copy, "reward")))
+        throw new AppError(400, "Found notices cannot include photos or a reward.");
       if (type === "sale") validatePickupWindow(copy.pickupWindow, post.createdAt, post.endsAt, now);
       const questionChanged = type === "poll" && copy.title !== undefined && copy.title !== post.title;
       const optionsChanged = options && (options.length !== post.options.length ||

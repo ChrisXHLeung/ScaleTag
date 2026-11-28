@@ -240,7 +240,8 @@ export function taskInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete the task form.");
   const wanted = body.taskKind === "wanted";
-  if (body.taskKind !== undefined && !wanted)
+  const found = body.taskKind === "found";
+  if (body.taskKind !== undefined && !wanted && !found)
     throw new AppError(400, "Choose a valid task type.");
   if (wanted && Object.hasOwn(body, "reward"))
     throw new AppError(400, "Item requests are for free items only.");
@@ -250,12 +251,14 @@ export function taskInput(body) {
     ...body,
     signature: body.signature || "Anonymous",
   });
+  if (found && (common.images.length || Object.hasOwn(body, "reward")))
+    throw new AppError(400, "Found notices cannot include photos or a reward.");
   return {
     ...common,
     type: "task",
     options: [],
     description: publicText(body.description, "Description", 4000),
-    ...(wanted ? { taskKind: "wanted" } : { reward: publicText(body.reward, "Reward", 160) }),
+    ...(wanted || found ? { taskKind: body.taskKind } : { reward: publicText(body.reward, "Reward", 160) }),
     ...credentials,
   };
 }
@@ -326,6 +329,12 @@ export function encryptedContactInput(value) {
 export function replyInput(body) {
   if (!body || typeof body !== "object")
     throw new AppError(400, "Please complete your reply.");
+  if (body.privateClaim === true) {
+    if (body.privacyAccepted !== true ||
+        Object.keys(body).some(key => !["privateClaim", "privacyAccepted", "encryptedContact"].includes(key)))
+      throw new AppError(400, "Submit ownership details in the encrypted claim form.");
+    return { privateClaim: true, encryptedContact: encryptedContactInput(body.encryptedContact) };
+  }
   if ("phone" in body || "email" in body)
     throw new AppError(
       400,
