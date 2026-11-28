@@ -2352,7 +2352,7 @@ test(
     await row.waitFor();
     await denyLocks();
     await row.getByRole("button", { name: "Remove", exact: true }).click();
-    await page.locator(".list-page > .field-hint").first().getByText(unavailableText, { exact: true }).waitFor();
+    await page.getByRole("status").and(page.getByText(unavailableText, { exact: true })).waitFor();
     assert.equal(await row.count(), 1);
     assert.deepEqual(JSON.parse(await readSaved()), items);
     assert.deepEqual(await rejections(), []);
