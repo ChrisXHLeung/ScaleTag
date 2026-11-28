@@ -199,6 +199,15 @@ function drawCoverImage(ctx, img, x, y, w, h, radius) {
 }
 
 function typeMeta(type) {
+  if (type === "lost") {
+    return {
+      badge: t("Lost items", "寻物"),
+      bylinePrefix: t("Posted by", "发布者："),
+      scanEyebrow: t("Send a private tip", "发送私密线索"),
+      scanHeadline: t("Lost items", "寻物"),
+      scanPrompt: t("Scan to view the notice or send the owner a private tip.", "扫码查看寻物帖，或私下向失主提供线索。"),
+    };
+  }
   if (type === "found") {
     return {
       badge: t("Found items", "失物招领"),

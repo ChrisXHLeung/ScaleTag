@@ -253,7 +253,8 @@ export function taskInput(body) {
     throw new AppError(400, "Please complete the task form.");
   const wanted = body.taskKind === "wanted";
   const found = body.taskKind === "found";
-  if (body.taskKind !== undefined && !wanted && !found)
+  const lost = body.taskKind === "lost";
+  if (body.taskKind !== undefined && !wanted && !found && !lost)
     throw new AppError(400, "Choose a valid task type.");
   if (wanted && Object.hasOwn(body, "reward"))
     throw new AppError(400, "Item requests are for free items only.");
@@ -265,15 +266,17 @@ export function taskInput(body) {
   });
   if (found && (common.images.length || Object.hasOwn(body, "reward")))
     throw new AppError(400, "Found notices cannot include photos or a reward.");
+  if (lost && (common.images.length || Object.hasOwn(body, "reward")))
+    throw new AppError(400, "Lost notices cannot include photos or a reward.");
   const taskDueAt = body.taskDueAt === undefined ? null : taskDeadlineInput(body.taskDueAt);
-  if ((wanted || found) && taskDueAt !== null)
+  if (body.taskKind && taskDueAt !== null)
     throw new AppError(400, "Only local tasks can have a help deadline.");
   return {
     ...common,
     type: "task",
     options: [],
     description: publicText(body.description, "Description", 4000),
-    ...(wanted || found ? { taskKind: body.taskKind } : { reward: publicText(body.reward, "Reward", 160) }),
+    ...(body.taskKind ? { taskKind: body.taskKind } : { reward: publicText(body.reward, "Reward", 160) }),
     ...(taskDueAt === null ? {} : { taskDueAt }),
     ...credentials,
   };

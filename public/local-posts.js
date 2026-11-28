@@ -85,6 +85,10 @@ const draftCopyFields = {
     path: "/create/wanted",
     fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
   },
+  lost: {
+    path: "/create/lost",
+    fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
+  },
   found: {
     path: "/create/found",
     fields: { "#task-title": "title", "#task-description": "description", "#task-name": "signature" },
@@ -599,6 +603,10 @@ export function renderSavedPosts(host, { offline = false } = {}) {
     ["wanted_in_progress", t("Arranging pickup", "正在安排领取")],
     ["wanted_completed", t("Item received", "已收到")],
     ["wanted_closed", t("Closed", "已关闭")],
+    ["lost_open", t("Looking for item", "寻找中")],
+    ["lost_in_progress", t("Checking a tip", "核实线索中")],
+    ["lost_completed", t("Recovered", "已找回")],
+    ["lost_closed", t("Closed", "已关闭")],
     ["found_open", t("Accepting claims", "接受认领")],
     ["found_in_progress", t("Arranging return", "正在安排归还")],
     ["found_completed", t("Returned", "已归还")],

@@ -29,7 +29,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
         <div id="owner-options"></div>
         <button class="add-option" type="button" id="owner-add-option">${t("Add an option", "添加选项")}</button>
       </fieldset>` : `<p class="field-hint">${t("The poll question and options can change only before the first vote and before voting closes.", "投票问题和选项只能在第一票产生前且投票尚未截止时修改。")}</p>` : ""}
-      ${post.taskKind === "found" ? "" : photoFields("owner", t("Replace photos (optional)", "替换照片（选填）"))}
+      ${["found", "lost"].includes(post.taskKind) ? "" : photoFields("owner", t("Replace photos (optional)", "替换照片（选填）"))}
       <div id="owner-photo-removal" ${post.images?.length ? "" : "hidden"}>
         <label class="checkbox-row"><input type="checkbox" id="owner-remove-photos">
           <span>${t("Remove current photos", "移除现有照片")}</span></label>
@@ -41,7 +41,7 @@ export function mountOwnerEdit(host, post, endpoint, key, onSaved) {
   controls.append(details);
   host.append(controls);
   const form = details.querySelector("form");
-  const photos = post.taskKind === "found" ? null : bindPhotoInput(form, "owner");
+  const photos = ["found", "lost"].includes(post.taskKind) ? null : bindPhotoInput(form, "owner");
   const submit = form.querySelector("[type=submit]");
   const error = form.querySelector("[role=alert]");
   const status = form.querySelector("[role=status]");

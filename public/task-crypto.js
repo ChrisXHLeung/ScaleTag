@@ -197,11 +197,11 @@ export async function encryptReplyContact(contactPublicKey, contact, context = '
   if (typeof contact?.email === 'string' && contact.email.trim()) {
     payload.email = contact.email.trim();
   }
-  if (!payload.phone && !payload.email) {
-    throw new Error('Reply contact must include a phone number or email address');
-  }
-  if (typeof contact.proof === 'string' && contact.proof.trim()) {
+  if (typeof contact?.proof === 'string' && contact.proof.trim()) {
     payload.proof = contact.proof.trim();
+  }
+  if (!payload.phone && !payload.email && !payload.proof) {
+    throw new Error('Reply must include contact details or a private message');
   }
 
   const recipientPublicKey = await subtle.importKey(
@@ -250,6 +250,7 @@ export async function decryptReplyContacts(password, task, context = '') {
     throw new Error('Missing task payload');
   }
   const { contactPublicKey, encryptedPrivateKey, replies } = task;
+  const privateItem = task.taskKind === "found" || task.taskKind === "lost";
   if (!Array.isArray(replies)) {
     throw new Error('Task replies must be an array');
   }
@@ -302,8 +303,8 @@ export async function decryptReplyContacts(password, task, context = '') {
         ciphertext,
       );
       const contact = JSON.parse(decoder.decode(plaintext));
-      if (task.taskKind === "found" && (!contact.proof?.trim() ||
-          !(typeof contact.phone === "string" || typeof contact.email === "string") ||
+      if (privateItem && (!contact.proof?.trim() ||
+          (task.taskKind === "found" && !(contact.phone?.trim() || contact.email?.trim())) ||
           (contact.phone !== undefined && typeof contact.phone !== "string") ||
           (contact.email !== undefined && typeof contact.email !== "string")))
         throw new Error("Incomplete encrypted claim");
@@ -315,7 +316,7 @@ export async function decryptReplyContacts(password, task, context = '') {
         encryptedContact: undefined,
       });
     } catch (error) {
-      if (task.taskKind !== "found") throw error;
+      if (!privateItem) throw error;
       decryptedReplies.push({ id: reply.id, createdAt: reply.createdAt, unreadable: true });
     }
   }

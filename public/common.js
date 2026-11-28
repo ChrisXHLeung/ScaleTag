@@ -72,11 +72,11 @@ export function postKindSwitch(current) {
     ["/create/task", t("Task", "任务")],
     ["/create/sale", t("Free Giveaways", "闲置赠予")],
     ["/create/wanted", t("Wanted", "求赠")],
-    ["/create/found", t("Found items", "失物招领")],
+    ["/create/found", t("Lost & Found", "失物招领")],
     ["/secrex", t("Secrex", "Secrex 阅后即焚")],
   ];
   const links = entries.map(([path, label]) =>
-    `<a href="${path}"${path === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
+    `<a href="${path}"${(path === current || (path === "/create/found" && current === "/create/lost")) ? ' aria-current="page"' : ""}>${label}</a>`).join("");
   return `<nav class="post-kind-switch" aria-label="${t("Post type", "帖子类型")}">${links}</nav>`;
 }
 export const ballotsSubmitted = (value) => `${t("Ballots submitted", "已提交选票")}: ${count(value)}`;

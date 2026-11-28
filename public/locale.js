@@ -154,6 +154,7 @@ export const serverErrors = {
   'Choose a valid ballot change setting.': '请选择有效的改选设置。',
   'A withdrawal cannot include options.': '撤回时不能同时提交选项。',
   'There is no editable ballot for this browser.': '此浏览器没有可修改的选票。',
+  'Lost notices cannot include photos or a reward.': '寻物帖不能包含照片或酬谢。',
   'Found notices cannot include photos or a reward.': '招领帖不能包含照片或酬谢。',
   'Submit ownership details in the encrypted claim form.': '请在加密认领表单中提交物品特征。',
   'Use the reply or claim form for this post.': '请使用该帖对应的回复或认领表单。',

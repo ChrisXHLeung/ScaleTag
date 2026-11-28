@@ -55,6 +55,16 @@ flowchart TD
     C --> D["<b>Requester</b><br/>Mark the item received"]
 ```
 
+### Lost items
+
+Choose **Lost & Found → I lost something** to publish a lost notice, or filter PostList and the map for **Lost items**. Share a general description with the approximate place and time. A neighbour can send a browser-encrypted tip with optional contact details. The publisher reads tips using the management password and can mark the item recovered to stop new tips.
+
+```mermaid
+flowchart LR
+    A["Item owner publishes a lost notice"] --> B["Neighbour sends an encrypted tip"]
+    B --> C["Item owner reviews tips and marks the item recovered"]
+```
+
 ### Found items
 
 [Publish a found item](https://www.scaletag.top/create/found) with the approximate area, time, and a general description. Keep distinctive features private so the owner can describe them. In PostList or the map, choose **Found items** to find nearby notices. A claimant sends identifying details and an email or phone number. Their browser encrypts the claim for the finder, who can use the management password to review it, arrange a return, and mark the item returned. [Found items help](https://www.scaletag.top/help#found)

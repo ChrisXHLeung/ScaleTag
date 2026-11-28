@@ -56,6 +56,13 @@ const features = [
       [actor.pickupVisitor, "Check the directions and pick up the item", "查看领取地点并现场领取"],
       [actor.giver, "Update the remaining quantity or mark the item claimed", "更新剩余件数或标记为已领取"],
     ]],
+  ["lost", "/create/lost", ["Lost items", "寻物"],
+    ["Publish what you lost and the approximate place and time. Tips are encrypted for you. Neighbours can send a tip without contact details.", "发布遗失物品及大致地点和时间。线索会加密，只有你可以解密。邻居可以在不留联系方式的情况下发送线索。"],
+    [
+      [["Item owner", "失主"], "Publish a lost notice", "发布寻物"],
+      [["Neighbour", "邻居"], "Send a private tip", "发送私密线索"],
+      [["Item owner", "失主"], "Check tips and mark the item recovered", "核实线索并标记已找回"],
+    ]],
   ["found", "/create/found", ["Found items", "失物招领"],
     ["Publish a general description of a found item. Keep distinctive details private so the owner can describe them. The finder can unlock private claims and arrange the return directly.", "公开发布拾获物品的大致描述，把可辨认的特征留给失主说明。拾获者可解密认领信息，并直接安排归还。"],
     [
@@ -184,4 +191,5 @@ export function helpTopic(path) {
   if (path === "/create/sale" || path.startsWith("/sale/")) return "giveaways";
   if (path === "/create/wanted") return "wanted";
   if (path === "/create/found") return "found";
+  if (path === "/create/lost") return "lost";
 }

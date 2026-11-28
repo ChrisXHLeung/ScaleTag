@@ -1055,6 +1055,37 @@ test("a task deadline closes replies without removing the task and the publisher
   assert.equal(reopened.endsAt, task.deleteAt);
 });
 
+test("lost notices accept private leads without requiring contact details", async t => {
+  const f = await fixture(t);
+  const lost = await createTask(f, { taskKind: "lost", title: "Lost a blue umbrella", reward: undefined });
+  const path = `/api/tasks/${lost.id}`;
+  const social = `/api/posts/${lost.id}`;
+  const proof = "There is a blue umbrella under the library bench.";
+  const payload = await encryptReplyContact(lost.contactPublicKey, { proof }, lost.id);
+  const claim = { encryptedContact: payload, privateClaim: true, privacyAccepted: true };
+  const { cookie } = await socialSession(f, lost.id);
+  assert.equal((await f.request(social + "/replies", { ...claim, proof }, cookie)).status, 400);
+  assert.equal((await f.request(social + "/replies", await replyBody(lost), cookie)).status, 400);
+  const delivered = await f.request(social + "/replies", claim, cookie);
+  assert.equal(delivered.status, 201);
+  const result = await delivered.json();
+  assert.deepEqual(result.replies, []);
+  assert.equal(result.createdReplyId, undefined);
+  const publicSocial = await (await f.request(social + "/social")).text();
+  assert.ok(!publicSocial.includes(proof) && !publicSocial.includes(payload.ciphertext));
+  for (const endpoint of ["/api/posts/search", "/api/map/search"]) {
+    const listing = await f.request(endpoint, { type: "lost" });
+    assert.equal(listing.status, 200);
+    assert.deepEqual((await listing.json()).polls.map(post => post.id), [lost.id]);
+  }
+  const managed = await (await f.request(path + "/manage", { authKey: lost.manageKey })).json();
+  const [decoded] = await decryptReplyContacts(lost.password, managed, lost.id);
+  assert.equal(decoded.proof, proof);
+  assert.equal(decoded.email, undefined);
+  assert.equal((await f.request(path + "/state", { authKey: lost.manageKey, state: "completed" })).status, 200);
+  assert.equal((await f.request(social + "/replies", claim, cookie)).status, 409);
+});
+
 test("found items appear in their own filter and ownership details are private to the finder", async t => {
   const f = await fixture(t);
   await createTask(f);

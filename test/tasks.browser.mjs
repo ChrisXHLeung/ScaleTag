@@ -119,6 +119,42 @@ test("task deadline is shown to a visitor, closes replies, and can be reschedule
   assert.deepEqual(f.errors, []);
 });
 
+test("a neighbour can privately notify the owner without sharing contact details", async t => {
+  const f = await fixture(t);
+  const owner = f.page;
+  await owner.goto(f.origin + "/create/found?lang=en");
+  await owner.getByRole("link", { name: "I lost something" }).click();
+  assert.equal(await owner.locator(".post-kind-switch a[aria-current=page]").textContent(), "Lost & Found");
+  await owner.locator("#task-title").fill("Lost blue umbrella");
+  await owner.locator("#task-description").fill("Last seen near the library.");
+  await owner.locator("#task-map-consent").check();
+  await owner.locator("#task-retention").check();
+  await owner.getByRole("button", { name: "Publish a lost notice" }).click();
+  await owner.getByRole("heading", { name: "Manage lost notice" }).waitFor();
+
+  const visitor = await f.browser.newPage({ viewport: { width: 320, height: 844 } });
+  await visitor.goto(f.origin + "/PostList?type=lost&lang=en");
+  await visitor.getByRole("link", { name: /Lost blue umbrella/ }).first().click();
+  const tip = "Look under the bench by the entrance.";
+  await visitor.getByLabel("What did you see?", { exact: true }).fill(tip);
+  await visitor.locator("#contact-consent").check();
+  const posted = visitor.waitForRequest(r => r.url().endsWith("/replies") && r.method() === "POST");
+  await visitor.getByRole("button", { name: "Send a private tip" }).click();
+  assert.ok(!(await posted).postData().includes(tip));
+  await visitor.getByText("Private tip sent.", { exact: true }).waitFor();
+  assert.equal(await visitor.getByText(tip, { exact: true }).count(), 0);
+  assert.equal(await visitor.evaluate(() => document.documentElement.scrollWidth), 320);
+
+  await owner.getByRole("button", { name: "Refresh tips" }).click();
+  await owner.getByText(tip, { exact: true }).waitFor();
+  owner.once("dialog", dialog => dialog.accept());
+  await owner.getByRole("button", { name: "Recovered", exact: true }).click();
+  await owner.locator("#task-state").filter({ hasText: /^Recovered$/ }).waitFor();
+  await visitor.reload();
+  await visitor.getByText("This notice is not accepting tips.").waitFor();
+  assert.deepEqual(f.errors, []);
+});
+
 test("the finder can publish, privately verify a claim, and mark an item returned", async t => {
   const f = await fixture(t);
   const title = "Found a keyring near the park";

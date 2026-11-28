@@ -99,7 +99,7 @@ export async function createPollMap() {
               ? t("Request before pickup", "先申请再领取")
               : t("Free Giveaway · View item ↗", "闲置赠予 · 查看物品 ↗")
           : p.type === "task"
-          ? p.taskKind === "found" ? t("Found items", "失物招领") : p.taskKind === "wanted" ? t("Wanted", "求赠")
+          ? p.taskKind === "lost" ? t("Lost items", "寻物") : p.taskKind === "found" ? t("Found items", "失物招领") : p.taskKind === "wanted" ? t("Wanted", "求赠")
             : t(`Task · Reward: ${p.reward} · View task ↗`, `任务 · 酬谢：${p.reward} · 查看任务 ↗`)
           : p.resultsHidden
             ? t("Results will appear when voting closes.", "投票截止后公布结果。")
